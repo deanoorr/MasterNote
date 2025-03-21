@@ -834,215 +834,250 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
         message.toLowerCase().includes('create a task') ||
         message.toLowerCase().includes('create task')) { 
       
-      console.log("Detected task creation request");
+      console.log("Detected task creation request:", message);
       
       // Extract task title - smarter parsing
       let taskTitle = message;
-      
-      // Remove common prefixes
-      const prefixes = [
-        /^add\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
-        /^create\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
-        /^new\s+task\s+(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
-      ];
-      
-      for (const prefix of prefixes) {
-        taskTitle = taskTitle.replace(prefix, '');
-      }
-      
-      // Parse time indicators in the task title
-      let dueDate: Date | undefined = undefined;
       let dateFound = false;
+      let dueDate: Date | undefined = undefined;
       const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       
-      // Special handling for common time suffix patterns like "for tomorrow"
-      const timeSuffixes = [
-        {
-          regex: /\s+for\s+tomorrow$/i,
-          handler: () => {
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            dueDate = tomorrow;
-            return '';
-          }
-        },
-        {
-          regex: /\s+for\s+today$/i,
-          handler: () => {
-            dueDate = new Date();
-            return '';
-          }
-        },
-        {
-          regex: /\s+for\s+next\s+week$/i,
-          handler: () => {
-            const nextWeek = new Date();
-            nextWeek.setDate(nextWeek.getDate() + 7);
-            dueDate = nextWeek;
-            return '';
-          }
-        },
-        // Handle days of the week: "for Monday", "for Tuesday", etc.
-        {
-          regex: /\s+for\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i,
-          handler: (match: RegExpMatchArray) => {
-            const dayOfWeek = match[1].toLowerCase();
-            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-            const targetDay = days.indexOf(dayOfWeek);
-            
-            if (targetDay !== -1) {
-              const today = new Date();
-              const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-              
-              // Calculate days to add (if today is the target day, schedule for next week)
-              let daysToAdd = targetDay - currentDay;
-              if (daysToAdd <= 0) {
-                daysToAdd += 7; // Move to next week
-              }
-              
-              const targetDate = new Date();
-              targetDate.setDate(today.getDate() + daysToAdd);
-              dueDate = targetDate;
-            }
-            
-            return '';
-          }
-        },
-        // Pattern for "in X days/weeks"
-        {
-          regex: /\s+in\s+(\d+)\s+(day|days|week|weeks)$/i,
-          handler: (match: RegExpMatchArray) => {
-            const amount = parseInt(match[1], 10);
-            const unit = match[2].toLowerCase();
-            
-            const targetDate = new Date();
-            if (unit === 'day' || unit === 'days') {
-              targetDate.setDate(targetDate.getDate() + amount);
-            } else if (unit === 'week' || unit === 'weeks') {
-              targetDate.setDate(targetDate.getDate() + (amount * 7));
-            }
-            
-            dueDate = targetDate;
-            return '';
+      // Handle "for tomorrow called X" pattern first - this is a high priority pattern
+      const forDateCalledPattern = /\s+for\s+(tomorrow|today|next\s+week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+called\s+(.+)$/i;
+      const forDateCalledMatch = message.match(forDateCalledPattern);
+      
+      if (forDateCalledMatch) {
+        const dateIndicator = forDateCalledMatch[1].toLowerCase();
+        const extractedTaskTitle = forDateCalledMatch[2].trim();
+        
+        console.log("Matched 'for DATE called X' pattern:", dateIndicator, extractedTaskTitle);
+        
+        dueDate = new Date();
+        dateFound = true;
+        
+        if (dateIndicator === 'tomorrow') {
+          dueDate.setDate(dueDate.getDate() + 1);
+        } else if (dateIndicator === 'next week') {
+          dueDate.setDate(dueDate.getDate() + 7);
+        } else if (dateIndicator !== 'today') {
+          // Handle weekday names
+          const targetDay = daysOfWeek.indexOf(dateIndicator);
+          if (targetDay !== -1) {
+            const today = dueDate.getDay();
+            let daysToAdd = targetDay - today;
+            if (daysToAdd <= 0) daysToAdd += 7; // If today or past, go to next week
+            dueDate.setDate(dueDate.getDate() + daysToAdd);
           }
         }
-      ];
-      
-      // Check for time suffix patterns
-      for (const {regex, handler} of timeSuffixes) {
-        const match = taskTitle.match(regex);
-        if (match) {
-          // Remove the time suffix and update the dueDate
-          taskTitle = taskTitle.replace(regex, handler(match));
-          break;
-        }
-      }
-      
-      // If no date found in suffixes, check for date indicators at the beginning of the task
-      if (!dateFound) {
-        const timeIndicators = [
-          { regex: /^today\s+(?:to\s+|is\s+to\s+|called\s+)?/i, days: 0 },
-          { regex: /^tomorrow\s+(?:to\s+|is\s+to\s+|called\s+)?/i, days: 1 },
-          { regex: /^this\s+(?:coming\s+)?(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, weekday: true },
-          { regex: /^next\s+(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, nextWeekday: true },
+        
+        taskTitle = extractedTaskTitle;
+        console.log("Special pattern extracted: Title:", taskTitle, "Due date:", dueDate);
+      } else {
+        // Remove common prefixes
+        const prefixes = [
+          /^add\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
+          /^create\s+(?:a\s+)?(?:new\s+)?(?:task\s+)?(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
+          /^new\s+task\s+(?:for\s+)?(?:to\s+)?(?:called\s+)?/i,
         ];
         
-        for (const indicator of timeIndicators) {
-          const match = taskTitle.match(indicator.regex);
-          if (match) {
-            dueDate = new Date();
-            
-            if (indicator.days !== undefined) {
-              // Simple day offset (today, tomorrow)
-              dueDate.setDate(dueDate.getDate() + indicator.days);
-              dateFound = true;
-            } else if (indicator.weekday && match[1]) {
-              // This week's weekday
-              const targetDayName = match[1].toLowerCase();
-              const targetDay = daysOfWeek.indexOf(targetDayName);
-              if (targetDay !== -1) {
-                const today = dueDate.getDay();
-                let daysToAdd = targetDay - today;
-                if (daysToAdd <= 0) daysToAdd += 7;  // If today or past, go to next week
-                dueDate.setDate(dueDate.getDate() + daysToAdd);
-                dateFound = true;
-              }
-            } else if (indicator.nextWeekday && match[1]) {
-              // Next week's weekday
-              const targetDayName = match[1].toLowerCase();
-              const targetDay = daysOfWeek.indexOf(targetDayName);
-              if (targetDay !== -1) {
-                const today = dueDate.getDay();
-                let daysToAdd = targetDay - today;
-                if (daysToAdd <= 0) daysToAdd += 7;  // Go to next week
-                dueDate.setDate(dueDate.getDate() + daysToAdd);
-                dateFound = true;
-              }
-            }
-            
-            // Remove the time indicator from the task title
-            if (dateFound) {
-              taskTitle = taskTitle.replace(match[0], '').trim();
-            }
-          }
+        for (const prefix of prefixes) {
+          taskTitle = taskTitle.replace(prefix, '');
         }
-      }
-      
-      // Also look for time indicators embedded in the task (e.g., "clean car today")
-      if (!dateFound) {
-        const embeddedTimeIndicators = [
-          { regex: /\s+today(?:\s+|$)/i, days: 0 },
-          { regex: /\s+tomorrow(?:\s+|$)/i, days: 1 },
-          { regex: /\s+this\s+(?:coming\s+)?(\w+)(?:\s+|$)/i, weekday: true },
-          { regex: /\s+next\s+(\w+)(?:\s+|$)/i, nextWeekday: true },
-          { regex: /\s+on\s+(\w+)(?:\s+|$)/i, weekday: true },
-        ];
         
-        for (const indicator of embeddedTimeIndicators) {
-          const match = taskTitle.match(indicator.regex);
-          if (match) {
-            dueDate = new Date();
-            
-            if (indicator.days !== undefined) {
-              // Simple day offset (today, tomorrow)
-              dueDate.setDate(dueDate.getDate() + indicator.days);
+        // Special handling for common time suffix patterns like "for tomorrow"
+        const timeSuffixes = [
+          {
+            regex: /\s+for\s+tomorrow$/i,
+            handler: () => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              dueDate = tomorrow;
               dateFound = true;
-            } else if ((indicator.weekday || indicator.nextWeekday) && match[1]) {
-              // This week's or next week's weekday
-              const targetDayName = match[1].toLowerCase();
-              const targetDay = daysOfWeek.indexOf(targetDayName);
+              return '';
+            }
+          },
+          {
+            regex: /\s+for\s+today$/i,
+            handler: () => {
+              dueDate = new Date();
+              dateFound = true;
+              return '';
+            }
+          },
+          {
+            regex: /\s+for\s+next\s+week$/i,
+            handler: () => {
+              const nextWeek = new Date();
+              nextWeek.setDate(nextWeek.getDate() + 7);
+              dueDate = nextWeek;
+              dateFound = true;
+              return '';
+            }
+          },
+          // Handle days of the week: "for Monday", "for Tuesday", etc.
+          {
+            regex: /\s+for\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i,
+            handler: (match: RegExpMatchArray) => {
+              const dayOfWeek = match[1].toLowerCase();
+              const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+              const targetDay = days.indexOf(dayOfWeek);
+              
               if (targetDay !== -1) {
-                const today = dueDate.getDay();
-                let daysToAdd = targetDay - today;
+                const today = new Date();
+                const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
                 
-                if (indicator.nextWeekday || daysToAdd <= 0) {
-                  daysToAdd += 7;  // For next week or if the day is today/past
+                // Calculate days to add (if today is the target day, schedule for next week)
+                let daysToAdd = targetDay - currentDay;
+                if (daysToAdd <= 0) {
+                  daysToAdd += 7; // Move to next week
                 }
                 
-                dueDate.setDate(dueDate.getDate() + daysToAdd);
+                const targetDate = new Date();
+                targetDate.setDate(today.getDate() + daysToAdd);
+                dueDate = targetDate;
                 dateFound = true;
               }
+              
+              return '';
             }
-            
-            // Remove the time indicator from the task title
-            if (dateFound) {
-              taskTitle = taskTitle.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+          },
+          // Pattern for "in X days/weeks"
+          {
+            regex: /\s+in\s+(\d+)\s+(day|days|week|weeks)$/i,
+            handler: (match: RegExpMatchArray) => {
+              const amount = parseInt(match[1], 10);
+              const unit = match[2].toLowerCase();
+              
+              const targetDate = new Date();
+              if (unit === 'day' || unit === 'days') {
+                targetDate.setDate(targetDate.getDate() + amount);
+              } else if (unit === 'week' || unit === 'weeks') {
+                targetDate.setDate(targetDate.getDate() + (amount * 7));
+              }
+              
+              dueDate = targetDate;
+              dateFound = true;
+              return '';
+            }
+          }
+        ];
+        
+        // Check for time suffix patterns
+        for (const {regex, handler} of timeSuffixes) {
+          const match = taskTitle.match(regex);
+          if (match) {
+            // Remove the time suffix and update the dueDate
+            taskTitle = taskTitle.replace(regex, handler(match));
+            break;
+          }
+        }
+        
+        // If no date found in suffixes, check for date indicators at the beginning of the task
+        if (!dateFound) {
+          const timeIndicators = [
+            { regex: /^today\s+(?:to\s+|is\s+to\s+|called\s+)?/i, days: 0 },
+            { regex: /^tomorrow\s+(?:to\s+|is\s+to\s+|called\s+)?/i, days: 1 },
+            { regex: /^this\s+(?:coming\s+)?(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, weekday: true },
+            { regex: /^next\s+(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, nextWeekday: true },
+          ];
+          
+          for (const indicator of timeIndicators) {
+            const match = taskTitle.match(indicator.regex);
+            if (match) {
+              dueDate = new Date();
+              
+              if (indicator.days !== undefined) {
+                // Simple day offset (today, tomorrow)
+                dueDate.setDate(dueDate.getDate() + indicator.days);
+                dateFound = true;
+              } else if (indicator.weekday && match[1]) {
+                // This week's weekday
+                const targetDayName = match[1].toLowerCase();
+                const targetDay = daysOfWeek.indexOf(targetDayName);
+                if (targetDay !== -1) {
+                  const today = dueDate.getDay();
+                  let daysToAdd = targetDay - today;
+                  if (daysToAdd <= 0) daysToAdd += 7;  // If today or past, go to next week
+                  dueDate.setDate(dueDate.getDate() + daysToAdd);
+                  dateFound = true;
+                }
+              } else if (indicator.nextWeekday && match[1]) {
+                // Next week's weekday
+                const targetDayName = match[1].toLowerCase();
+                const targetDay = daysOfWeek.indexOf(targetDayName);
+                if (targetDay !== -1) {
+                  const today = dueDate.getDay();
+                  let daysToAdd = targetDay - today;
+                  if (daysToAdd <= 0) daysToAdd += 7;  // Go to next week
+                  dueDate.setDate(dueDate.getDate() + daysToAdd);
+                  dateFound = true;
+                }
+              }
+              
+              // Remove the time indicator from the task title
+              if (dateFound) {
+                taskTitle = taskTitle.replace(match[0], '').trim();
+              }
             }
           }
         }
-      }
-      
-      // Special handling for formats like "today called clean car"
-      if (!dateFound) {
-        const specialFormat = /^(today|tomorrow)\s+called\s+(.+)$/i;
-        const match = message.match(specialFormat);
-        if (match) {
-          dueDate = new Date();
-          if (match[1].toLowerCase() === 'tomorrow') {
-            dueDate.setDate(dueDate.getDate() + 1);
+        
+        // Also look for time indicators embedded in the task (e.g., "clean car today")
+        if (!dateFound) {
+          const embeddedTimeIndicators = [
+            { regex: /\s+today(?:\s+|$)/i, days: 0 },
+            { regex: /\s+tomorrow(?:\s+|$)/i, days: 1 },
+            { regex: /\s+this\s+(?:coming\s+)?(\w+)(?:\s+|$)/i, weekday: true },
+            { regex: /\s+next\s+(\w+)(?:\s+|$)/i, nextWeekday: true },
+            { regex: /\s+on\s+(\w+)(?:\s+|$)/i, weekday: true },
+          ];
+          
+          for (const indicator of embeddedTimeIndicators) {
+            const match = taskTitle.match(indicator.regex);
+            if (match) {
+              dueDate = new Date();
+              
+              if (indicator.days !== undefined) {
+                // Simple day offset (today, tomorrow)
+                dueDate.setDate(dueDate.getDate() + indicator.days);
+                dateFound = true;
+              } else if ((indicator.weekday || indicator.nextWeekday) && match[1]) {
+                // This week's or next week's weekday
+                const targetDayName = match[1].toLowerCase();
+                const targetDay = daysOfWeek.indexOf(targetDayName);
+                if (targetDay !== -1) {
+                  const today = dueDate.getDay();
+                  let daysToAdd = targetDay - today;
+                  
+                  if (indicator.nextWeekday || daysToAdd <= 0) {
+                    daysToAdd += 7;  // For next week or if the day is today/past
+                  }
+                  
+                  dueDate.setDate(dueDate.getDate() + daysToAdd);
+                  dateFound = true;
+                }
+              }
+              
+              // Remove the time indicator from the task title
+              if (dateFound) {
+                taskTitle = taskTitle.replace(match[0], ' ').replace(/\s+/g, ' ').trim();
+              }
+            }
           }
-          taskTitle = match[2].trim();
-          dateFound = true;
+        }
+        
+        // Special handling for formats like "today called clean car"
+        if (!dateFound) {
+          const specialFormat = /^(today|tomorrow)\s+called\s+(.+)$/i;
+          const match = taskTitle.match(specialFormat);
+          if (match) {
+            dueDate = new Date();
+            if (match[1].toLowerCase() === 'tomorrow') {
+              dueDate.setDate(dueDate.getDate() + 1);
+            }
+            taskTitle = match[2].trim();
+            dateFound = true;
+          }
         }
       }
       
