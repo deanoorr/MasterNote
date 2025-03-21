@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { FiSend, FiSettings, FiLoader, FiCpu, FiZap, FiClock, FiTag, FiFlag } from 'react-icons/fi'
+import { FiSend, FiSettings, FiLoader, FiCpu, FiZap, FiClock, FiTag, FiFlag, FiPlus, FiCheckSquare } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '@hooks/useAppRedux'
 import { addTask } from '@features/tasks/tasksSlice'
 import { TaskPriority } from '@/types'
 import { analyzeTaskWithAI } from '@services/ai'
+import TaskList from '@components/tasks/TaskList'
 
 const AIAssistant = () => {
   const [input, setInput] = useState('')
@@ -20,6 +21,7 @@ const AIAssistant = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   
   const { apiKey, provider, model, features } = useAppSelector(state => state.aiSettings)
+  const { tasks } = useAppSelector(state => state.tasks)
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   
@@ -286,128 +288,142 @@ I'll understand what you mean and create the appropriate task with all the detai
         )}
       </div>
       
-      <div className="flex-1 card overflow-hidden flex flex-col mb-6">
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {conversation.map((message, index) => (
-            <div 
-              key={index} 
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+      <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+        {/* AI Chat Panel */}
+        <div className="flex-1 card overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {conversation.map((message, index) => (
               <div 
-                className={`max-w-3/4 rounded-lg p-3 ${
-                  message.role === 'user' 
-                    ? 'bg-primary-500 text-white' 
-                    : 'bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white'
-                }`}
+                key={index} 
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {message.role === 'assistant' && (
-                  <div className="flex items-center mb-1">
-                    <FiCpu className="mr-2 text-primary-500 dark:text-primary-400" />
-                    <span className="font-medium">Assistant</span>
-                  </div>
-                )}
-                {message.content.split('\n').map((line, i) => (
-                  <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>
-                ))}
+                <div 
+                  className={`max-w-3/4 rounded-lg p-3 ${
+                    message.role === 'user' 
+                      ? 'bg-primary-500 text-white' 
+                      : 'bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white'
+                  }`}
+                >
+                  {message.role === 'assistant' && (
+                    <div className="flex items-center mb-1">
+                      <FiCpu className="mr-2 text-primary-500 dark:text-primary-400" />
+                      <span className="font-medium">Assistant</span>
+                    </div>
+                  )}
+                  {message.content.split('\n').map((line, i) => (
+                    <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-          {isProcessing && (
-            <div className="flex justify-start">
-              <div className="bg-secondary-100 dark:bg-secondary-800 rounded-lg p-3 flex items-center">
-                <FiLoader className="animate-spin mr-2 text-primary-500 dark:text-primary-400" />
-                <span>Processing...</span>
+            ))}
+            {isProcessing && (
+              <div className="flex justify-start">
+                <div className="bg-secondary-100 dark:bg-secondary-800 rounded-lg p-3 flex items-center">
+                  <FiLoader className="animate-spin mr-2 text-primary-500 dark:text-primary-400" />
+                  <span>Processing...</span>
+                </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          
+          <div className="border-t border-secondary-200 dark:border-secondary-700 p-4">
+            <form onSubmit={handleSubmit} className="flex items-end">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask the AI to create tasks for you..."
+                className="flex-1 input resize-none min-h-[60px]"
+                rows={2}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSubmit(e)
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isProcessing}
+                className="btn btn-primary ml-3 h-[60px] w-[60px] flex items-center justify-center"
+              >
+                <FiSend size={20} />
+              </button>
+            </form>
+            
+            {!apiKey && (
+              <div className="mt-4 text-center text-secondary-500 dark:text-secondary-400 text-sm">
+                To enable advanced AI features, please configure your API key in settings.
+              </div>
+            )}
+          </div>
         </div>
         
-        <div className="border-t border-secondary-200 dark:border-secondary-700 p-4">
-          <form onSubmit={handleSubmit} className="flex items-end">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 input resize-none min-h-[60px]"
-              rows={2}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSubmit(e)
-                }
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isProcessing}
-              className="btn btn-primary ml-3 h-[60px] w-[60px] flex items-center justify-center"
+        {/* Tasks Panel */}
+        <div className="flex-1 card overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-secondary-200 dark:border-secondary-700">
+            <h2 className="text-lg font-semibold text-secondary-900 dark:text-white">Your Tasks</h2>
+            <button 
+              onClick={() => navigate('/tasks/new')}
+              className="btn btn-sm btn-primary flex items-center"
             >
-              <FiSend size={20} />
+              <FiPlus className="mr-1" size={14} />
+              New Task
             </button>
-          </form>
+          </div>
           
-          {!apiKey && (
-            <div className="mt-4 text-center text-secondary-500 dark:text-secondary-400 text-sm">
-              To enable advanced AI features, please configure your API key in settings.
-            </div>
-          )}
+          <div className="flex-1 overflow-y-auto">
+            {tasks.length > 0 ? (
+              <TaskList 
+                tasks={tasks.slice(0, 10)} 
+                hideFilters={true} 
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                <FiCheckSquare size={48} className="text-secondary-400 dark:text-secondary-600 mb-4" />
+                <h3 className="text-lg font-medium text-secondary-900 dark:text-white mb-2">No tasks yet</h3>
+                <p className="text-secondary-600 dark:text-secondary-400 max-w-sm">
+                  Try asking the assistant to create a task for you, or click the "New Task" button to create one manually.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      
-      <div className="card mb-6">
+
+      <div className="mt-6 card">
         <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-4">
-          What can the AI Assistant do?
+          Example prompts
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start">
-            <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900 mr-3">
-              <FiZap className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h3 className="font-medium text-secondary-900 dark:text-white">Create Tasks</h3>
-              <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                Describe a task in natural language and I'll create it with all the relevant details.
-              </p>
-            </div>
+          <div 
+            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
+            onClick={() => setInput("Create a task to prepare presentation slides for the quarterly review by next Friday")}
+          >
+            <p className="text-secondary-800 dark:text-secondary-200">Create a task to prepare presentation slides for the quarterly review by next Friday</p>
           </div>
           
-          <div className="flex items-start">
-            <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900 mr-3">
-              <FiTag className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h3 className="font-medium text-secondary-900 dark:text-white">Categorize Tasks</h3>
-              <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                I'll suggest appropriate tags and categories for your tasks.
-              </p>
-            </div>
+          <div 
+            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
+            onClick={() => setInput("I need to call client about project updates with high priority")}
+          >
+            <p className="text-secondary-800 dark:text-secondary-200">I need to call client about project updates with high priority</p>
           </div>
           
-          <div className="flex items-start">
-            <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900 mr-3">
-              <FiFlag className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h3 className="font-medium text-secondary-900 dark:text-white">Set Priorities</h3>
-              <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                I can determine the appropriate priority level for your tasks.
-              </p>
-            </div>
+          <div 
+            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
+            onClick={() => setInput("Remind me to send invoice by tomorrow")}
+          >
+            <p className="text-secondary-800 dark:text-secondary-200">Remind me to send invoice by tomorrow</p>
           </div>
           
-          <div className="flex items-start">
-            <div className="p-2 rounded-full bg-primary-100 dark:bg-primary-900 mr-3">
-              <FiClock className="h-5 w-5 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h3 className="font-medium text-secondary-900 dark:text-white">Suggest Deadlines</h3>
-              <p className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-                I'll recommend reasonable deadlines based on your task description.
-              </p>
-            </div>
+          <div 
+            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
+            onClick={() => setInput("Add a task to review project requirements with urgent priority")}
+          >
+            <p className="text-secondary-800 dark:text-secondary-200">Add a task to review project requirements with urgent priority</p>
           </div>
         </div>
       </div>

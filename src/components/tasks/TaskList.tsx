@@ -6,26 +6,31 @@ import TaskItem from './TaskItem'
 import { Task, TaskPriority } from '@/types'
 
 interface TaskListProps {
-  projectId?: string | null
+  projectId?: string | null;
+  tasks?: Task[];
+  hideFilters?: boolean;
 }
 
 type FilterOption = 'all' | 'active' | 'completed'
 type SortOption = 'priority' | 'dueDate' | 'createdAt' | 'alphabetical'
 
-const TaskList = ({ projectId }: TaskListProps) => {
+const TaskList = ({ projectId, tasks: propTasks, hideFilters = false }: TaskListProps) => {
   const [filter, setFilter] = useState<FilterOption>('all')
   const [sort, setSort] = useState<SortOption>('createdAt')
   const [searchTerm, setSearchTerm] = useState('')
   
-  const { tasks } = useAppSelector(state => state.tasks)
+  const { tasks: storeTasks } = useAppSelector(state => state.tasks)
   const dispatch = useAppDispatch()
+
+  // Use tasks from props if provided, otherwise use from store
+  const allTasks = propTasks || storeTasks;
 
   // Filter and sort tasks
   const filteredTasks = useMemo(() => {
     // First filter by project if specified
     let result = projectId 
-      ? tasks.filter(task => task.projectId === projectId) 
-      : tasks
+      ? allTasks.filter(task => task.projectId === projectId) 
+      : allTasks
 
     // Then filter by completion status
     if (filter === 'active') {
@@ -72,7 +77,7 @@ const TaskList = ({ projectId }: TaskListProps) => {
           return a.position - b.position
       }
     })
-  }, [tasks, projectId, filter, sort, searchTerm])
+  }, [allTasks, projectId, filter, sort, searchTerm])
 
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result
@@ -88,65 +93,70 @@ const TaskList = ({ projectId }: TaskListProps) => {
       return
     }
 
-    dispatch(reorderTasks({
-      taskId: draggableId,
-      newPosition: destination.index
-    }))
+    // Only reorder if we're using store tasks (not custom tasks)
+    if (!propTasks) {
+      dispatch(reorderTasks({
+        taskId: draggableId,
+        newPosition: destination.index
+      }))
+    }
   }
 
   return (
     <div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1 text-sm rounded-md ${
-              filter === 'all' 
-                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
-                : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('active')}
-            className={`px-3 py-1 text-sm rounded-md ${
-              filter === 'active' 
-                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
-                : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
-            }`}
-          >
-            Active
-          </button>
-          <button
-            onClick={() => setFilter('completed')}
-            className={`px-3 py-1 text-sm rounded-md ${
-              filter === 'completed' 
-                ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
-                : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
-            }`}
-          >
-            Completed
-          </button>
-        </div>
+      {!hideFilters && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1 text-sm rounded-md ${
+                filter === 'all' 
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
+                  : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilter('active')}
+              className={`px-3 py-1 text-sm rounded-md ${
+                filter === 'active' 
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
+                  : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setFilter('completed')}
+              className={`px-3 py-1 text-sm rounded-md ${
+                filter === 'completed' 
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
+                  : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300'
+              }`}
+            >
+              Completed
+            </button>
+          </div>
 
-        <div className="flex items-center space-x-2">
-          <label htmlFor="sort" className="text-sm text-secondary-700 dark:text-secondary-300">
-            Sort by:
-          </label>
-          <select
-            id="sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortOption)}
-            className="text-sm rounded-md bg-white dark:bg-secondary-800 border border-secondary-300 dark:border-secondary-600 text-secondary-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
-          >
-            <option value="createdAt">Default</option>
-            <option value="priority">Priority</option>
-            <option value="dueDate">Due Date</option>
-            <option value="alphabetical">Alphabetical</option>
-          </select>
+          <div className="flex items-center space-x-2">
+            <label htmlFor="sort" className="text-sm text-secondary-700 dark:text-secondary-300">
+              Sort by:
+            </label>
+            <select
+              id="sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="text-sm rounded-md bg-white dark:bg-secondary-800 border border-secondary-300 dark:border-secondary-600 text-secondary-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400"
+            >
+              <option value="createdAt">Default</option>
+              <option value="priority">Priority</option>
+              <option value="dueDate">Due Date</option>
+              <option value="alphabetical">Alphabetical</option>
+            </select>
+          </div>
         </div>
-      </div>
+      )}
 
       {filteredTasks.length === 0 ? (
         <div className="card p-8 text-center">
@@ -162,17 +172,7 @@ const TaskList = ({ projectId }: TaskListProps) => {
                 className="space-y-3"
               >
                 {filteredTasks.map((task, index) => (
-                  <Draggable key={task.id} draggableId={task.id} index={index}>
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                      >
-                        <TaskItem task={task} />
-                      </div>
-                    )}
-                  </Draggable>
+                  <TaskItem key={task.id} task={task} index={index} />
                 ))}
                 {provided.placeholder}
               </div>

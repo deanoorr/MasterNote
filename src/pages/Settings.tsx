@@ -117,16 +117,56 @@ const Settings = () => {
               <label htmlFor="model" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-1">
                 AI Model
               </label>
-              <input
-                type="text"
-                id="model"
-                placeholder={provider === AIProvider.OPENAI ? "gpt-4o" : provider === AIProvider.ANTHROPIC ? "claude-3-opus" : "gemini-pro"}
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="input w-full"
-              />
+              {provider === AIProvider.OPENAI && (
+                <select
+                  id="model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4">GPT-4</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </select>
+              )}
+              {provider === AIProvider.ANTHROPIC && (
+                <select
+                  id="model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="claude-3-opus">Claude 3 Opus</option>
+                  <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                  <option value="claude-3-haiku">Claude 3 Haiku</option>
+                  <option value="claude-2">Claude 2</option>
+                </select>
+              )}
+              {provider === AIProvider.GOOGLE && (
+                <select
+                  id="model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="input w-full"
+                >
+                  <option value="gemini-pro">Gemini Pro</option>
+                  <option value="gemini-ultra">Gemini Ultra</option>
+                </select>
+              )}
+              {provider === AIProvider.CUSTOM && (
+                <input
+                  type="text"
+                  id="model"
+                  placeholder="Enter model name"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="input w-full"
+                />
+              )}
               <p className="mt-1 text-xs text-secondary-500 dark:text-secondary-400">
-                Leave blank to use the default model for the selected provider
+                Select the AI model to use for task analysis and suggestions
               </p>
             </div>
             
@@ -156,6 +196,36 @@ const Settings = () => {
               <p className="mt-1 text-xs text-secondary-500 dark:text-secondary-400">
                 Your API key is stored locally and never sent to our servers
               </p>
+              {provider === AIProvider.OPENAI && (
+                <a 
+                  href="https://platform.openai.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:underline inline-block"
+                >
+                  Get an OpenAI API key →
+                </a>
+              )}
+              {provider === AIProvider.ANTHROPIC && (
+                <a 
+                  href="https://console.anthropic.com/account/keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:underline inline-block"
+                >
+                  Get an Anthropic API key →
+                </a>
+              )}
+              {provider === AIProvider.GOOGLE && (
+                <a 
+                  href="https://ai.google.dev/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs text-primary-600 dark:text-primary-400 hover:underline inline-block"
+                >
+                  Get a Google AI API key →
+                </a>
+              )}
             </div>
             
             <button
