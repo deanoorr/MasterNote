@@ -189,7 +189,6 @@ const Settings = () => {
                   checked={aiSettings.features.taskCategorization}
                   onChange={() => handleToggleFeature('taskCategorization')}
                   className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
-                  disabled={!aiSettings.apiKey}
                 />
               </div>
               <div className="ml-3">
@@ -213,7 +212,6 @@ const Settings = () => {
                   checked={aiSettings.features.prioritization}
                   onChange={() => handleToggleFeature('prioritization')}
                   className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
-                  disabled={!aiSettings.apiKey}
                 />
               </div>
               <div className="ml-3">
@@ -237,7 +235,6 @@ const Settings = () => {
                   checked={aiSettings.features.suggestions}
                   onChange={() => handleToggleFeature('suggestions')}
                   className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
-                  disabled={!aiSettings.apiKey}
                 />
               </div>
               <div className="ml-3">
@@ -261,7 +258,6 @@ const Settings = () => {
                   checked={aiSettings.features.taskCreation || false}
                   onChange={() => handleToggleFeature('taskCreation')}
                   className="h-4 w-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
-                  disabled={!aiSettings.apiKey}
                 />
               </div>
               <div className="ml-3">
@@ -278,11 +274,18 @@ const Settings = () => {
             </div>
           </div>
           
-          {!aiSettings.apiKey && (
+          {!aiSettings.apiKey ? (
             <div className="mt-6 p-4 border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/30 dark:border-yellow-700 rounded-md text-yellow-800 dark:text-yellow-300">
               <div className="flex">
                 <FiX className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mr-2 flex-shrink-0" />
                 <p>To enable AI features, please add your API key in the settings above.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-6 p-4 border border-green-300 bg-green-50 dark:bg-green-900/30 dark:border-green-800 rounded-md text-green-800 dark:text-green-300">
+              <div className="flex">
+                <FiCheck className="h-5 w-5 text-green-600 dark:text-green-500 mr-2 flex-shrink-0" />
+                <p>AI features are enabled! Select which features you want to use above.</p>
               </div>
             </div>
           )}
