@@ -1,0 +1,109 @@
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { Message, Task } from './types';
+
+export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical';
+
+interface Store {
+  messages: Message[];
+  tasks: Task[];
+  sortOrder: SortOption;
+  addMessage: (message: Message) => void;
+  addTask: (task: Task) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => void;
+  deleteTask: (taskId: string) => void;
+  clearMessages: () => void;
+  setSortOrder: (order: SortOption) => void;
+  getSortedTasks: () => Task[];
+}
+
+export const useStore = create<Store>()(
+  persist(
+    (set, get) => ({
+      messages: [],
+      tasks: [],
+      sortOrder: 'due-date' as SortOption,
+      addMessage: (message) =>
+        set((state) => ({
+          messages: [...state.messages, message],
+        })),
+      addTask: (task) =>
+        set((state) => {
+          console.log("Store: Adding task to state:", task);
+          return {
+            tasks: [...state.tasks, task],
+          };
+        }),
+      updateTask: (taskId, updates) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId ? { ...task, ...updates } : task
+          ),
+        })),
+      deleteTask: (taskId) =>
+        set((state) => ({
+          tasks: state.tasks.filter((task) => task.id !== taskId),
+        })),
+      clearMessages: () => 
+        set(() => ({
+          messages: [],
+        })),
+      setSortOrder: (order: SortOption) => 
+        set(() => ({
+          sortOrder: order
+        })),
+      getSortedTasks: () => {
+        const { tasks, sortOrder } = get();
+        const tasksCopy = [...tasks];
+
+        switch (sortOrder) {
+          case 'priority-high':
+            // Sort by priority (high to low)
+            return tasksCopy.sort((a, b) => {
+              const priorityOrder = { high: 3, medium: 2, low: 1 };
+              return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+            });
+          
+          case 'priority-low':
+            // Sort by priority (low to high)
+            return tasksCopy.sort((a, b) => {
+              const priorityOrder = { high: 3, medium: 2, low: 1 };
+              return (priorityOrder[a.priority] || 0) - (priorityOrder[b.priority] || 0);
+            });
+          
+          case 'due-date':
+            // Sort by due date (closest first, null dates at the end)
+            return tasksCopy.sort((a, b) => {
+              if (!a.dueDate && !b.dueDate) return 0;
+              if (!a.dueDate) return 1;
+              if (!b.dueDate) return -1;
+              return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+            });
+          
+          case 'created-newest':
+            // Sort by creation date (newest first)
+            return tasksCopy.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+          
+          case 'created-oldest':
+            // Sort by creation date (oldest first)
+            return tasksCopy.sort((a, b) => 
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+          
+          case 'alphabetical':
+            // Sort alphabetically by title
+            return tasksCopy.sort((a, b) => a.title.localeCompare(b.title));
+          
+          default:
+            return tasksCopy;
+        }
+      }
+    }),
+    {
+      name: 'masternote-storage',
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+); 
