@@ -12,7 +12,7 @@ const MainLayout = () => {
   // Handle responsive sidebar
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 768) {
+      if (window.innerWidth < 1024) {
         setIsMobile(true)
         setIsSidebarOpen(false)
       } else {
@@ -34,8 +34,8 @@ const MainLayout = () => {
     <div className="flex h-screen overflow-hidden bg-white dark:bg-secondary-900">
       <Sidebar isOpen={isSidebarOpen} isMobile={isMobile} onClose={() => setIsSidebarOpen(false)} />
 
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header toggleSidebar={toggleSidebar} />
+      <div className={`flex flex-col flex-1 overflow-hidden ${isMobile ? 'w-full' : 'ml-64'}`}>
+        <Header toggleSidebar={toggleSidebar} isMobile={isMobile} />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-7xl mx-auto">

@@ -6,10 +6,11 @@ import { addTask } from '@features/tasks/tasksSlice'
 import { TaskPriority } from '@/types'
 
 interface HeaderProps {
-  toggleSidebar: () => void
+  toggleSidebar: () => void;
+  isMobile: boolean;
 }
 
-const Header = ({ toggleSidebar }: HeaderProps) => {
+const Header = ({ toggleSidebar, isMobile }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false)
   const [taskTitle, setTaskTitle] = useState('')
@@ -46,13 +47,15 @@ const Header = ({ toggleSidebar }: HeaderProps) => {
   return (
     <header className="bg-white dark:bg-secondary-800 border-b border-secondary-200 dark:border-secondary-700 px-4 py-3 flex items-center justify-between shadow-sm">
       <div className="flex items-center">
-        <button
-          onClick={toggleSidebar}
-          className="text-secondary-500 hover:text-secondary-700 dark:text-secondary-400 dark:hover:text-secondary-200 lg:hidden"
-        >
-          <FiMenu size={24} />
-        </button>
-        <form onSubmit={handleSearch} className="ml-4">
+        {isMobile && (
+          <button
+            onClick={toggleSidebar}
+            className="text-secondary-500 hover:text-secondary-700 dark:text-secondary-400 dark:hover:text-secondary-200"
+          >
+            <FiMenu size={24} />
+          </button>
+        )}
+        <form onSubmit={handleSearch} className={isMobile ? "ml-4" : ""}>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
               <FiSearch className="text-secondary-400 dark:text-secondary-500" />
