@@ -5,7 +5,7 @@ import { useAppSelector, useAppDispatch } from '@hooks/useAppRedux'
 import { addTask } from '@features/tasks/tasksSlice'
 import { updateAISettings } from '@features/aiSettings/aiSettingsSlice'
 import { TaskPriority } from '@/types'
-import { analyzeTaskWithAI } from '@services/ai'
+import { analyzeTaskWithAI, getAIResponse } from '@services/ai'
 import TaskList from '@components/tasks/TaskList'
 
 const AIAssistant = () => {
@@ -79,10 +79,10 @@ const AIAssistant = () => {
     }
     
     try {
+      // Check for task-related commands first
       if (detectTaskCreationIntent(userMessage)) {
-        // Try to parse the task from natural language
+        // Handle task creation
         const taskInfo = await processTaskCreation(userMessage)
-        
         setConversation(prev => [
           ...prev, 
           { 
@@ -97,14 +97,22 @@ const AIAssistant = () => {
           }
         ])
       } else if (/show|list|what|display tasks/i.test(userMessage)) {
-        // Handle task listing/summarizing queries
+        // Handle task listing
         processTaskListingQuery(userMessage)
       } else if (/analyze|review|summarize task/i.test(userMessage)) {
-        // Handle task analysis queries
+        // Handle task analysis
         await processTaskAnalysisQuery(userMessage)
       } else {
-        // Default intelligent response
-        processGeneralQuery(userMessage)
+        // Handle general conversation
+        const response = await getAIResponse(userMessage, { apiKey, provider, model, features })
+        if (response.success && response.data) {
+          setConversation(prev => [
+            ...prev,
+            { role: 'assistant', content: response.data }
+          ])
+        } else {
+          throw new Error(response.error || 'Failed to get AI response')
+        }
       }
     } catch (error) {
       console.error('Error processing message:', error)
@@ -414,66 +422,6 @@ const AIAssistant = () => {
     setConversation(prev => [
       ...prev, 
       { role: 'assistant', content: taskInfo.join('\n') }
-    ])
-  }
-  
-  // Process general queries
-  const processGeneralQuery = (message: string) => {
-    // Extract the main intent
-    const lowerMessage = message.toLowerCase()
-    let response = ''
-    
-    if (lowerMessage.includes('help') || lowerMessage.includes('what can you do')) {
-      response = `I can help you manage your tasks in several ways:
-
-1. **Create tasks** - Just tell me what you need to do
-2. **List tasks** - Ask me to show your tasks, upcoming tasks, or high priority tasks
-3. **Analyze tasks** - I can review specific tasks and offer suggestions
-4. **Task stats** - I can give you a summary of your current workload
-
-Try asking something like "Show me my high priority tasks" or "Create a task to finish the report by Friday."
-`
-    } else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-      const pendingCount = tasks.filter(t => !t.completed).length
-      const urgentCount = tasks.filter(t => !t.completed && (t.priority === TaskPriority.HIGH || t.priority === TaskPriority.URGENT)).length
-      
-      response = `Hello! I'm your AI task assistant. ${
-        pendingCount > 0 
-          ? `You currently have ${pendingCount} active tasks${urgentCount > 0 ? `, including ${urgentCount} high priority or urgent ones` : ''}.` 
-          : "You don't have any active tasks at the moment."
-      } How can I help you today?`
-    } else if (lowerMessage.includes('stats') || lowerMessage.includes('summary') || lowerMessage.includes('overview')) {
-      const totalTasks = tasks.length
-      const completedTasks = tasks.filter(t => t.completed).length
-      const pendingTasks = totalTasks - completedTasks
-      const highPriorityTasks = tasks.filter(t => !t.completed && (t.priority === TaskPriority.HIGH || t.priority === TaskPriority.URGENT)).length
-      
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const upcomingTasks = tasks.filter(t => !t.completed && t.dueDate && new Date(t.dueDate) >= today).length
-      
-      response = `**Task Summary:**
-
-• Total tasks: ${totalTasks}
-• Completed: ${completedTasks} (${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%)
-• Pending: ${pendingTasks}
-• High priority/urgent: ${highPriorityTasks}
-• With upcoming deadlines: ${upcomingTasks}
-`
-    } else {
-      response = `I can help you with task management. Try asking me to create a task, show your tasks, or analyze a specific task. 
-
-Here are some examples of what you can ask:
-• "Create a task to finish the presentation by Friday"
-• "Show me my high priority tasks"
-• "What tasks do I have today?"
-• "Analyze my task about the quarterly report"
-`
-    }
-    
-    setConversation(prev => [
-      ...prev, 
-      { role: 'assistant', content: response }
     ])
   }
   

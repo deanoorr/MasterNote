@@ -2,21 +2,117 @@ import axios from 'axios'
 import { AISettings, Task, TaskPriority } from '@/types'
 import { AIProvider } from '@features/aiSettings/aiSettingsSlice'
 
-export interface AIResponse {
-  success: boolean;
-  data?: any;
-  error?: string;
+interface AIResponse {
+  success: boolean
+  data?: string
+  error?: string
+}
+
+interface AIConfig {
+  apiKey: string
+  provider: string
+  model: string
+  features?: string[]
 }
 
 interface AIAnalysisResponse {
-  success: boolean;
-  error?: string;
+  success: boolean
+  error?: string
   data?: {
-    tags?: string[] | string;
-    priority?: TaskPriority;
-    deadline?: string;
-    reasoning?: string;
-  };
+    tags?: string[]
+    priority?: TaskPriority
+    deadline?: string
+    reasoning?: string
+  }
+}
+
+interface Tag {
+  name: string
+  color?: string
+}
+
+interface RawResponse {
+  rawResponse: string
+}
+
+// Function to handle general AI conversation
+const getAIResponse = async (message: string, config: AIConfig): Promise<AIResponse> => {
+  if (!config.apiKey) {
+    return {
+      success: false,
+      error: 'API key is required'
+    }
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model || 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an intelligent AI assistant integrated into a task management application. Your primary role is to help users manage their tasks and engage in general conversation.
+
+When users mention specific task-related commands like "create task", "show tasks", "analyze task", etc., you should recognize these as application commands and respond accordingly.
+
+For task creation:
+- Extract key details like title, priority, due date, and tags
+- Format dates consistently
+- Suggest appropriate priorities based on context
+- Add relevant tags based on the task description
+
+For task listing:
+- Support filtering by priority, status, date range
+- Provide clear, organized summaries
+- Highlight urgent or overdue items
+
+For task analysis:
+- Offer insights on task complexity
+- Suggest time management strategies
+- Identify potential dependencies
+- Recommend priority adjustments
+
+For general conversation:
+- Engage naturally while staying focused on productivity
+- Provide helpful suggestions
+- Answer questions about any topic
+- Maintain context of the conversation`
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to get AI response')
+    }
+
+    const data = await response.json()
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format')
+    }
+
+    return {
+      success: true,
+      data: data.choices[0].message.content
+    }
+  } catch (error) {
+    console.error('Error getting AI response:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    }
+  }
 }
 
 // Function to categorize task using OpenAI
@@ -200,225 +296,71 @@ export const analyzeTaskWithClaude = async (
 /**
  * Analyzes a task with AI to provide suggestions for tags, priority, etc.
  */
-export const analyzeTaskWithAI = async (
-  task: Task,
-  aiSettings: {
-    apiKey: string;
-    provider: string;
-    model: string;
-    features: {
-      taskCategorization: boolean;
-      prioritization: boolean;
-      suggestions: boolean;
-      reminders: boolean;
-      reasoning: boolean;
-    };
-  }
-): Promise<AIAnalysisResponse> => {
-  const { apiKey, provider, model, features } = aiSettings;
-  
+const analyzeTaskWithAI = async (taskDescription: string, apiKey: string): Promise<AIAnalysisResponse> => {
   if (!apiKey) {
     return {
       success: false,
       error: 'API key is required'
-    };
+    }
   }
 
   try {
-    const featuresRequested: string[] = [];
-    
-    if (features.taskCategorization) featuresRequested.push('tags');
-    if (features.prioritization) featuresRequested.push('priority');
-    if (features.suggestions) featuresRequested.push('deadline');
-    if (features.reasoning) featuresRequested.push('reasoning');
-    
-    if (featuresRequested.length === 0) {
-      return {
-        success: false,
-        error: 'No AI features enabled'
-      };
-    }
-    
-    let endpoint = '';
-    let modelToUse = '';
-    let requestBody = {};
-    
-    switch (provider) {
-      case AIProvider.OPENAI:
-        endpoint = 'https://api.openai.com/v1/chat/completions';
-        modelToUse = model || 'gpt-4o';
-        requestBody = {
-          model: modelToUse,
-          messages: [
-            {
-              role: 'system',
-              content: `You are an AI assistant that specializes in task management. Analyze the given task and provide the following information: ${featuresRequested.join(', ')}.
-              
-              For tags, provide up to 3 relevant tags as an array.
-              For priority, provide one of the following values: "low", "medium", "high", "urgent".
-              For deadline, suggest a reasonable deadline as an ISO string.
-              For reasoning, provide a brief explanation of your analysis and suggestions.
-              
-              Return your response as a JSON object with the requested fields.`
-            },
-            {
-              role: 'user',
-              content: `Task: ${task.title}
-              Description: ${task.description || 'No description provided'}
-              Current priority: ${task.priority}
-              Current due date: ${task.dueDate || 'None'}`
-            }
-          ],
-          temperature: 0.3,
-          response_format: { type: 'json_object' }
-        };
-        break;
-        
-      case AIProvider.ANTHROPIC:
-        endpoint = 'https://api.anthropic.com/v1/messages';
-        modelToUse = model || 'claude-3-haiku';
-        requestBody = {
-          model: modelToUse,
-          messages: [
-            {
-              role: 'user',
-              content: `You are an AI assistant that specializes in task management. Analyze the given task and provide the following information: ${featuresRequested.join(', ')}.
-              
-              For tags, provide up to 3 relevant tags as an array.
-              For priority, provide one of the following values: "low", "medium", "high", "urgent".
-              For deadline, suggest a reasonable deadline as an ISO string.
-              For reasoning, provide a brief explanation of your analysis and suggestions.
-              
-              Task: ${task.title}
-              Description: ${task.description || 'No description provided'}
-              Current priority: ${task.priority}
-              Current due date: ${task.dueDate || 'None'}
-              
-              Return your response as a JSON object with the requested fields.`
-            }
-          ],
-          max_tokens: 1000
-        };
-        break;
-        
-      case AIProvider.GOOGLE:
-        endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-        modelToUse = model || 'gemini-pro';
-        requestBody = {
-          contents: [
-            {
-              parts: [
-                {
-                  text: `You are an AI assistant that specializes in task management. Analyze the given task and provide the following information: ${featuresRequested.join(', ')}.
-                  
-                  For tags, provide up to 3 relevant tags as an array.
-                  For priority, provide one of the following values: "low", "medium", "high", "urgent".
-                  For deadline, suggest a reasonable deadline as an ISO string.
-                  For reasoning, provide a brief explanation of your analysis and suggestions.
-                  
-                  Task: ${task.title}
-                  Description: ${task.description || 'No description provided'}
-                  Current priority: ${task.priority}
-                  Current due date: ${task.dueDate || 'None'}
-                  
-                  Return your response as a JSON object with the requested fields.`
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.3
-          }
-        };
-        endpoint = `${endpoint}?key=${apiKey}`;
-        break;
-        
-      default:
-        return {
-          success: false,
-          error: 'Unsupported AI provider'
-        };
-    }
-    
-    let headers: HeadersInit = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (provider === AIProvider.OPENAI) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else if (provider === AIProvider.ANTHROPIC) {
-      headers['x-api-key'] = apiKey;
-      headers['anthropic-version'] = '2023-06-01';
-    }
-    
-    const response = await fetch(endpoint, {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
-    });
-    
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a task analysis assistant. Analyze the given task and extract or suggest:
+1. Relevant tags (as an array of strings)
+2. Appropriate priority level (URGENT, HIGH, MEDIUM, or LOW)
+3. Suggested deadline if applicable (in ISO date format)
+4. Brief reasoning for your suggestions
+
+Format your response as a JSON object with these keys: tags, priority, deadline, reasoning`
+          },
+          {
+            role: 'user',
+            content: taskDescription
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    })
+
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${response.status} ${errorText}`);
+      throw new Error('Failed to analyze task')
     }
-    
-    const responseData = await response.json();
-    
-    let result: any;
-    
-    // Extract the content based on provider
-    if (provider === AIProvider.OPENAI) {
-      try {
-        const content = responseData.choices[0].message.content;
-        result = JSON.parse(content);
-      } catch (e) {
-        throw new Error('Failed to parse OpenAI response');
-      }
-    } else if (provider === AIProvider.ANTHROPIC) {
-      try {
-        const content = responseData.content[0].text;
-        // Extract JSON from the content
-        const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/({[\s\S]*})/);
-        if (jsonMatch && jsonMatch[1]) {
-          result = JSON.parse(jsonMatch[1]);
-        } else {
-          result = JSON.parse(content);
-        }
-      } catch (e) {
-        throw new Error('Failed to parse Anthropic response');
-      }
-    } else if (provider === AIProvider.GOOGLE) {
-      try {
-        const content = responseData.candidates[0].content.parts[0].text;
-        // Extract JSON from the content
-        const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/({[\s\S]*})/);
-        if (jsonMatch && jsonMatch[1]) {
-          result = JSON.parse(jsonMatch[1]);
-        } else {
-          result = JSON.parse(content);
-        }
-      } catch (e) {
-        throw new Error('Failed to parse Google AI response');
-      }
+
+    const data = await response.json()
+    if (!data.choices?.[0]?.message?.content) {
+      throw new Error('Invalid response format')
     }
-    
+
+    const analysisResult = JSON.parse(data.choices[0].message.content)
     return {
       success: true,
       data: {
-        tags: result.tags,
-        priority: result.priority,
-        deadline: result.deadline,
-        reasoning: result.reasoning
+        tags: Array.isArray(analysisResult.tags) ? analysisResult.tags : [],
+        priority: analysisResult.priority as TaskPriority,
+        deadline: analysisResult.deadline,
+        reasoning: analysisResult.reasoning
       }
-    };
+    }
   } catch (error) {
-    console.error('Error analyzing task with AI:', error);
+    console.error('Error analyzing task:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
+    }
   }
-};
+}
 
 /**
  * Convert natural language to a task
@@ -445,4 +387,17 @@ export const naturalLanguageToTask = async (
     title: input,
     priority: TaskPriority.MEDIUM
   };
-}; 
+};
+
+const processRawResponse = (response: unknown): string => {
+  if (typeof response === 'string') {
+    return response
+  }
+  if (response && typeof response === 'object' && 'rawResponse' in response) {
+    const typedResponse = response as RawResponse
+    return typedResponse.rawResponse
+  }
+  throw new Error('Invalid response format')
+}
+
+export { getAIResponse, analyzeTaskWithAI, processRawResponse } 
