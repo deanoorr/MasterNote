@@ -18,6 +18,26 @@ const getPerplexityApiKey = () => {
   return import.meta.env.VITE_PERPLEXITY_API_KEY || '';
 };
 
+// Helper function to map month names to month numbers (0-based index)
+const getMonthNumber = (monthName: string): number | undefined => {
+  const months: {[key: string]: number} = {
+    'january': 0, 'jan': 0,
+    'february': 1, 'feb': 1,
+    'march': 2, 'mar': 2,
+    'april': 3, 'apr': 3,
+    'may': 4,
+    'june': 5, 'jun': 5,
+    'july': 6, 'jul': 6,
+    'august': 7, 'aug': 7,
+    'september': 8, 'sep': 8, 'sept': 8,
+    'october': 9, 'oct': 9,
+    'november': 10, 'nov': 10,
+    'december': 11, 'dec': 11
+  };
+  
+  return months[monthName.toLowerCase()];
+};
+
 // Initialize OpenAI with the API key
 const getOpenAIClient = () => {
   const apiKey = getApiKey();
@@ -846,7 +866,30 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
       const forDateCalledPattern = /\s+for\s+(tomorrow|today|next\s+week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+called\s+(.+)$/i;
       const forDateCalledMatch = message.match(forDateCalledPattern);
       
-      if (forDateCalledMatch) {
+      // Handle "for [specific date] called X" pattern (high priority)
+      const forSpecificDateCalledPattern = /\s+for\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(\w+)(?:\s+|\,\s*)(\d{4})?\s+called\s+(.+)$/i;
+      const forSpecificDateCalledMatch = message.match(forSpecificDateCalledPattern);
+      
+      if (forSpecificDateCalledMatch) {
+        // Extract date components
+        const day = parseInt(forSpecificDateCalledMatch[1]);
+        const monthName = forSpecificDateCalledMatch[2].toLowerCase();
+        // If year not provided, use current year
+        const year = forSpecificDateCalledMatch[3] ? parseInt(forSpecificDateCalledMatch[3]) : new Date().getFullYear();
+        const extractedTaskTitle = forSpecificDateCalledMatch[4].trim();
+        
+        console.log("Matched 'for SPECIFIC DATE called X' pattern:", day, monthName, year, extractedTaskTitle);
+        
+        const monthNumber = getMonthNumber(monthName);
+        
+        if (monthNumber !== undefined && day >= 1 && day <= 31) {
+          dueDate = new Date(year, monthNumber, day);
+          dateFound = true;
+          taskTitle = extractedTaskTitle;
+          console.log("Specific date parsed: Title:", taskTitle, "Due date:", dueDate);
+        }
+      }
+      else if (forDateCalledMatch) {
         const dateIndicator = forDateCalledMatch[1].toLowerCase();
         const extractedTaskTitle = forDateCalledMatch[2].trim();
         
@@ -979,6 +1022,8 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
             { regex: /^tomorrow\s+(?:to\s+|is\s+to\s+|called\s+)?/i, days: 1 },
             { regex: /^this\s+(?:coming\s+)?(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, weekday: true },
             { regex: /^next\s+(\w+)\s+(?:to\s+|is\s+to\s+|called\s+)?/i, nextWeekday: true },
+            // Add specific date format pattern
+            { regex: /^(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(\w+)(?:\s+|\,\s*)(\d{4})?\s+(?:to\s+|is\s+to\s+|called\s+)?/i, specificDate: true },
           ];
           
           for (const indicator of timeIndicators) {
@@ -1012,6 +1057,20 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
                   dueDate.setDate(dueDate.getDate() + daysToAdd);
                   dateFound = true;
                 }
+              } else if (indicator.specificDate && match[1] && match[2]) {
+                // Handle specific date format (e.g., "25th of November 2025")
+                const day = parseInt(match[1]);
+                const monthName = match[2].toLowerCase();
+                // If year not provided, use current year
+                const year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+                
+                const monthNumber = getMonthNumber(monthName);
+                
+                if (monthNumber !== undefined && day >= 1 && day <= 31) {
+                  dueDate = new Date(year, monthNumber, day);
+                  dateFound = true;
+                  console.log("Specific date parsed from beginning of task:", dueDate);
+                }
               }
               
               // Remove the time indicator from the task title
@@ -1030,6 +1089,9 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
             { regex: /\s+this\s+(?:coming\s+)?(\w+)(?:\s+|$)/i, weekday: true },
             { regex: /\s+next\s+(\w+)(?:\s+|$)/i, nextWeekday: true },
             { regex: /\s+on\s+(\w+)(?:\s+|$)/i, weekday: true },
+            // Add embedded specific date pattern
+            { regex: /\s+on\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(\w+)(?:\s+|\,\s*)(\d{4})?(?:\s+|$)/i, specificDate: true },
+            { regex: /\s+for\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(\w+)(?:\s+|\,\s*)(\d{4})?(?:\s+|$)/i, specificDate: true },
           ];
           
           for (const indicator of embeddedTimeIndicators) {
@@ -1055,6 +1117,20 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
                   
                   dueDate.setDate(dueDate.getDate() + daysToAdd);
                   dateFound = true;
+                }
+              } else if (indicator.specificDate && match[1] && match[2]) {
+                // Handle embedded specific date format (e.g., "on the 25th of November 2025")
+                const day = parseInt(match[1]);
+                const monthName = match[2].toLowerCase();
+                // If year not provided, use current year
+                const year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+                
+                const monthNumber = getMonthNumber(monthName);
+                
+                if (monthNumber !== undefined && day >= 1 && day <= 31) {
+                  dueDate = new Date(year, monthNumber, day);
+                  dateFound = true;
+                  console.log("Embedded specific date parsed:", dueDate);
                 }
               }
               
