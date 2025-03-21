@@ -573,12 +573,18 @@ Here are some examples of what you can ask:
           <div className="p-4 bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <FiCheckSquare className="text-primary-600 dark:text-primary-400" />
-              <span className="font-medium text-secondary-900 dark:text-white">Tasks</span>
+              <span className="font-medium text-secondary-900 dark:text-white">Active Tasks</span>
             </div>
+            <button
+              onClick={() => navigate('/tasks')}
+              className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
+            >
+              View All Tasks
+            </button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-4">
-            <TaskList tasks={tasks} />
+            <TaskList tasks={tasks.filter(task => !task.completed)} hideFilters={true} />
           </div>
         </div>
       </div>

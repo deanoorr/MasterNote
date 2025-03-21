@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FiCheck, FiChevronRight, FiFlag, FiTag, FiCalendar, FiCpu } from 'react-icons/fi'
 import { Draggable } from 'react-beautiful-dnd'
 import { Task, TaskPriority } from '@/types'
 import { useAppDispatch } from '@hooks/useAppRedux'
-import { toggleTaskCompleted, updateTask } from '@features/tasks/tasksSlice'
+import { toggleTaskCompleted, updateTask, deleteTask } from '@features/tasks/tasksSlice'
 import SubTaskList from './SubTaskList'
 
 // Helper to get priority color
@@ -31,7 +31,27 @@ interface TaskItemProps {
 const TaskItem: React.FC<TaskItemProps> = ({ task, index }) => {
   const [expanded, setExpanded] = useState(false)
   const [showAISuggestions, setShowAISuggestions] = useState(false)
+  const [isRemoving, setIsRemoving] = useState(false)
   const dispatch = useAppDispatch()
+  
+  // Handle auto-remove when task is completed
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
+    if (task.completed) {
+      // Set removing state first for animation
+      setIsRemoving(true)
+      
+      // Then remove after delay
+      timeoutId = setTimeout(() => {
+        dispatch(deleteTask(task.id))
+      }, 800) // Adjust time to match CSS transition duration
+    }
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }, [task.completed, task.id, dispatch])
   
   const toggleExpand = () => {
     setExpanded(!expanded)
@@ -84,7 +104,9 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, index }) => {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className="task-item card mb-3 overflow-visible"
+          className={`task-item card mb-3 overflow-visible transition-all duration-700 ${
+            isRemoving ? 'opacity-0 transform translate-x-full' : 'opacity-100'
+          }`}
         >
           <div className="flex items-start">
             <button
