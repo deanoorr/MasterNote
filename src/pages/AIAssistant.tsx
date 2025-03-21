@@ -133,7 +133,7 @@ I'll understand what you mean and create the appropriate task with all the detai
       priority: TaskPriority.MEDIUM,
       dueDate: null as string | null,
       projectId: null,
-      tags: [],
+      tags: [] as string[],
       completed: false,
       subtasks: [],
     }
@@ -144,14 +144,23 @@ I'll understand what you mean and create the appropriate task with all the detai
       const reminderMatch = message.match(/remind (?:me )?to (.*?)(?:by|due|on|with priority|$)/i)
       const needToMatch = message.match(/(?:need|have) to (.*?)(?:by|due|on|with priority|$)/i)
       
-      if (titleMatch) {
+      if (titleMatch && titleMatch[2] && titleMatch[2].trim().length > 0) {
         taskData.title = titleMatch[2].trim()
-      } else if (reminderMatch) {
+      } else if (reminderMatch && reminderMatch[1] && reminderMatch[1].trim().length > 0) {
         taskData.title = reminderMatch[1].trim()
-      } else if (needToMatch) {
+      } else if (needToMatch && needToMatch[1] && needToMatch[1].trim().length > 0) {
         taskData.title = needToMatch[1].trim()
       } else {
-        // If no clear pattern, use the message as the title
+        // If no clear pattern, use the message as the title but remove common prefixes
+        const cleanMessage = message.replace(/^(create|add) a task (to|for|about) /i, '')
+                                    .replace(/^remind me to /i, '')
+                                    .replace(/^(need|have) to /i, '')
+                                    .trim()
+        taskData.title = cleanMessage
+      }
+
+      // Make sure we have a complete title
+      if (!taskData.title || taskData.title.length === 0) {
         taskData.title = message.trim()
       }
       
@@ -229,8 +238,8 @@ I'll understand what you mean and create the appropriate task with all the detai
         if (result.success && result.data) {
           // Apply tags if available
           if (features.taskCategorization && result.data.tags) {
-            const newTags = Array.isArray(result.data.tags) ? result.data.tags : [result.data.tags]
-            taskData.tags = newTags as string[];
+            const newTags = Array.isArray(result.data.tags) ? result.data.tags : [result.data.tags];
+            taskData.tags = newTags as Array<string>;
           }
           
           // Apply priority if not already set and available
