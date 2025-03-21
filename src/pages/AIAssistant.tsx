@@ -64,7 +64,6 @@ const AIAssistant = () => {
     }
     
     try {
-      // Detect task creation intent
       if (detectTaskCreationIntent(userMessage)) {
         // Try to parse the task from natural language
         const taskInfo = await processTaskCreation(userMessage)
@@ -82,21 +81,15 @@ const AIAssistant = () => {
             }` 
           }
         ])
+      } else if (/show|list|what|display tasks/i.test(userMessage)) {
+        // Handle task listing/summarizing queries
+        processTaskListingQuery(userMessage)
+      } else if (/analyze|review|summarize task/i.test(userMessage)) {
+        // Handle task analysis queries
+        await processTaskAnalysisQuery(userMessage)
       } else {
-        // Generic response for other queries
-        setConversation(prev => [
-          ...prev, 
-          { 
-            role: 'assistant', 
-            content: `I can help you with task management. Try asking me to create a task, for example:
-            
-"Create a task to finish the presentation by Friday"
-"Add a high priority task to call John about the meeting"
-"I need to buy groceries tomorrow"
-
-I'll understand what you mean and create the appropriate task with all the details.` 
-          }
-        ])
+        // Default intelligent response
+        processGeneralQuery(userMessage)
       }
     } catch (error) {
       console.error('Error processing message:', error)
@@ -276,6 +269,197 @@ I'll understand what you mean and create the appropriate task with all the detai
       console.error('Error creating task:', error)
       throw error
     }
+  }
+  
+  // Process task listing queries
+  const processTaskListingQuery = (message: string) => {
+    const today = new Date()
+    const pendingTasks = tasks.filter(t => !t.completed)
+    const upcomingTasks = pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) > today)
+    const overdueTasks = pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) < today)
+    const highPriorityTasks = pendingTasks.filter(t => t.priority === TaskPriority.HIGH || t.priority === TaskPriority.URGENT)
+    
+    let response = ''
+    
+    if (/today|current/i.test(message)) {
+      response = formatTasksResponse("Here's what you need to work on today", pendingTasks.slice(0, 5))
+    } else if (/upcoming|next|future/i.test(message)) {
+      response = formatTasksResponse("Here are your upcoming tasks", upcomingTasks.slice(0, 5))
+    } else if (/overdue|late|missed/i.test(message)) {
+      response = formatTasksResponse("Here are your overdue tasks", overdueTasks)
+    } else if (/urgent|important|priority/i.test(message)) {
+      response = formatTasksResponse("Here are your high priority tasks", highPriorityTasks)
+    } else if (/completed|finished|done/i.test(message)) {
+      response = formatTasksResponse("Here are your completed tasks", tasks.filter(t => t.completed).slice(0, 5))
+    } else {
+      response = formatTasksResponse("Here are your active tasks", pendingTasks.slice(0, 5))
+    }
+    
+    setConversation(prev => [
+      ...prev, 
+      { role: 'assistant', content: response }
+    ])
+  }
+  
+  // Format tasks into a readable response
+  const formatTasksResponse = (intro: string, taskList: Array<any>): string => {
+    if (taskList.length === 0) {
+      return `${intro}, but I don't see any matching tasks.`
+    }
+    
+    const tasksText = taskList.map(task => {
+      const dueText = task.dueDate ? ` (due ${new Date(task.dueDate).toLocaleDateString()})` : ''
+      const priorityText = task.priority !== TaskPriority.MEDIUM ? ` [${task.priority}]` : ''
+      return `• ${task.title}${priorityText}${dueText}`
+    }).join('\n')
+    
+    return `${intro}:\n\n${tasksText}\n\nYou have ${tasks.length} tasks total (${tasks.filter(t => !t.completed).length} active).`
+  }
+  
+  // Process task analysis queries
+  const processTaskAnalysisQuery = async (message: string) => {
+    const taskMatch = message.match(/analyze|review|summarize task (?:about |for |related to )?(.*)/i)
+    let matchedTask = null
+    
+    if (taskMatch && taskMatch[1]) {
+      const searchTerm = taskMatch[1].trim().toLowerCase()
+      matchedTask = tasks.find(t => 
+        t.title.toLowerCase().includes(searchTerm) || 
+        t.description.toLowerCase().includes(searchTerm)
+      )
+    }
+    
+    if (!matchedTask) {
+      setConversation(prev => [
+        ...prev, 
+        { role: 'assistant', content: "I couldn't find a task matching that description. Could you provide more details or the exact task name?" }
+      ])
+      return
+    }
+    
+    // Use AI to analyze the task
+    if (apiKey && features.taskCategorization) {
+      try {
+        const result = await analyzeTaskWithAI(
+          matchedTask,
+          { apiKey, provider, model, features }
+        )
+        
+        if (result.success && result.data) {
+          const analysis: string[] = []
+          analysis.push(`**Task Analysis: "${matchedTask.title}"**\n`)
+          
+          if (result.data.priority && result.data.priority !== matchedTask.priority) {
+            analysis.push(`• Suggested priority: ${result.data.priority} (currently ${matchedTask.priority})`)
+          }
+          
+          if (result.data.deadline && (!matchedTask.dueDate || new Date(result.data.deadline).toDateString() !== new Date(matchedTask.dueDate).toDateString())) {
+            analysis.push(`• Suggested deadline: ${new Date(result.data.deadline).toLocaleDateString()}${
+              matchedTask.dueDate ? ` (currently ${new Date(matchedTask.dueDate).toLocaleDateString()})` : ''
+            }`)
+          }
+          
+          if (result.data.tags) {
+            const newTags = Array.isArray(result.data.tags) ? result.data.tags : [result.data.tags]
+            const suggestedTags = newTags.filter(tag => !matchedTask.tags.includes(tag))
+            if (suggestedTags.length > 0) {
+              analysis.push(`• Suggested additional tags: ${suggestedTags.join(', ')}`)
+            }
+          }
+          
+          if (result.data.reasoning) {
+            analysis.push(`\n**Analysis:**\n${result.data.reasoning}`)
+          }
+          
+          setConversation(prev => [
+            ...prev, 
+            { role: 'assistant', content: analysis.join('\n') }
+          ])
+          return
+        }
+      } catch (error) {
+        console.error('Error analyzing task:', error)
+      }
+    }
+    
+    // Fallback if AI analysis failed
+    const taskInfo: string[] = []
+    taskInfo.push(`**Task: "${matchedTask.title}"**\n`)
+    taskInfo.push(`• Priority: ${matchedTask.priority}`)
+    if (matchedTask.dueDate) {
+      taskInfo.push(`• Due: ${new Date(matchedTask.dueDate).toLocaleDateString()}`)
+    }
+    if (matchedTask.tags.length > 0) {
+      taskInfo.push(`• Tags: ${matchedTask.tags.join(', ')}`)
+    }
+    if (matchedTask.description) {
+      taskInfo.push(`\n**Description:**\n${matchedTask.description}`)
+    }
+    
+    setConversation(prev => [
+      ...prev, 
+      { role: 'assistant', content: taskInfo.join('\n') }
+    ])
+  }
+  
+  // Process general queries
+  const processGeneralQuery = (message: string) => {
+    // Extract the main intent
+    const lowerMessage = message.toLowerCase()
+    let response = ''
+    
+    if (lowerMessage.includes('help') || lowerMessage.includes('what can you do')) {
+      response = `I can help you manage your tasks in several ways:
+
+1. **Create tasks** - Just tell me what you need to do
+2. **List tasks** - Ask me to show your tasks, upcoming tasks, or high priority tasks
+3. **Analyze tasks** - I can review specific tasks and offer suggestions
+4. **Task stats** - I can give you a summary of your current workload
+
+Try asking something like "Show me my high priority tasks" or "Create a task to finish the report by Friday."
+`
+    } else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
+      const pendingCount = tasks.filter(t => !t.completed).length
+      const urgentCount = tasks.filter(t => !t.completed && (t.priority === TaskPriority.HIGH || t.priority === TaskPriority.URGENT)).length
+      
+      response = `Hello! I'm your AI task assistant. ${
+        pendingCount > 0 
+          ? `You currently have ${pendingCount} active tasks${urgentCount > 0 ? `, including ${urgentCount} high priority or urgent ones` : ''}.` 
+          : "You don't have any active tasks at the moment."
+      } How can I help you today?`
+    } else if (lowerMessage.includes('stats') || lowerMessage.includes('summary') || lowerMessage.includes('overview')) {
+      const totalTasks = tasks.length
+      const completedTasks = tasks.filter(t => t.completed).length
+      const pendingTasks = totalTasks - completedTasks
+      const highPriorityTasks = tasks.filter(t => !t.completed && (t.priority === TaskPriority.HIGH || t.priority === TaskPriority.URGENT)).length
+      
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const upcomingTasks = tasks.filter(t => !t.completed && t.dueDate && new Date(t.dueDate) >= today).length
+      
+      response = `**Task Summary:**
+
+• Total tasks: ${totalTasks}
+• Completed: ${completedTasks} (${totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%)
+• Pending: ${pendingTasks}
+• High priority/urgent: ${highPriorityTasks}
+• With upcoming deadlines: ${upcomingTasks}
+`
+    } else {
+      response = `I can help you with task management. Try asking me to create a task, show your tasks, or analyze a specific task. 
+
+Here are some examples of what you can ask:
+• "Create a task to finish the presentation by Friday"
+• "Show me my high priority tasks"
+• "What tasks do I have today?"
+• "Analyze my task about the quarterly report"
+`
+    }
+    
+    setConversation(prev => [
+      ...prev, 
+      { role: 'assistant', content: response }
+    ])
   }
   
   const handleGoToSettings = () => {
