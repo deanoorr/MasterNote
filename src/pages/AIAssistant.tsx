@@ -3,6 +3,7 @@ import { FiSend, FiSettings, FiLoader, FiCpu, FiZap, FiClock, FiTag, FiFlag, FiP
 import { useNavigate } from 'react-router-dom'
 import { useAppSelector, useAppDispatch } from '@hooks/useAppRedux'
 import { addTask } from '@features/tasks/tasksSlice'
+import { updateAISettings } from '@features/aiSettings/aiSettingsSlice'
 import { TaskPriority } from '@/types'
 import { analyzeTaskWithAI } from '@services/ai'
 import TaskList from '@components/tasks/TaskList'
@@ -16,6 +17,7 @@ const AIAssistant = () => {
       content: 'Hello! I\'m your AI task assistant. I can help you create tasks, analyze them, and suggest improvements. What would you like to do today?' 
     }
   ])
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4o')
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -24,6 +26,13 @@ const AIAssistant = () => {
   const { tasks } = useAppSelector(state => state.tasks)
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
+  
+  // Set initial model from store
+  useEffect(() => {
+    if (model) {
+      setSelectedModel(model)
+    }
+  }, [model])
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -38,6 +47,12 @@ const AIAssistant = () => {
       inputRef.current.focus()
     }
   }, [])
+
+  // Set model and update in the store
+  const handleModelChange = (modelName: string) => {
+    setSelectedModel(modelName)
+    dispatch(updateAISettings({ model: modelName }))
+  }
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -462,73 +477,79 @@ Here are some examples of what you can ask:
     ])
   }
   
-  const handleGoToSettings = () => {
-    navigate('/settings')
-  }
-  
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-secondary-900 dark:text-white">AI Assistant</h1>
-        {!apiKey && (
-          <button 
-            onClick={handleGoToSettings}
-            className="btn btn-primary flex items-center"
-          >
-            <FiSettings className="mr-2" />
-            Configure AI
-          </button>
-        )}
-      </div>
-      
-      <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
-        {/* AI Chat Panel */}
-        <div className="flex-1 card overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
+      {/* Main content container */}
+      <div className="flex flex-1 h-full overflow-hidden">
+        {/* Left side - AI Assistant */}
+        <div className="w-1/2 h-full flex flex-col border-r dark:border-secondary-700">
+          {/* Model selector */}
+          <div className="p-4 bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <FiCpu className="text-primary-600 dark:text-primary-400" />
+              <span className="font-medium text-secondary-900 dark:text-white">AI Assistant</span>
+            </div>
+            
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => handleModelChange('gpt-4o')}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  selectedModel === 'gpt-4o' 
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
+                    : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300 border dark:border-secondary-700'
+                }`}
+              >
+                GPT-4o
+              </button>
+              <button 
+                onClick={() => handleModelChange('gpt-3.5-turbo')}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  selectedModel === 'gpt-3.5-turbo' 
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' 
+                    : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300 border dark:border-secondary-700'
+                }`}
+              >
+                GPT-3.5
+              </button>
+              <button 
+                onClick={() => navigate('/settings')}
+                className="p-1 text-secondary-500 hover:text-secondary-700 dark:text-secondary-400 dark:hover:text-secondary-200 transition-colors"
+              >
+                <FiSettings />
+              </button>
+            </div>
+          </div>
+          
+          {/* Messages container */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary-50 dark:bg-secondary-900">
             {conversation.map((message, index) => (
               <div 
                 key={index} 
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div 
-                  className={`max-w-3/4 rounded-lg p-3 ${
+                  className={`max-w-[80%] rounded-lg p-3 ${
                     message.role === 'user' 
                       ? 'bg-primary-500 text-white' 
-                      : 'bg-secondary-100 dark:bg-secondary-800 text-secondary-900 dark:text-white'
+                      : 'bg-white dark:bg-secondary-800 text-secondary-900 dark:text-white'
                   }`}
                 >
-                  {message.role === 'assistant' && (
-                    <div className="flex items-center mb-1">
-                      <FiCpu className="mr-2 text-primary-500 dark:text-primary-400" />
-                      <span className="font-medium">Assistant</span>
-                    </div>
-                  )}
-                  {message.content.split('\n').map((line, i) => (
-                    <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>
-                  ))}
+                  <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
             ))}
-            {isProcessing && (
-              <div className="flex justify-start">
-                <div className="bg-secondary-100 dark:bg-secondary-800 rounded-lg p-3 flex items-center">
-                  <FiLoader className="animate-spin mr-2 text-primary-500 dark:text-primary-400" />
-                  <span>Processing...</span>
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </div>
           
-          <div className="border-t border-secondary-200 dark:border-secondary-700 p-4">
+          {/* Input area */}
+          <div className="p-4 bg-white dark:bg-secondary-800 border-t dark:border-secondary-700">
             <form onSubmit={handleSubmit} className="flex items-end">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask the AI to create tasks for you..."
-                className="flex-1 input resize-none min-h-[60px]"
-                rows={2}
+                placeholder="Type a message..."
+                className="flex-1 h-10 min-h-[2.5rem] max-h-32 p-2 bg-secondary-100 dark:bg-secondary-700 border-none rounded-lg resize-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 dark:text-white"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -538,85 +559,26 @@ Here are some examples of what you can ask:
               />
               <button
                 type="submit"
-                disabled={!input.trim() || isProcessing}
-                className="btn btn-primary ml-3 h-[60px] w-[60px] flex items-center justify-center"
+                disabled={isProcessing || !input.trim()}
+                className="ml-2 p-2 rounded-full bg-primary-500 hover:bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <FiSend size={20} />
+                {isProcessing ? <FiLoader className="animate-spin" /> : <FiSend />}
               </button>
             </form>
-            
-            {!apiKey && (
-              <div className="mt-4 text-center text-secondary-500 dark:text-secondary-400 text-sm">
-                To enable advanced AI features, please configure your API key in settings.
-              </div>
-            )}
           </div>
         </div>
         
-        {/* Tasks Panel */}
-        <div className="flex-1 card overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-secondary-200 dark:border-secondary-700">
-            <h2 className="text-lg font-semibold text-secondary-900 dark:text-white">Your Tasks</h2>
-            <button 
-              onClick={() => navigate('/tasks/new')}
-              className="btn btn-sm btn-primary flex items-center"
-            >
-              <FiPlus className="mr-1" size={14} />
-              New Task
-            </button>
+        {/* Right side - Tasks */}
+        <div className="w-1/2 h-full flex flex-col overflow-hidden">
+          <div className="p-4 bg-white dark:bg-secondary-800 border-b dark:border-secondary-700 flex justify-between items-center">
+            <div className="flex items-center space-x-2">
+              <FiCheckSquare className="text-primary-600 dark:text-primary-400" />
+              <span className="font-medium text-secondary-900 dark:text-white">Tasks</span>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto">
-            {tasks.length > 0 ? (
-              <TaskList 
-                tasks={tasks.slice(0, 10)} 
-                hideFilters={true} 
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-center p-6">
-                <FiCheckSquare size={48} className="text-secondary-400 dark:text-secondary-600 mb-4" />
-                <h3 className="text-lg font-medium text-secondary-900 dark:text-white mb-2">No tasks yet</h3>
-                <p className="text-secondary-600 dark:text-secondary-400 max-w-sm">
-                  Try asking the assistant to create a task for you, or click the "New Task" button to create one manually.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6 card">
-        <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-4">
-          Example prompts
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div 
-            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
-            onClick={() => setInput("Create a task to prepare presentation slides for the quarterly review by next Friday")}
-          >
-            <p className="text-secondary-800 dark:text-secondary-200">Create a task to prepare presentation slides for the quarterly review by next Friday</p>
-          </div>
-          
-          <div 
-            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
-            onClick={() => setInput("I need to call client about project updates with high priority")}
-          >
-            <p className="text-secondary-800 dark:text-secondary-200">I need to call client about project updates with high priority</p>
-          </div>
-          
-          <div 
-            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
-            onClick={() => setInput("Remind me to send invoice by tomorrow")}
-          >
-            <p className="text-secondary-800 dark:text-secondary-200">Remind me to send invoice by tomorrow</p>
-          </div>
-          
-          <div 
-            className="p-3 bg-secondary-50 dark:bg-secondary-800/50 rounded-md border border-secondary-200 dark:border-secondary-700 cursor-pointer hover:bg-secondary-100 dark:hover:bg-secondary-800"
-            onClick={() => setInput("Add a task to review project requirements with urgent priority")}
-          >
-            <p className="text-secondary-800 dark:text-secondary-200">Add a task to review project requirements with urgent priority</p>
+          <div className="flex-1 overflow-y-auto p-4">
+            <TaskList tasks={tasks} />
           </div>
         </div>
       </div>
