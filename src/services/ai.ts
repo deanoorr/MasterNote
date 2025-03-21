@@ -46,7 +46,7 @@ const callPerplexityAPI = async (message: string) => {
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant that can manage tasks as well as answer general questions using internet search. IMPORTANT: Only create tasks when the user explicitly asks to create, add, or manage tasks. Do not convert general information, facts, or search results into tasks. If the user is asking about general topics like cryptocurrency prices, news, or factual information, just provide the information without suggesting tasks. When users do explicitly request to create a task, identify it clearly with a format like "TASK: title". For complex task planning, provide the steps as guidance within a single task response.'
+            content: 'You are a helpful assistant that can manage tasks as well as answer general questions using internet search. IMPORTANT INSTRUCTION: Only create tasks when the user explicitly asks to create, add, or manage a task. When creating a task, ALWAYS use the format "TASK: [task title]" to clearly mark it as a task to be added to the task list. Any other responses should be normal conversation without the TASK prefix. When users ask you to do something or give you instructions, DO NOT convert those instructions into tasks unless they explicitly ask for a task to be created. If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix. For complex task planning, provide the steps as guidance in your explanation, but the task itself should be a single entry with a clear title.'
           },
           { role: 'user', content: message }
         ],
@@ -649,7 +649,7 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
             dueDate.setDate(dueDate.getDate() + (weeks * 7));
             dateString = `${weeks} weeks from now`;
             break;
-          } else if (pattern.toString().includes('this\\s+(?:coming\\s+)?(\\w+)')) {
+          } else if (pattern.toString().includes('this\\s+(?:coming\s+)?(\\w+)')) {
             const dayOrUnit = match[1].toLowerCase();
             
             // Handle "this week"
@@ -1251,7 +1251,7 @@ export async function getAIResponse(model: AIModel, message: string): Promise<AI
       messages: [
         {
           role: 'system',
-          content: 'You are a helpful assistant that can manage tasks. When users mention tasks, identify them clearly. If creating a task with detailed steps, encapsulate it as a single task rather than creating separate tasks for each step. For complex task planning, provide the steps as guidance within a single task response. Do not format it as a numbered list of separate tasks unless specifically asked to create multiple distinct tasks.'
+          content: 'You are a helpful assistant that can manage tasks as well as answer general questions using internet search. IMPORTANT INSTRUCTION: Only create tasks when the user explicitly asks to create, add, or manage a task. When creating a task, ALWAYS use the format "TASK: [task title]" to clearly mark it as a task to be added to the task list. Any other responses should be normal conversation without the TASK prefix. When users ask you to do something or give you instructions, DO NOT convert those instructions into tasks unless they explicitly ask for a task to be created. If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix. For complex task planning, provide the steps as guidance in your explanation, but the task itself should be a single entry with a clear title.'
         },
         { role: 'user', content: message }
       ],
@@ -1307,64 +1307,86 @@ export function extractTasksFromResponse(response: string) {
     return [];
   }
   
-  // If the message doesn't include any task-related keywords, don't extract tasks
-  const taskKeywords = ['task:', 'todo:', 'to-do:', 'to do:', 'need to:', 'should:', 'must:', 'i\'ll create a task', 'i\'ve added a task', 'here\'s a task', 'added task'];
-  const hasTaskKeywords = taskKeywords.some(keyword => 
-    response.toLowerCase().includes(keyword.toLowerCase())
-  );
+  // Look specifically for the TASK: format first
+  const taskPrefixRegex = /TASK:\s*(.*?)(?:\n|$)/gi;
+  let taskMatches = [];
+  let match;
   
-  if (!hasTaskKeywords) {
-    console.log("No task keywords found - not extracting tasks");
-    return [];
-  }
-  
-  // Continue with existing task extraction logic
-  const taskRegex = /task:?\s*(.*?)(?:\n|$)/gi;
-  const todoRegex = /(?:todo|to-do|to do):?\s*(.*?)(?:\n|$)/gi;
-  const tasks = [];
-  
-  // Match tasks from the AI response
-  let taskMatch;
-  
-  // Extract tasks marked with "Task:" format
-  while ((taskMatch = taskRegex.exec(response)) !== null) {
-    if (taskMatch[1] && taskMatch[1].trim()) {
-      tasks.push({
-        title: taskMatch[1].trim(),
+  while ((match = taskPrefixRegex.exec(response)) !== null) {
+    if (match[1] && match[1].trim()) {
+      taskMatches.push({
+        title: match[1].trim(),
         priority: 'medium' as 'low' | 'medium' | 'high'
       });
     }
   }
   
-  // Extract todos
-  while ((taskMatch = todoRegex.exec(response)) !== null) {
-    if (taskMatch[1] && taskMatch[1].trim()) {
-      tasks.push({
-        title: taskMatch[1].trim(),
-        priority: 'medium' as 'low' | 'medium' | 'high'
-      });
-    }
+  // If we found explicit TASK: markers, use only those
+  if (taskMatches.length > 0) {
+    console.log("Found explicit TASK markers:", taskMatches);
+    return taskMatches;
   }
-  
-  // If no specific task markers were found but the message is clearly about task creation
-  if (tasks.length === 0 && (
-      response.toLowerCase().includes('i\'ll create a task') || 
-      response.toLowerCase().includes('i\'ve added a task') ||
-      response.toLowerCase().includes('here\'s a task') ||
-      response.toLowerCase().includes('added task'))
-  ) {
-    // Try to extract the task from sentences that mention tasks
-    const sentenceRegex = /(?:i\'ll create a task|i\'ve added a task|here\'s a task|added task)[^.!?]*?(?:called|named|titled|for)?\s*["']?([^"'.!?]+)["']?/i;
+
+  // If no explicit TASK: markers, check for other format only if there's a clear indication
+  // of task creation intent in the message
+  if (response.toLowerCase().includes('add a task') || 
+      response.toLowerCase().includes('create a task') ||
+      response.toLowerCase().includes('new task') ||
+      response.toLowerCase().includes('added task')) {
+    
+    // Check for task-related keywords in specific formats
+    const taskKeywords = ['task:', 'todo:', 'to-do:', 'to do:'];
+    const hasTaskKeywords = taskKeywords.some(keyword => 
+      response.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasTaskKeywords) {
+      // Continue with existing task extraction logic for these formats
+      const taskRegex = /task:?\s*(.*?)(?:\n|$)/gi;
+      const todoRegex = /(?:todo|to-do|to do):?\s*(.*?)(?:\n|$)/gi;
+      const tasks = [];
+      
+      // Extract tasks marked with "Task:" format
+      while ((match = taskRegex.exec(response)) !== null) {
+        if (match[1] && match[1].trim()) {
+          tasks.push({
+            title: match[1].trim(),
+            priority: 'medium' as 'low' | 'medium' | 'high'
+          });
+        }
+      }
+      
+      // Extract todos
+      while ((match = todoRegex.exec(response)) !== null) {
+        if (match[1] && match[1].trim()) {
+          tasks.push({
+            title: match[1].trim(),
+            priority: 'medium' as 'low' | 'medium' | 'high'
+          });
+        }
+      }
+      
+      if (tasks.length > 0) {
+        console.log("Extracted tasks from keywords:", tasks);
+        return tasks;
+      }
+    }
+    
+    // If still no tasks found, look for sentences describing task creation
+    const sentenceRegex = /(?:i\'ll create a task|i\'ve added a task|here\'s a task|added task|created a task)[^.!?]*?(?:called|named|titled|for)?\s*["']?([^"'.!?]+)["']?/i;
     const sentenceMatch = response.match(sentenceRegex);
     
     if (sentenceMatch && sentenceMatch[1] && sentenceMatch[1].trim()) {
-      tasks.push({
+      const taskFromSentence = [{
         title: sentenceMatch[1].trim(),
         priority: 'medium' as 'low' | 'medium' | 'high'
-      });
+      }];
+      console.log("Extracted task from sentence:", taskFromSentence);
+      return taskFromSentence;
     }
   }
 
-  console.log("Extracted tasks:", tasks);
-  return tasks;
+  // If we get here, we didn't find any tasks
+  console.log("No tasks found in the response");
+  return [];
 } 
