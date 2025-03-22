@@ -33,8 +33,24 @@ const cssStyles = `
     }
   }
   
+  @keyframes searchGlow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(82, 130, 255, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 8px 2px rgba(82, 130, 255, 0.6);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(82, 130, 255, 0.4);
+    }
+  }
+  
   .reasoning-active {
     animation: reasoningGlow 2s infinite;
+  }
+  
+  .search-active {
+    animation: searchGlow 2s infinite;
   }
   
   .logo-container {
@@ -257,6 +273,26 @@ function App() {
                         <Text size="sm" c="teal" fw={600}>Reasoning Mode</Text>
                       </Group>
                     </div>
+                  ) : selectedModel === 'perplexity-sonar' ? (
+                    <div
+                      style={{
+                        width: 200,
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: 'rgba(82, 130, 255, 0.15)',
+                        border: '1px solid #5282FF',
+                        borderRadius: '6px',
+                        padding: '0 12px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Group gap={5}>
+                        <IconSearch size={15} color="#5282FF" />
+                        <Text size="sm" c="#5282FF" fw={600}>Search Mode</Text>
+                      </Group>
+                    </div>
                   ) : (
                     <Select
                       value={selectedModel}
@@ -264,7 +300,6 @@ function App() {
                       data={[
                         { value: 'gpt4o', label: 'GPT-4o' },
                         { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
-                        { value: 'perplexity-sonar', label: 'Perplexity Sonar' },
                       ]}
                       style={{ width: 180 }}
                       styles={{
@@ -334,6 +369,35 @@ function App() {
                       <IconBulb size={18} />
                     </ActionIcon>
                   </Tooltip>
+                  
+                  <Tooltip label="Use search mode (Perplexity Sonar)">
+                    <ActionIcon
+                      variant="subtle"
+                      size="md"
+                      radius="md"
+                      color={selectedModel === 'perplexity-sonar' ? "blue" : "gray"}
+                      className={selectedModel === 'perplexity-sonar' ? 'search-active' : ''}
+                      onClick={() => {
+                        // Toggle Perplexity Sonar model
+                        if (selectedModel === 'perplexity-sonar') {
+                          // Store the previous model in localStorage
+                          const previousModel = localStorage.getItem('previous_model') || 'gpt4o';
+                          setSelectedModel(previousModel as AIModel);
+                          localStorage.setItem('selected_model', previousModel);
+                          console.log(`Switched back to ${previousModel} model`);
+                        } else {
+                          // Save current model before switching to search mode
+                          localStorage.setItem('previous_model', selectedModel);
+                          setSelectedModel('perplexity-sonar');
+                          localStorage.setItem('selected_model', 'perplexity-sonar');
+                          console.log("Switched to Perplexity Sonar Search mode");
+                        }
+                      }}
+                    >
+                      <IconSearch size={18} />
+                    </ActionIcon>
+                  </Tooltip>
+                  
                   <Tooltip label="Clear conversation">
                     <ActionIcon
                       variant="subtle"
