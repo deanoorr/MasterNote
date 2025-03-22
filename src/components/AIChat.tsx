@@ -83,8 +83,63 @@ export default function AIChat({ model }: AIChatProps) {
       };
       addMessage(assistantMessage);
 
-      // Task creation is now handled directly in the AI service
-      // No need to process suggestedTasks anymore
+      // Look for task creation patterns in the response
+      // Adding direct task handling here instead of relying solely on the AI service
+      if (aiMode === 'task') {
+        const taskRegex = /TASK:\s*([^|]+)(?:\|(.+))?/g;
+        let match;
+        
+        // Find and process all task matches in the AI response
+        while ((match = taskRegex.exec(response)) !== null) {
+          let fullTitle = match[1]?.trim() || '';
+          const description = match[2]?.trim() || '';
+          
+          // Clean the task title - remove any leading numbers/formats like "1. " or "3."
+          fullTitle = fullTitle.replace(/^\d+\.\s*/, '');
+          
+          if (fullTitle) {
+            const task: Task = {
+              id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              title: fullTitle,
+              description,
+              priority: 'medium',
+              status: 'todo',
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              aiGenerated: true,
+              dueDate: undefined
+            };
+            
+            console.log('Adding task from AIChat component:', task);
+            addTask(task);
+          }
+        }
+        
+        // Also look for direct task references in the format "1. task name", "2. another task"
+        // This handles cases where the AI gives a numbered list of tasks
+        const numberedTaskRegex = /^\s*(\d+)\.\s+(.+)$/gm;
+        while ((match = numberedTaskRegex.exec(response)) !== null) {
+          const taskText = match[2]?.trim();
+          
+          // Skip if it's too short or already handled by the TASK: format
+          if (taskText && taskText.length > 2 && !taskText.startsWith('TASK:')) {
+            const task: Task = {
+              id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              title: taskText,
+              description: '',
+              priority: 'medium',
+              status: 'todo',
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              aiGenerated: true,
+              dueDate: undefined
+            };
+            
+            console.log('Adding numbered task from AIChat component:', task);
+            addTask(task);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error processing message:", error);
       const errorMessage: Message = {

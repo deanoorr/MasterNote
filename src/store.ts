@@ -36,8 +36,15 @@ export const useStore = create<Store>()(
       addTask: (task) =>
         set((state) => {
           console.log("Store: Adding task to state:", task);
+          
+          // Ensure the task title is cleaned of any leading numbers (like "1. ", "2.", etc.)
+          const cleanedTask = {
+            ...task,
+            title: task.title.replace(/^\d+\.\s*/, '')
+          };
+          
           return {
-            tasks: [...state.tasks, task],
+            tasks: [...state.tasks, cleanedTask],
           };
         }),
       updateTask: (taskId, updates) =>

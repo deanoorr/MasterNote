@@ -210,23 +210,28 @@ export default function TaskList() {
   };
 
   const handleAddTask = () => {
-    if (!newTaskTitle.trim()) return;
-    
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title: newTaskTitle,
-      priority: taskPriority,
-      status: 'todo',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      aiGenerated: false,
-      dueDate: taskDueDate,
-    };
-    
-    addTask(newTask);
-    setNewTaskTitle('');
-    setTaskDueDate(undefined);
-    setAddingTask(false);
+    if (newTaskTitle.trim()) {
+      // Clean the task title - remove any leading numbers/formats like "1. " or "3."
+      const cleanTitle = newTaskTitle.trim().replace(/^\d+\.\s*/, '');
+      
+      const task: Task = {
+        id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        title: cleanTitle, // Use the cleaned title
+        priority: taskPriority,
+        status: 'todo',
+        dueDate: taskDueDate,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        aiGenerated: false
+      };
+      
+      console.log("Adding new task with title:", cleanTitle);
+      addTask(task);
+      setNewTaskTitle('');
+      setTaskPriority('medium');
+      setTaskDueDate(undefined);
+      setAddingTask(false);
+    }
   };
 
   const handleEditTask = (taskId: string, e: React.MouseEvent) => {
