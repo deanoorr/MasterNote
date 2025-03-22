@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, useMantineColorScheme } from '@mantine/core';
-import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck } from '@tabler/icons-react';
+import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, useMantineColorScheme, Code } from '@mantine/core';
+import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff } from '@tabler/icons-react';
+import { testOpenAIConnection } from '../services/ai';
 
 interface SettingsModalProps {
   opened: boolean;
@@ -12,8 +13,11 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const isDark = colorScheme === 'dark';
   const [apiKey, setApiKey] = useState('');
   const [perplexityApiKey, setPerplexityApiKey] = useState('');
+  const [deepseekApiKey, setDeepseekApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testingApi, setTestingApi] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<any>(null);
 
   useEffect(() => {
     // Load saved API key from localStorage
@@ -23,6 +27,10 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
     // Load saved Perplexity API key from localStorage
     const savedPerplexityApiKey = localStorage.getItem('perplexity_api_key') || '';
     setPerplexityApiKey(savedPerplexityApiKey);
+    
+    // Load saved DeepSeek API key from localStorage
+    const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
+    setDeepseekApiKey(savedDeepseekApiKey);
   }, []);
 
   const handleSave = () => {
@@ -33,6 +41,9 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
     // Save Perplexity API key to localStorage
     localStorage.setItem('perplexity_api_key', perplexityApiKey);
     
+    // Save DeepSeek API key to localStorage
+    localStorage.setItem('deepseek_api_key', deepseekApiKey);
+    
     setSaved(true);
     setTimeout(() => {
       setSaving(false);
@@ -42,6 +53,22 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
       // Refresh the page to ensure the API key is used in new requests
       window.location.reload();
     }, 1500);
+  };
+
+  const handleApiTest = async () => {
+    setTestingApi(true);
+    setApiTestResult(null);
+    try {
+      // Test OpenAI connection
+      const openaiResult = await testOpenAIConnection();
+      console.log("OpenAI test result:", openaiResult);
+      setApiTestResult(openaiResult);
+    } catch (error) {
+      console.error("Error testing API:", error);
+      setApiTestResult({ success: false, error: String(error) });
+    } finally {
+      setTestingApi(false);
+    }
   };
 
   // Effect for setting up event handler for enter key
@@ -138,24 +165,34 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
                 border: `1px solid ${isDark ? 'rgba(34, 139, 230, 0.3)' : 'rgba(34, 139, 230, 0.2)'}`,
               },
               message: {
-                color: isDark ? '#90CAF9' : '#1c7ed6',
+                fontSize: '14px',
+                color: isDark ? '#C1C2C5' : '#495057',
               }
             }}
-            icon={<IconInfoCircle size={16} />} 
+            icon={<IconInfoCircle size={18} />}
           >
-            <Text size="xs" style={{ lineHeight: 1.5 }}>
-              To get an API key, sign up for an account at <a href="https://platform.openai.com" target="_blank" rel="noreferrer" style={{ color: '#20C997', textDecoration: 'none' }}>platform.openai.com</a> and create a key in the API section.
-            </Text>
+            You need an OpenAI API key to use this app. Get it from <a href="https://platform.openai.com/account/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: isDark ? '#228be6' : '#228be6' }}>OpenAI Dashboard</a>.
           </Alert>
         </Box>
         
-        <Box mt="md">
-          <Text fw={500} size="sm" mb="xs">Perplexity API Key</Text>
+        <Box
+          style={{
+            backgroundColor: isDark ? '#25262b' : '#f8f9fa',
+            padding: '16px',
+            borderRadius: '8px',
+            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+            marginTop: '16px'
+          }}
+        >
+          <Group mb="xs">
+            <IconSearch size={20} color="#228BE6" />
+            <Text fw={600} size="sm" c={isDark ? undefined : 'gray.8'}>Perplexity API Key (Optional)</Text>
+          </Group>
+          
           <TextInput
+            placeholder="sk-..."
             value={perplexityApiKey}
             onChange={(e) => setPerplexityApiKey(e.target.value)}
-            placeholder="Enter your Perplexity API key"
-            leftSection={<IconSearch size="1rem" />}
             styles={{
               input: {
                 backgroundColor: isDark ? '#2C2E33' : '#ffffff',
@@ -165,14 +202,54 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
                 padding: '12px 16px',
                 transition: 'all 0.2s ease',
                 '&:focus': {
-                  borderColor: '#20C997',
+                  borderColor: '#228BE6',
                   backgroundColor: isDark ? '#373A40' : '#f8f9fa',
                 }
               }
             }}
           />
-          <Text size="xs" color="dimmed" mt={6}>
-            Required for Perplexity Sonar model. Get your API key from <a href="https://docs.perplexity.ai" target="_blank" rel="noopener noreferrer" style={{ color: isDark ? '#20C997' : '#0ca678' }}>Perplexity</a>.
+          
+          <Text size="sm" c="dimmed" mt="xs">
+            Optional: Required only if you want to use the Perplexity Sonar model.
+          </Text>
+        </Box>
+        
+        <Box
+          style={{
+            backgroundColor: isDark ? '#25262b' : '#f8f9fa',
+            padding: '16px',
+            borderRadius: '8px',
+            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+            marginTop: '16px'
+          }}
+        >
+          <Group mb="xs">
+            <IconBrandOpenai size={20} color="#3388FF" />
+            <Text fw={600} size="sm" c={isDark ? undefined : 'gray.8'}>DeepSeek R1 API Key (Optional)</Text>
+          </Group>
+          
+          <TextInput
+            placeholder="sk-..."
+            value={deepseekApiKey}
+            onChange={(e) => setDeepseekApiKey(e.target.value)}
+            styles={{
+              input: {
+                backgroundColor: isDark ? '#2C2E33' : '#ffffff',
+                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                color: isDark ? '#C1C2C5' : '#495057',
+                fontSize: '16px',
+                padding: '12px 16px',
+                transition: 'all 0.2s ease',
+                '&:focus': {
+                  borderColor: '#3388FF',
+                  backgroundColor: isDark ? '#373A40' : '#f8f9fa',
+                }
+              }
+            }}
+          />
+          
+          <Text size="sm" c="dimmed" mt="xs">
+            Optional: Required only if you want to use the DeepSeek R1 model.
           </Text>
         </Box>
         
@@ -213,40 +290,63 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
           </Alert>
         </Box>
         
-        <Group justify="flex-end" mt="xl">
-          {apiKey && (
+        <Divider my="md" />
+        
+        <Group justify="space-between">
+          <Button 
+            variant="outline" 
+            color="gray" 
+            onClick={handleApiTest}
+            loading={testingApi}
+            leftSection={<IconCloudOff size={16} />}
+          >
+            Test API Connection
+          </Button>
+          
+          <Group>
             <Button 
+              color="gray" 
               variant="subtle" 
               onClick={onClose}
-              styles={{
-                root: {
-                  transition: 'all 0.2s ease',
-                  color: isDark ? '#C1C2C5' : '#495057',
-                }
-              }}
             >
               Cancel
             </Button>
-          )}
-          <Button 
-            onClick={handleSave} 
-            loading={saving}
-            disabled={!apiKey.trim()}
-            color="teal"
-            styles={{
-              root: {
-                transition: 'all 0.2s ease',
-                '&:not(:disabled):hover': {
-                  backgroundColor: '#12B886',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(32, 201, 151, 0.25)'
-                }
-              }
-            }}
-          >
-            {saved ? 'Saved!' : 'Save Configuration'}
-          </Button>
+            <Button 
+              color="teal"
+              onClick={handleSave}
+              loading={saving}
+              leftSection={saved ? <IconCheck size={16} /> : null}
+            >
+              {saved ? 'Saved!' : 'Save Configuration'}
+            </Button>
+          </Group>
         </Group>
+        
+        {apiTestResult && (
+          <Box mt="md" p="md" style={{ 
+            backgroundColor: apiTestResult.success ? 'rgba(32, 201, 151, 0.1)' : 'rgba(250, 82, 82, 0.1)',
+            borderRadius: '8px',
+            border: `1px solid ${apiTestResult.success ? 'rgba(32, 201, 151, 0.3)' : 'rgba(250, 82, 82, 0.3)'}`,
+          }}>
+            <Text fw={600} mb="xs" size="sm" c={apiTestResult.success ? 'teal' : 'red'}>
+              API Test Result: {apiTestResult.success ? 'Success' : 'Failed'}
+            </Text>
+            {apiTestResult.success ? (
+              <Text size="sm">OpenAI API connection is working correctly.</Text>
+            ) : (
+              <>
+                <Text size="sm" mb="xs">Error: {apiTestResult.error}</Text>
+                {apiTestResult.status && <Text size="sm">Status: {apiTestResult.status}</Text>}
+                {apiTestResult.response && (
+                  <Code block my="sm" style={{ maxHeight: '150px', overflow: 'auto' }}>
+                    {JSON.stringify(apiTestResult.response, null, 2)}
+                  </Code>
+                )}
+              </>
+            )}
+          </Box>
+        )}
+        
       </Stack>
     </Modal>
   );

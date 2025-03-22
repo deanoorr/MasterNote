@@ -104,11 +104,22 @@ function App() {
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
   const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('dark');
-  const { messages, clearMessages } = useStore();
+  const { messages, clearMessages, aiMode } = useStore();
+
+  // Set the effective model based on AI mode
+  const effectiveModel: AIModel = aiMode === 'task' ? 'o3-mini' : selectedModel;
 
   const toggleColorScheme = () => {
     setColorScheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
+
+  // Effect to handle model changes when aiMode changes
+  useEffect(() => {
+    // If changing to task mode, log the automatic model switch
+    if (aiMode === 'task' && selectedModel !== 'o3-mini') {
+      console.log('Task Mode active: Automatically using o3-mini model');
+    }
+  }, [aiMode, selectedModel]);
 
   useEffect(() => {
     // Check if API key is set in localStorage
@@ -226,6 +237,7 @@ function App() {
                       { value: 'gpt4o', label: 'GPT-4o' },
                       { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
                       { value: 'perplexity-sonar', label: 'Perplexity Sonar' },
+                      { value: 'deepseek-r1', label: 'DeepSeek R1' },
                     ]}
                     style={{ width: 180 }}
                     styles={{
@@ -243,6 +255,8 @@ function App() {
                     rightSection={
                       selectedModel === 'perplexity-sonar' ? 
                         <IconSearch size={16} color="#20C997" /> : 
+                        selectedModel === 'deepseek-r1' ?
+                        <IconBrandOpenai size={16} color="#3388FF" /> :
                         <IconBrandOpenai size={16} color="#20C997" />
                     }
                   />
@@ -275,7 +289,7 @@ function App() {
                   </ActionIcon>
                 </Group>
               </Group>
-              <AIChat model={selectedModel} />
+              <AIChat model={effectiveModel} />
             </div>
 
             {/* Right Panel - Task List */}
