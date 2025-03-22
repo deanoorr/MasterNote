@@ -577,10 +577,11 @@ async function getCompletionResponse(message: string, mode: 'normal' | 'task', u
       const systemPrompt = `You are MasterNote AI's task interpreter component. Your job is to analyze the user's input and determine:
 1. If they are trying to create a task, and if so, extract the task title, description (if any), due date (if any), and priority (if any)
 2. If they are trying to manage existing tasks (search, list, complete, delete, etc.)
+3. If they are asking about their tasks (like "what tasks do I have today?" or "what tasks do I have coming up?")
 
 Respond in a structured JSON format only, like this:
 {
-  "intent": "create_task | manage_tasks | unclear",
+  "intent": "create_task | manage_tasks | task_inquiry | unclear",
   "taskDetails": {
     "title": "Task title here",
     "description": "Description here or null",
@@ -588,6 +589,7 @@ Respond in a structured JSON format only, like this:
     "priority": "high | medium | low | null"
   },
   "managementAction": "search | list | complete | delete | null",
+  "inquiryType": "today | tomorrow | upcoming | overdue | all | null",
   "filterCriteria": {
     "status": "todo | in_progress | done | null",
     "priority": "high | medium | low | null",
@@ -693,6 +695,22 @@ No need for explanations or conversation - just provide the structured JSON.`;
               }
             }
           }
+          // Add handler for task inquiries
+          else if (parsedResponse.intent === "task_inquiry") {
+            console.log("Handling task inquiry:", parsedResponse);
+            
+            // Default to today for "what tasks do I have today"
+            let dateFilter = "today";
+            
+            // For "what tasks do I have coming up", use the upcoming filter
+            if (parsedResponse.inquiryType === "upcoming" || 
+                (message.toLowerCase().includes("coming up") || 
+                 message.toLowerCase().includes("upcoming"))) {
+              dateFilter = "upcoming";
+            }
+            
+            return handleTaskListRequest(dateFilter, taskStore);
+          }
           
           // If we reach this point, the AI couldn't properly interpret the command
           return "I couldn't understand your task request. Try using commands like 'add a task for finish report by Friday', 'show my tasks for today', or 'complete high priority tasks'.";
@@ -717,6 +735,43 @@ export async function getAIResponse(message: string, mode: 'normal' | 'task', us
   if (mode === 'task') {
     // First process the message to normalize and clean it
     const normalizedMessage = message.toLowerCase().trim();
+    
+    // Handle task inquiry patterns first
+    const taskInquiryPattern = /^(?:what|show|tell me|list|display)\s+(?:tasks|to-?dos?|items|things)\s+(?:do\s+i\s+have|i\s+have|for|are\s+(?:due|scheduled))\s*(today|tomorrow|this\s+week|next\s+week|coming\s+up|upcoming|overdue)?/i;
+    const taskInquiryMatch = normalizedMessage.match(taskInquiryPattern);
+    
+    if (taskInquiryMatch) {
+      console.log("Detected task inquiry pattern:", taskInquiryMatch);
+      
+      // Default to "all" if no specific time frame mentioned
+      let dateFilter = "all";
+      
+      // Extract the time frame if specified
+      if (taskInquiryMatch[1]) {
+        const timeFrame = taskInquiryMatch[1].trim().toLowerCase();
+        
+        if (timeFrame === "today") {
+          dateFilter = "today";
+        } else if (timeFrame === "tomorrow") {
+          dateFilter = "tomorrow";
+        } else if (timeFrame === "this week") {
+          dateFilter = "this week";
+        } else if (timeFrame === "next week") {
+          dateFilter = "next week";
+        } else if (timeFrame === "coming up" || timeFrame === "upcoming") {
+          dateFilter = "upcoming";
+        } else if (timeFrame === "overdue") {
+          dateFilter = "overdue";
+        }
+      } else if (normalizedMessage.includes("coming up") || normalizedMessage.includes("upcoming")) {
+        dateFilter = "upcoming";
+      } else if (normalizedMessage.includes("today")) {
+        dateFilter = "today";
+      }
+      
+      console.log("Using date filter for task inquiry:", dateFilter);
+      return handleTaskListRequest(dateFilter, taskStore);
+    }
     
     // Look for complete/delete all tasks commands FIRST (before checking the special case)
     const completeAllPattern = /^(?:complete|mark|finish)\s+all\s+tasks(?:\s+(?:for|on)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?))?\s*$/i;
