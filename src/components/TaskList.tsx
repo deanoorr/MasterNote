@@ -56,11 +56,25 @@ export default function TaskList() {
       background: isDark ? '#25262b' : '#f8f9fa', 
       borderBottom: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
       color: isDark ? '#C1C2C5' : '#495057',
+      position: 'relative' as const,
+      padding: '12px 16px',
+      zIndex: 5,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     },
     monthCell: { color: isDark ? '#C1C2C5' : '#495057' },
     day: { 
       color: isDark ? '#C1C2C5' : '#495057',
       '&:hover': { background: isDark ? '#373A40' : '#e9ecef' },
+      fontSize: '14px',
+      height: '40px',
+      width: '40px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      margin: '1px',
+      borderRadius: '8px'
     },
     weekend: { color: isDark ? '#909296' : '#adb5bd' },
     selected: { 
@@ -77,23 +91,80 @@ export default function TaskList() {
       border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
       borderRadius: '8px',
       background: isDark ? '#25262b' : '#ffffff',
+      position: 'relative' as const,
+      overflow: 'visible' as const,
+      minWidth: '340px',
+      padding: '12px'
     },
     yearPicker: { 
       background: isDark ? '#25262b' : '#ffffff',
       color: isDark ? '#C1C2C5' : '#495057',
+      padding: '16px'
     },
     monthPicker: { 
       background: isDark ? '#25262b' : '#ffffff',
-      color: isDark ? '#C1C2C5' : '#495057', 
+      color: isDark ? '#C1C2C5' : '#495057',
+      padding: '16px'
     },
-    weekday: { color: isDark ? '#909296' : '#adb5bd' },
+    weekday: { 
+      color: isDark ? '#909296' : '#adb5bd', 
+      fontSize: '13px',
+      fontWeight: 600,
+      padding: '10px 0',
+      textTransform: 'uppercase' as const
+    },
     yearPickerControl: { 
       color: isDark ? '#C1C2C5' : '#495057',
       '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' },
+      borderRadius: '6px',
+      padding: '10px',
+      margin: '3px',
+      fontSize: '14px'
     },
     monthPickerControl: { 
       color: isDark ? '#C1C2C5' : '#495057',
       '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' },
+      borderRadius: '6px',
+      padding: '10px',
+      margin: '3px',
+      fontSize: '14px'
+    },
+    calendarHeaderControl: {
+      width: '36px',
+      height: '36px',
+      borderRadius: '6px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: isDark ? '#C1C2C5' : '#495057',
+      '&:hover': {
+        backgroundColor: isDark ? '#373A40' : '#e9ecef'
+      }
+    },
+    calendarHeaderLevel: {
+      fontSize: '16px',
+      fontWeight: 600,
+      padding: '0 20px',
+      cursor: 'pointer',
+      color: isDark ? '#C1C2C5' : '#495057',
+      '&:hover': {
+        textDecoration: 'underline',
+      }
+    },
+    dropdown: {
+      zIndex: 1000,
+      boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
+      border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+      borderRadius: '8px'
+    },
+    // Add a time section style
+    timeInput: {
+      backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+      borderTop: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+      padding: '12px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
   };
 
@@ -243,6 +314,107 @@ export default function TaskList() {
     setEditTaskDueDate(date || undefined);
   };
 
+  useEffect(() => {
+    // Fix the date picker dropdown positioning issue
+    const fixCalendarDropdown = () => {
+      const dropdowns = document.querySelectorAll('.mantine-Popover-dropdown');
+      dropdowns.forEach(dropdown => {
+        if (dropdown instanceof HTMLElement) {
+          dropdown.style.zIndex = '1000';
+          dropdown.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.15)';
+          
+          // Make days larger and more clickable
+          const days = dropdown.querySelectorAll('.mantine-Calendar-day');
+          days.forEach(day => {
+            if (day instanceof HTMLElement) {
+              day.style.height = '40px';
+              day.style.width = '40px';
+              day.style.fontSize = '14px';
+              day.style.margin = '2px';
+              day.style.display = 'flex';
+              day.style.alignItems = 'center';
+              day.style.justifyContent = 'center';
+              day.style.borderRadius = '8px';
+            }
+          });
+          
+          // Add spacing between weeks
+          const weekRows = dropdown.querySelectorAll('.mantine-Month-weekRow');
+          weekRows.forEach(row => {
+            if (row instanceof HTMLElement) {
+              row.style.marginBottom = '4px';
+            }
+          });
+          
+          // Improve weekday headers
+          const weekdays = dropdown.querySelectorAll('.mantine-Calendar-weekday');
+          weekdays.forEach(weekday => {
+            if (weekday instanceof HTMLElement) {
+              weekday.style.fontSize = '12px';
+              weekday.style.fontWeight = '600';
+              weekday.style.padding = '10px 0';
+              weekday.style.color = isDark ? '#909296' : '#adb5bd';
+            }
+          });
+          
+          // Improve month selection
+          const monthControls = dropdown.querySelectorAll('.mantine-MonthPicker-monthPickerControl');
+          monthControls.forEach(control => {
+            if (control instanceof HTMLElement) {
+              control.style.padding = '14px';
+              control.style.margin = '4px';
+              control.style.borderRadius = '8px';
+            }
+          });
+          
+          // Improve year selection
+          const yearControls = dropdown.querySelectorAll('.mantine-YearPicker-yearPickerControl');
+          yearControls.forEach(control => {
+            if (control instanceof HTMLElement) {
+              control.style.padding = '14px';
+              control.style.margin = '4px';
+              control.style.borderRadius = '8px';
+            }
+          });
+          
+          // Add padding to month picker
+          const monthPickerControls = dropdown.querySelectorAll('.mantine-MonthPicker-monthsListControl');
+          if (monthPickerControls.length > 0) {
+            const monthPickerWrapper = monthPickerControls[0].parentElement;
+            if (monthPickerWrapper instanceof HTMLElement) {
+              monthPickerWrapper.style.padding = '10px';
+            }
+          }
+          
+          // Add padding to year picker
+          const yearPickerControls = dropdown.querySelectorAll('.mantine-YearPicker-yearsListControl');
+          if (yearPickerControls.length > 0) {
+            const yearPickerWrapper = yearPickerControls[0].parentElement;
+            if (yearPickerWrapper instanceof HTMLElement) {
+              yearPickerWrapper.style.padding = '10px';
+            }
+          }
+        }
+      });
+    };
+    
+    // Apply fix when component mounts and whenever tasks change (which might trigger UI updates)
+    fixCalendarDropdown();
+    
+    // Set up a mutation observer to catch dynamically added dropdowns
+    const observer = new MutationObserver(mutations => {
+      mutations.forEach(mutation => {
+        if (mutation.addedNodes.length) {
+          fixCalendarDropdown();
+        }
+      });
+    });
+    
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    return () => observer.disconnect();
+  }, [isDark]); // Add isDark as a dependency
+
   return (
     <DatesProvider settings={{ locale: 'en', firstDayOfWeek: 0 }}>
       <Paper style={{ 
@@ -337,6 +509,8 @@ export default function TaskList() {
                         value={taskDueDate}
                         onChange={handleTaskDueDateChange}
                         clearable
+                        maxLevel="month"
+                        firstDayOfWeek={0}
                         style={{ flex: 1 }}
                         leftSection={<IconCalendar size={16} color="#20C997" />}
                         styles={{
@@ -579,12 +753,12 @@ export default function TaskList() {
                         <Text fw={600} size="sm" style={{ 
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
                           color: task.status === 'done' ? (isDark ? '#909296' : '#adb5bd') : (isDark ? '#C1C2C5' : '#495057'),
-                          fontSize: '16px'
+                          fontSize: '15px'
                         }}>
                           {task.title}
                         </Text>
                         <Group gap="xs">
-                          <Menu shadow="md" width={160} position="bottom-end">
+                          <Menu shadow="md" width={160} position="bottom-end" offset={12}>
                             <Menu.Target>
                               <Badge color={getPriorityColor(task.priority)} size="sm" variant="light" 
                                 style={{ cursor: 'pointer', transition: 'all 0.2s ease' }} 
@@ -594,13 +768,19 @@ export default function TaskList() {
                               </Badge>
                             </Menu.Target>
 
-                            <Menu.Dropdown style={{ backgroundColor: isDark ? '#25262B' : '#ffffff', border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}` }}>
+                            <Menu.Dropdown style={{ 
+                              backgroundColor: isDark ? '#25262B' : '#ffffff', 
+                              border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                              padding: '8px',
+                              zIndex: 1000
+                            }}>
                               <Menu.Label>Change Priority</Menu.Label>
                               <Menu.Item 
                                 color="blue" 
                                 onClick={(e) => handlePriorityChange(task.id, 'low', e)}
                                 fw={task.priority === 'low' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
+                                style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 Low
                               </Menu.Item>
@@ -609,6 +789,7 @@ export default function TaskList() {
                                 onClick={(e) => handlePriorityChange(task.id, 'medium', e)}
                                 fw={task.priority === 'medium' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
+                                style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 Medium
                               </Menu.Item>
@@ -617,6 +798,7 @@ export default function TaskList() {
                                 onClick={(e) => handlePriorityChange(task.id, 'high', e)}
                                 fw={task.priority === 'high' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
+                                style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 High
                               </Menu.Item>
@@ -634,7 +816,7 @@ export default function TaskList() {
                       {task.description && (
                         <Text c="dimmed" size="sm" mt="xs" mb="xs" style={{
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                          fontSize: '14px',
+                          fontSize: '13px',
                           lineHeight: 1.5
                         }}>
                           {task.description}
@@ -642,7 +824,7 @@ export default function TaskList() {
                       )}
                       {task.dueDate && (
                         <Group gap="xs" mt="xs">
-                          <Menu shadow="md" width={280}>
+                          <Menu shadow="md" width={280} position="bottom-end" offset={12}>
                             <Menu.Target>
                               <Group style={{ cursor: 'pointer' }}>
                                 <IconClock size={14} color={dueDateColor !== 'dimmed' ? `var(--mantine-color-${dueDateColor}-filled)` : undefined} />
@@ -670,6 +852,8 @@ export default function TaskList() {
                                     handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
                                   }
                                   clearable
+                                  maxLevel="month"
+                                  firstDayOfWeek={0}
                                   leftSection={<IconCalendar size={16} />}
                                   styles={calendarStyles}
                                 />
@@ -702,6 +886,8 @@ export default function TaskList() {
                                   handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
                                 }
                                 clearable
+                                maxLevel="month"
+                                firstDayOfWeek={0}
                                 leftSection={<IconCalendar size={16} />}
                                 styles={calendarStyles}
                               />
@@ -821,157 +1007,183 @@ export default function TaskList() {
         <Modal
           opened={!!editTaskId}
           onClose={closeEditModal}
-          title="Edit Task"
+          title={<Text fw={600} size="lg">Edit Task</Text>}
           centered
-          size="sm"
+          radius="md"
+          size="md"
+          padding="xl"
           styles={{
             header: {
               backgroundColor: isDark ? '#25262B' : '#f8f9fa',
               borderBottom: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-              padding: '16px 24px',
+              padding: '20px 24px',
+              marginBottom: '10px'
+            },
+            title: {
+              fontSize: '20px',
               fontWeight: 600
             },
             content: {
               backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
+              borderRadius: '12px',
+              overflow: 'hidden'
             },
             body: {
-              padding: '24px'
+              padding: '10px 24px 24px'
+            },
+            close: {
+              color: isDark ? '#909296' : '#495057',
+              '&:hover': {
+                backgroundColor: isDark ? '#2C2E33' : '#e9ecef'
+              }
             }
           }}
         >
-          <TextInput
-            placeholder="Task title"
-            value={editTaskTitle}
-            onChange={(e) => setEditTaskTitle(e.target.value)}
-            autoFocus
-            mb="md"
-            styles={{
-              input: {
-                backgroundColor: isDark ? '#2C2E33' : '#f8f9fa',
-                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                borderRadius: '8px',
-                padding: '12px 16px',
-                fontSize: '16px',
-                transition: 'all 0.2s ease',
-                '&:focus': {
-                  borderColor: '#20C997',
-                  backgroundColor: isDark ? '#373A40' : '#ffffff'
-                }
-              }
-            }}
-          />
-          <Box mb="lg">
-            <Text size="xs" fw={500} c="dimmed" mb="xs">Due date (optional):</Text>
-            <DatePickerInput
-              valueFormat="MMM D, YYYY"
-              placeholder="Select date"
-              value={editTaskDueDate}
-              onChange={handleEditTaskDueDateChange}
-              clearable
-              leftSection={<IconCalendar size={16} color="#20C997" />}
-              styles={{
-                input: {
-                  backgroundColor: isDark ? '#2C2E33' : '#ffffff',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                  borderRadius: '8px',
-                  padding: '12px 16px',
-                  fontSize: '16px',
-                  transition: 'all 0.2s ease',
-                  '&:focus': {
-                    borderColor: '#20C997',
-                    backgroundColor: isDark ? '#373A40' : '#f1f3f5'
+          <Stack gap="lg">
+            <Box>
+              <Text size="sm" fw={500} mb="xs">Task Title</Text>
+              <TextInput
+                placeholder="Enter task title"
+                value={editTaskTitle}
+                onChange={(e) => setEditTaskTitle(e.target.value)}
+                autoFocus
+                styles={{
+                  input: {
+                    backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    fontSize: '16px',
+                    height: '50px',
+                    transition: 'all 0.2s ease',
+                    '&:focus': {
+                      borderColor: '#20C997',
+                      backgroundColor: isDark ? '#2C2E33' : '#ffffff'
+                    }
+                  },
+                  wrapper: {
+                    marginBottom: '8px'
                   }
-                },
-                ...calendarStyles
-              }}
-            />
-            <SimpleGrid cols={4} spacing="xs" mt="sm">
-              <UnstyledButton 
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
                 }}
-                onClick={() => handleEditTaskDueDateChange(getRelativeDate(0))}
-              >
-                <Text size="xs" fw={500}>Today</Text>
-              </UnstyledButton>
-              <UnstyledButton 
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
+              />
+            </Box>
+
+            <Box>
+              <Text size="sm" fw={500} mb="xs">Due Date</Text>
+              <DatePickerInput
+                valueFormat="MMMM D, YYYY"
+                placeholder="Select due date"
+                value={editTaskDueDate}
+                onChange={handleEditTaskDueDateChange}
+                clearable
+                leftSection={<IconCalendar size={18} color="#20C997" />}
+                maxLevel="month"
+                firstDayOfWeek={0}
+                styles={{
+                  input: {
+                    backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    fontSize: '16px',
+                    height: '50px',
+                    transition: 'all 0.2s ease',
+                    '&:focus': {
+                      borderColor: '#20C997',
+                      backgroundColor: isDark ? '#2C2E33' : '#ffffff'
+                    }
+                  },
+                  ...calendarStyles
                 }}
-                onClick={() => handleEditTaskDueDateChange(getRelativeDate(1))}
-              >
-                <Text size="xs" fw={500}>Tomorrow</Text>
-              </UnstyledButton>
-              <UnstyledButton 
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
+              />
+            </Box>
+
+            <Box>
+              <Text size="sm" fw={500} mb="xs">Priority Level</Text>
+              <Select
+                value={editTaskPriority}
+                onChange={(value) => setEditTaskPriority(value as 'low' | 'medium' | 'high')}
+                data={[
+                  { value: 'low', label: '🟢 Low Priority' },
+                  { value: 'medium', label: '🟡 Medium Priority' },
+                  { value: 'high', label: '🔴 High Priority' }
+                ]}
+                leftSection={<IconFlag size={18} color="#20C997" />}
+                style={{ position: 'relative', zIndex: 1 }}
+                styles={{
+                  input: {
+                    backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    fontSize: '16px',
+                    height: '50px',
+                    transition: 'all 0.2s ease',
+                    '&:focus': {
+                      borderColor: '#20C997',
+                      backgroundColor: isDark ? '#2C2E33' : '#ffffff'
+                    }
+                  },
+                  dropdown: {
+                    backgroundColor: isDark ? '#25262B' : '#ffffff',
+                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    borderRadius: '8px',
+                    padding: '6px',
+                    zIndex: 1000
+                  },
+                  option: {
+                    fontSize: '15px',
+                    padding: '10px 16px',
+                    borderRadius: '4px',
+                    margin: '2px 0',
+                    '&[data-selected]': {
+                      backgroundColor: '#20C997',
+                      color: 'white'
+                    },
+                    '&[data-hovered]': {
+                      backgroundColor: isDark ? '#2C2E33' : '#f1f3f5'
+                    }
+                  }
                 }}
-                onClick={() => handleEditTaskDueDateChange(getNextWeekday(1))}
-              >
-                <Text size="xs" fw={500}>Monday</Text>
-              </UnstyledButton>
-              <UnstyledButton 
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
+              />
+            </Box>
+
+            <Group justify="space-between" mt="md">
+              <Button 
+                variant="default" 
+                onClick={closeEditModal}
+                style={{ 
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease',
+                  backgroundColor: isDark ? '#25262b' : '#f1f3f5',
+                  color: isDark ? '#909296' : '#495057'
                 }}
-                onClick={() => handleEditTaskDueDateChange(getNextWeekday(5))}
               >
-                <Text size="xs" fw={500}>Friday</Text>
-              </UnstyledButton>
-            </SimpleGrid>
-          </Box>
-          <Group justify="flex-end">
-            <Button 
-              variant="subtle" 
-              color="gray" 
-              onClick={closeEditModal}
-            >
-              Cancel
-            </Button>
-            <Button 
-              variant="filled" 
-              color="teal" 
-              onClick={saveEditedTask}
-              disabled={!editTaskTitle.trim()}
-              style={{
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(32, 201, 151, 0.3)'
-                }
-              }}
-            >
-              Save Changes
-            </Button>
-          </Group>
+                Cancel
+              </Button>
+              <Button 
+                onClick={saveEditedTask}
+                disabled={!editTaskTitle.trim()}
+                style={{ 
+                  backgroundColor: '#20C997', 
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(32, 201, 151, 0.2)'
+                }}
+                rightSection={<IconCheck size={18} />}
+              >
+                Save Changes
+              </Button>
+            </Group>
+          </Stack>
         </Modal>
       </Paper>
     </DatesProvider>
