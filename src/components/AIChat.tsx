@@ -199,25 +199,7 @@ export default function AIChat({ model }: AIChatProps) {
             value={aiMode}
             onChange={(value) => {
               const newMode = value as AIModeType;
-              const previousMode = aiMode;
               setAIMode(newMode);
-              
-              // Simplify mode switch messages
-              if (newMode === 'task' && previousMode !== 'task') {
-                addMessage({
-                  id: Date.now().toString(),
-                  content: "Switched to Task Mode. I'll help you manage your tasks. Just tell me what you need to do!",
-                  role: 'assistant',
-                  timestamp: new Date(),
-                });
-              } else if (newMode === 'normal' && previousMode !== 'normal') {
-                addMessage({
-                  id: Date.now().toString(),
-                  content: "Switched to Normal Mode. I can now answer general questions and help with a variety of tasks.",
-                  role: 'assistant',
-                  timestamp: new Date(),
-                });
-              }
             }}
             styles={{
               root: {
