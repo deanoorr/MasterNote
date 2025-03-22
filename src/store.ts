@@ -28,7 +28,7 @@ export const useStore = create<Store>()(
       messages: [],
       tasks: [],
       sortOrder: 'due-date' as SortOption,
-      aiMode: 'normal' as AIModeType,
+      aiMode: 'task' as AIModeType,
       addMessage: (message) =>
         set((state) => ({
           messages: [...state.messages, message],
