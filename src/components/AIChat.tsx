@@ -178,6 +178,17 @@ export default function AIChat({ model }: AIChatProps) {
             <IconRobot size={20} style={{ color: isDark ? '#C1C2C5' : '#5c5f66' }} />
             <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>MasterNote AI</Text>
             
+            {model === 'deepseek-r1' && (
+              <Badge 
+                color="blue" 
+                variant="light"
+                size="sm"
+                style={{ marginLeft: 10 }}
+              >
+                Reasoning Mode
+              </Badge>
+            )}
+            
             {aiMode === 'task' && (
               <Badge 
                 color="teal" 
@@ -301,27 +312,31 @@ export default function AIChat({ model }: AIChatProps) {
                         {model === 'deepseek-r1' && msg.role === 'assistant' ? (
                           <div>
                             <div style={{
-                              marginBottom: '10px',
-                              padding: '5px 10px',
-                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.2)' : 'rgba(51, 136, 255, 0.1)',
-                              borderRadius: '4px',
-                              display: 'inline-block'
+                              marginBottom: '12px',
+                              padding: '8px 12px',
+                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.25)' : 'rgba(51, 136, 255, 0.15)',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px'
                             }}>
-                              <Text size="xs" fw={600} c={isDark ? 'blue.4' : 'blue.7'}>
+                              <IconBrandOpenai size={16} style={{ color: isDark ? '#70B0FF' : '#3388FF' }}/>
+                              <Text size="sm" fw={600} c={isDark ? 'blue.3' : 'blue.7'}>
                                 DeepSeek R1 Reasoning Process
                               </Text>
                             </div>
                             <div style={{ 
-                              padding: '15px 20px',
-                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.1)' : 'rgba(51, 136, 255, 0.05)',
+                              padding: '16px 20px',
+                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.12)' : 'rgba(51, 136, 255, 0.08)',
                               borderRadius: '8px',
-                              border: `1px solid ${isDark ? 'rgba(51, 136, 255, 0.2)' : 'rgba(51, 136, 255, 0.15)'}`,
+                              border: `1px solid ${isDark ? 'rgba(51, 136, 255, 0.25)' : 'rgba(51, 136, 255, 0.2)'}`,
                               whiteSpace: 'pre-wrap',
                               fontFamily: 'monospace',
                               lineHeight: '1.8',
                               fontSize: '14px',
                               overflow: 'auto',
-                              maxHeight: '500px'
+                              maxHeight: '500px',
+                              boxShadow: isDark ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.05)'
                             }}>
                               {/* Transform numbered lists to be more visually distinct */}
                               {msg.content.split('\n').map((line, i) => {

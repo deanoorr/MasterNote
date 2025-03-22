@@ -215,7 +215,6 @@ function App() {
                       { value: 'gpt4o', label: 'GPT-4o' },
                       { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
                       { value: 'perplexity-sonar', label: 'Perplexity Sonar' },
-                      { value: 'deepseek-r1', label: 'DeepSeek R1' },
                     ]}
                     style={{ width: 180 }}
                     styles={{
@@ -256,6 +255,24 @@ function App() {
                 </Group>
                 
                 <Group>
+                  <Tooltip label="Use reasoning mode (DeepSeek R1)">
+                    <ActionIcon
+                      variant="subtle"
+                      size="md"
+                      radius="md"
+                      color={selectedModel === 'deepseek-r1' ? "teal" : "gray"}
+                      onClick={() => {
+                        // Toggle DeepSeek R1 model
+                        if (selectedModel === 'deepseek-r1') {
+                          setSelectedModel('gpt4o');
+                        } else {
+                          setSelectedModel('deepseek-r1');
+                        }
+                      }}
+                    >
+                      <IconBrandOpenai size={18} />
+                    </ActionIcon>
+                  </Tooltip>
                   <Tooltip label="Clear conversation">
                     <ActionIcon
                       variant="subtle"
