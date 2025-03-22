@@ -353,13 +353,13 @@ function App() {
                         // Toggle DeepSeek R1 model
                         if (selectedModel === 'deepseek-r1') {
                           // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('previous_model') || 'gpt4o';
+                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt4o';
                           setSelectedModel(previousModel as AIModel);
                           localStorage.setItem('selected_model', previousModel);
                           console.log(`Switched back to ${previousModel} model`);
                         } else {
                           // Save current model before switching to reasoning mode
-                          localStorage.setItem('previous_model', selectedModel);
+                          localStorage.setItem('reasoning_previous_model', selectedModel);
                           setSelectedModel('deepseek-r1');
                           localStorage.setItem('selected_model', 'deepseek-r1');
                           console.log("Switched to DeepSeek R1 Reasoning mode");
@@ -381,13 +381,13 @@ function App() {
                         // Toggle Perplexity Sonar model
                         if (selectedModel === 'perplexity-sonar') {
                           // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('previous_model') || 'gpt4o';
+                          const previousModel = localStorage.getItem('search_previous_model') || 'gpt4o';
                           setSelectedModel(previousModel as AIModel);
                           localStorage.setItem('selected_model', previousModel);
                           console.log(`Switched back to ${previousModel} model`);
                         } else {
                           // Save current model before switching to search mode
-                          localStorage.setItem('previous_model', selectedModel);
+                          localStorage.setItem('search_previous_model', selectedModel);
                           setSelectedModel('perplexity-sonar');
                           localStorage.setItem('selected_model', 'perplexity-sonar');
                           console.log("Switched to Perplexity Sonar Search mode");
