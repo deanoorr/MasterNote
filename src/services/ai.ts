@@ -718,6 +718,30 @@ export async function getAIResponse(message: string, mode: 'normal' | 'task', us
     // First process the message to normalize and clean it
     const normalizedMessage = message.toLowerCase().trim();
     
+    // Special case: Check if this is a request to create a task rather than running a command
+    // Only apply this rule for exact match of "complete all tasks" due to its dual meaning
+    if (normalizedMessage === "complete all tasks") {
+      console.log("Handling 'complete all tasks' as a task creation request");
+      return createTask(message, taskStore);
+    }
+    
+    // Check for complete/delete all tasks commands
+    const completeAllPattern = /^(?:complete|mark|finish)\s+all\s+tasks(?:\s+(?:for|on)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?))?\s*$/i;
+    const deleteAllPattern = /^(?:delete|remove|clear)\s+all\s+tasks(?:\s+(?:for|on)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?))?\s*$/i;
+    
+    const completeMatch = normalizedMessage.match(completeAllPattern);
+    const deleteMatch = normalizedMessage.match(deleteAllPattern);
+    
+    if (completeMatch) {
+      console.log("Detected complete all tasks command with date filter:", completeMatch[1]);
+      return completeAllTasks(taskStore, completeMatch[1]);
+    }
+    
+    if (deleteMatch) {
+      console.log("Detected delete all tasks command with date filter:", deleteMatch[1]);
+      return deleteAllTasks(taskStore, deleteMatch[1]);
+    }
+    
     // ==========================================
     // TASK MODIFICATION COMMANDS - Prioritize these before task creation
     // ==========================================
@@ -843,267 +867,65 @@ export async function getAIResponse(message: string, mode: 'normal' | 'task', us
     }
     
     // ==========================================
-    // TASK SEARCHING AND SORTING COMMANDS
+    // Check for commands to change "all tasks" to a specific date
     // ==========================================
-    
-    // Search tasks
-    if (/\b(?:search|find|locate|look for)\b/i.test(normalizedMessage) && 
-        /\b(?:task|tasks|to-?do|to do)\b/i.test(normalizedMessage)) {
+    if (/\b(?:change|modify|set|update|move)\s+all\s+tasks\s+to\b/i.test(normalizedMessage)) {
+      console.log("Detected command to change all tasks to a specific date");
       
-      // Extract the search keyword - everything after "for" or "containing"
-      let keyword = '';
-      const forMatch = message.match(/\b(?:for|containing|with|has|having)\s+["']?([^"']+?)["']?(?:\s|$)/i);
-      if (forMatch && forMatch[1]) {
-        keyword = forMatch[1].trim();
-      } else {
-        // Try to extract keyword as everything after search/find
-        const generalMatch = message.match(/\b(?:search|find|locate|look for)\s+(?:tasks?|to-?dos?)?(?:\s+for|containing|with)?\s+["']?([^"']+?)["']?(?:\s|$)/i);
-        if (generalMatch && generalMatch[1]) {
-          keyword = generalMatch[1].trim();
+      // Extract the date
+      let dateRef = 'today'; // Default
+      
+      if (/\b(?:to)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|weekend)\b/i.test(normalizedMessage)) {
+        const dateMatch = normalizedMessage.match(/\b(?:to)\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|weekend)\b/i);
+        if (dateMatch && dateMatch[1]) {
+          dateRef = dateMatch[1].toLowerCase();
+          console.log("Date reference for all tasks:", dateRef);
+        }
+      } else if (/\b(?:to)\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)(?:\s+of\s+[a-z]+)?\b/i.test(normalizedMessage)) {
+        // Extract the full date reference
+        const fullDateRef = extractFullDateReference(normalizedMessage);
+        if (fullDateRef.dateText) {
+          dateRef = fullDateRef.dateText;
+          console.log("Full date reference for all tasks:", dateRef);
         }
       }
       
-      if (keyword) {
-        return searchTasks(keyword, taskStore);
-      }
-    }
-    
-    // Sort tasks
-    if (/\b(?:sort|order|arrange|organize)\b/i.test(normalizedMessage) && 
-        /\b(?:task|tasks|to-?do|to do)\b/i.test(normalizedMessage)) {
+      // Get all active tasks
+      const activeTasks = getSortedTasksFromStore(taskStore, true);
+      const taskNumbers = activeTasks.map((_, index) => index + 1); // Convert to 1-based indices
       
-      let sortBy = 'duedate'; // Default sort
-      
-      if (/\b(?:by|on|using)\s+(?:due\s+date|date|deadline|time)\b/i.test(normalizedMessage)) {
-        sortBy = 'duedate';
-      } else if (/\b(?:by|on|using)\s+(?:priority|importance|urgency)\b/i.test(normalizedMessage)) {
-        sortBy = 'priority';
-      } else if (/\b(?:by|on|using)\s+(?:name|title|alphabetical|alphabetically)\b/i.test(normalizedMessage)) {
-        sortBy = 'title';
-      } else if (/\b(?:by|on|using)\s+(?:status|state|completion)\b/i.test(normalizedMessage)) {
-        sortBy = 'status';
-      } else if (/\b(?:by|on|using)\s+(?:created|creation|creation date|when created)\b/i.test(normalizedMessage)) {
-        sortBy = 'created';
+      if (taskNumbers.length === 0) {
+        return "There are no active tasks to update.";
       }
       
-      return sortTasks(sortBy, taskStore);
+      return changeMultipleTasksDueDateByNumbers(taskNumbers, dateRef, taskStore);
     }
     
     // ==========================================
-    // TASK LISTING COMMANDS
+    // TASK SEARCH, SORTING, AND LISTING
     // ==========================================
     
-    // Check if this is a task listing request
-    if (/\b(?:what|show|list|tell me|get|view|display)\b/i.test(normalizedMessage) &&
-        /\b(?:tasks?|to-?dos?)\b/i.test(normalizedMessage)) {
-        
-      // Extract date filter
-      let dateFilter = 'all';
-      
-      if (/\btoday\b/i.test(normalizedMessage)) dateFilter = 'today';
-      else if (/\btomorrow\b/i.test(normalizedMessage)) dateFilter = 'tomorrow';
-      else if (/\bthis\s+week\b/i.test(normalizedMessage)) dateFilter = 'this week';
-      else if (/\bnext\s+week\b/i.test(normalizedMessage)) dateFilter = 'next week';
-      else if (/\bupcoming\b/i.test(normalizedMessage)) dateFilter = 'upcoming';
-      else if (/\boverdue\b/i.test(normalizedMessage)) dateFilter = 'overdue';
-      else if (/\bweekend\b/i.test(normalizedMessage)) dateFilter = 'weekend';
-      
-      // Check for priority-specific listing
-      if (/\b(?:high|medium|low)\s+priority\b/i.test(normalizedMessage) || /\bpriority\s+(?:high|medium|low)\b/i.test(normalizedMessage)) {
-        let priority = 'medium';
-        if (/\bhigh\b/i.test(normalizedMessage)) priority = 'high';
-        else if (/\blow\b/i.test(normalizedMessage)) priority = 'low';
-        
-        return handleTaskListByPriority(priority as 'high' | 'medium' | 'low', taskStore);
-      }
-      
-      // Check for status-specific listing
-      if (/\b(?:completed|done|finished|in progress|to do|todo|pending)\b/i.test(normalizedMessage)) {
-        let status = 'todo';
-        if (/\b(?:completed|done|finished)\b/i.test(normalizedMessage)) status = 'done';
-        else if (/\bin progress\b/i.test(normalizedMessage)) status = 'in_progress';
-        
-        return handleTaskListByStatus(status as 'todo' | 'in_progress' | 'done', taskStore);
-      }
-      
-      return handleTaskListRequest(dateFilter, taskStore);
-    }
-    
-    // Additional simple pattern for just asking about tasks
-    if (/^(?:my\s+tasks|tasks|to-?dos?|what\s+(?:tasks?|to-?dos?)\s+do\s+i\s+have)$/i.test(normalizedMessage)) {
-      return handleTaskListRequest('all', taskStore);
-    }
-    
     // ==========================================
-    // TASK STATISTICS AND RECOMMENDATIONS
+    // MULTI-TASK CREATION - Check for this before regular task creation
     // ==========================================
     
-    // Statistics about tasks
-    if (/\b(?:statistics|stats|summary|overview|report|count|analyze|analyse)\b/i.test(normalizedMessage) && 
-        /\b(?:task|tasks|to-?do|to do)\b/i.test(normalizedMessage)) {
-      
-      return getTasksStatistics(taskStore);
-    }
-    
-    // What to do next / recommendations
-    if (/\b(?:what|which|suggest|recommend|prioritize)\s+(?:should|can|to)\s+(?:i|we)?\s+(?:do|work on|focus on|tackle|start|begin)\s+(?:next|first|now|today)\b/i.test(normalizedMessage) || 
-        /\b(?:next task|priority task|important task|urgent task|recommend task|suggest task)\b/i.test(normalizedMessage)) {
-      
-      return getNextTaskRecommendations(taskStore);
-    }
-    
-    // ==========================================
-    // TASK COMPLETION COMMANDS
-    // ==========================================
-    
-    // Check for task completion commands
-    if (/\b(?:complete|mark|finish|done|check off|tick off|check|fix)\b/i.test(normalizedMessage)) {
-      // Check for MULTIPLE task numbers (e.g., "complete tasks 1, 2 and 3")
-      const taskNumbers = extractTaskNumbers(normalizedMessage);
-      if (taskNumbers.length > 0) {
-        console.log("Found multiple task numbers for completion:", taskNumbers);
-        return completeMultipleTasksByNumbers(taskNumbers, taskStore);
-      }
-      
-      // Check for SINGLE task number reference (e.g., "complete task 1" or "mark task #3 as done")
-      const numberMatch = normalizedMessage.match(/\b(?:task|tasks|item|number|#)\s*#?(\d+)\b/i);
-      if (numberMatch && numberMatch[1]) {
-        const taskNumber = parseInt(numberMatch[1], 10);
-        return completeTaskByNumber(taskNumber, taskStore);
-      }
-      
-      // Check if completing tasks by date filter
-      if (/\b(?:today|tomorrow|this week|next week|upcoming|weekend|all)\b/i.test(normalizedMessage)) {
-        let dateFilter = 'all';
-        if (/\btoday\b/i.test(normalizedMessage)) dateFilter = 'today';
-        else if (/\btomorrow\b/i.test(normalizedMessage)) dateFilter = 'tomorrow';
-        else if (/\bthis week\b/i.test(normalizedMessage)) dateFilter = 'this week';
-        else if (/\bnext week\b/i.test(normalizedMessage)) dateFilter = 'next week';
-        else if (/\bupcoming\b/i.test(normalizedMessage)) dateFilter = 'upcoming';
-        else if (/\bweekend\b/i.test(normalizedMessage)) dateFilter = 'weekend';
-        
-        return handleTaskCompletion(dateFilter, taskStore);
-      }
-      
-      // Check for completing by priority
-      if (/\b(?:high|medium|low)\s+priority\b/i.test(normalizedMessage) || /\bpriority\s+(?:high|medium|low)\b/i.test(normalizedMessage)) {
-        let priority = 'medium';
-        if (/\bhigh\b/i.test(normalizedMessage)) priority = 'high';
-        else if (/\blow\b/i.test(normalizedMessage)) priority = 'low';
-        
-        return handleTaskCompletionByPriority(priority as 'high' | 'medium' | 'low', taskStore);
-      }
-      
-      // Extract the task name for individual task completion
-      const possibleTaskName = message
-        .replace(/^(?:complete|mark|finish|done with|check off|tick off|check|fix)\s+(?:my|the)?\s*(?:task|tasks)?\s+(?:called|named|titled)?\s*/i, "")
-        .replace(/\s+(?:as|to be)?\s+(?:complete|done|finished|checked)/i, "")
-        .trim();
-      
-      if (possibleTaskName && possibleTaskName.length > 0) {
-        return completeTaskByName(possibleTaskName, taskStore);
-      }
-    }
-    
-    // ==========================================
-    // TASK DELETION COMMANDS
-    // ==========================================
-    
-    // Check for deletion commands
-    if (/\b(?:delete|remove|clear|trash|bin|erase|get rid of)\b/i.test(normalizedMessage)) {
-      // Check for MULTIPLE task numbers (e.g., "delete tasks 1, 2 and 3")
-      const taskNumbers = extractTaskNumbers(normalizedMessage);
-      if (taskNumbers.length > 0) {
-        console.log("Found multiple task numbers for deletion:", taskNumbers);
-        return deleteMultipleTasksByNumbers(taskNumbers, taskStore);
-      }
-      
-      // Check for SINGLE task number reference (e.g., "delete task 2" or "remove #4")
-      const numberMatch = normalizedMessage.match(/\b(?:task|tasks|item|number|#)\s*#?(\d+)\b/i);
-      if (numberMatch && numberMatch[1]) {
-        const taskNumber = parseInt(numberMatch[1], 10);
-        return deleteTaskByNumber(taskNumber, taskStore);
-      }
-      
-      // Check for "delete all tasks" pattern
-      if (/\ball\b/i.test(normalizedMessage)) {
-        if (/\b(?:confirm|yes|sure|absolutely|proceed|do it)\b/i.test(normalizedMessage)) {
-          return handleTaskDeletion('all', taskStore);
-        } else {
-          return "Are you sure you want to delete ALL tasks? This cannot be undone. Please confirm by saying 'yes, delete all tasks'.";
-        }
-      }
-      
-      // Check for date-specific deletion
-      if (/\b(?:today|tomorrow|this week|next week|upcoming|weekend)\b/i.test(normalizedMessage)) {
-        let dateFilter = 'all';
-        if (/\btoday\b/i.test(normalizedMessage)) dateFilter = 'today';
-        else if (/\btomorrow\b/i.test(normalizedMessage)) dateFilter = 'tomorrow';
-        else if (/\bthis week\b/i.test(normalizedMessage)) dateFilter = 'this week';
-        else if (/\bnext week\b/i.test(normalizedMessage)) dateFilter = 'next week';
-        else if (/\bupcoming\b/i.test(normalizedMessage)) dateFilter = 'upcoming';
-        else if (/\bweekend\b/i.test(normalizedMessage)) dateFilter = 'weekend';
-        
-        return handleTaskDeletion(dateFilter, taskStore);
-      }
-      
-      // Check for priority-specific deletion
-      if (/\b(?:high|medium|low)\s+priority\b/i.test(normalizedMessage) || /\bpriority\s+(?:high|medium|low)\b/i.test(normalizedMessage)) {
-        let priority = 'medium';
-        if (/\bhigh\b/i.test(normalizedMessage)) priority = 'high';
-        else if (/\blow\b/i.test(normalizedMessage)) priority = 'low';
-        
-        return handleTaskDeletionByPriority(priority as 'high' | 'medium' | 'low', taskStore);
-      }
-      
-      // Check for status-specific deletion
-      if (/\b(?:done|complete|completed|finished|in progress|todo|to do|pending)\b/i.test(normalizedMessage)) {
-        let status = 'todo';
-        if (/\b(?:done|complete|completed|finished)\b/i.test(normalizedMessage)) status = 'done';
-        else if (/\b(?:in progress)\b/i.test(normalizedMessage)) status = 'in_progress';
-        
-        return handleTaskDeletionByStatus(status as 'todo' | 'in_progress' | 'done', taskStore);
-      }
-      
-      // Extract the task name for individual task deletion
-      const possibleTaskName = message
-        .replace(/^(?:delete|remove|clear|trash|bin|erase|get rid of)\s+(?:my|the)?\s*(?:task|tasks)?\s+(?:called|named|titled)?\s*/i, "")
-        .trim();
-      
-      if (possibleTaskName && possibleTaskName.length > 0) {
-        return deleteTaskByName(possibleTaskName, taskStore);
-      }
-    }
-    
-    // Special handling for confirmation responses
-    if (/^(?:yes|confirm|sure|absolutely|proceed|do it)(?:\s*,?\s*delete\s+all\s+tasks)?$/i.test(normalizedMessage)) {
-      // This is a confirmation for deleting all tasks
-      return handleTaskDeletion('all', taskStore);
-    }
-    
-    // ==========================================
-    // TASK STATUS CHANGE COMMANDS
-    // ==========================================
-    
-    // Check for status change commands (to in-progress)
-    if (/\b(?:start|begin|commence|set to in progress|move to in progress)\b/i.test(normalizedMessage)) {
-      // Extract the task name
-      const possibleTaskName = message
-        .replace(/^(?:start|begin|commence|set to in progress|move to in progress)\s+(?:my|the|on)?\s*(?:task|tasks)?\s+(?:called|named|titled)?\s*/i, "")
-        .replace(/\s+(?:to|into|as)?\s+(?:in progress|working|started)/i, "")
-        .trim();
-      
-      if (possibleTaskName && possibleTaskName.length > 0) {
-        return changeTaskStatus(possibleTaskName, 'in_progress', taskStore);
-      }
+    // Check if this is a request to create multiple tasks
+    if (isMultiTaskCreationRequest(message)) {
+      console.log("Detected multi-task creation request");
+      return createMultipleTasks(message, taskStore);
     }
     
     // ==========================================
     // TASK CREATION FALLBACK
     // ==========================================
     
-    // If no command matched, try to interpret as a task creation
-    return createTask(message, taskStore);
+    // If nothing else matched, try to interpret as a task creation
+    const taskComponents = analyzeTaskMessage(message);
+    
+    // If we have a title, create a task
+    if (taskComponents.title) {
+      return createTask(message, taskStore);
+    }
   }
   
   return getCompletionResponse(message, mode, userId);
@@ -1531,6 +1353,17 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
   // Normalize message text
   const normalizedMessage = message.trim();
   
+  // Check if this is a "complete all tasks" as a task title rather than a command
+  if (/^complete\s+all\s+tasks$/i.test(normalizedMessage)) {
+    console.log("Detected 'complete all tasks' as a task title");
+    return {
+      title: normalizedMessage,
+      description: null,
+      dueDate: new Date(), // Default to today
+      priority: 'medium'
+    };
+  }
+  
   // Initialize return values
   let title = '';
   let description: string | null = null;
@@ -1548,6 +1381,18 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
   
   // Look for task creation patterns
   const taskPatterns = [
+    // Pattern for "add a task for tomorrow to clean the house"
+    /^add\s+a\s+task\s+for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)\s+to\s+(.+)$/i,
+    
+    // Pattern for "add task for tomorrow to clean the house" (without "a")
+    /^add\s+task\s+for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)\s+to\s+(.+)$/i,
+    
+    // Pattern for commands that start with the date: "tomorrow remind me to buy fish"
+    /^(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week)\s+(?:remind|remember|tell)\s+me\s+to\s+(.+)$/i,
+    
+    // Pattern for "add task to [action] for the [date]" format
+    /^add\s+task\s+to\s+(.*?)\s+for\s+the\s+(\d+)(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?$/i,
+    
     // Explicit task creation with due date reference (including the 25th, the 25th of month)
     /^(?:.*?)\b(?:add|create|make|set up)\s+(?:a\s+)?(?:task|reminder|to-do|todo|note)\s+(?:to\s+|for\s+|about\s+|called\s+|named\s+|titled\s+)?(.*?)(?:\s+(?:on|by|for|due|before|after|this|next|the)\s+([a-z0-9]+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?|[a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
     
@@ -1564,6 +1409,88 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
   for (const pattern of taskPatterns) {
     const match = message.match(pattern);
     if (match) {
+      // Special handling for "add a task for [date] to [action]" pattern
+      if (pattern.toString().includes('add\\s+a\\s+task\\s+for') || pattern.toString().includes('add\\s+task\\s+for')) {
+        console.log("Matched 'add task for [date] to [action]' pattern:", match);
+        const dateString = match[1];
+        const taskTitle = match[2];
+        
+        // Get due date from date string
+        let dueDate: Date | null = null;
+        if (dateString) {
+          dueDate = parseDateReference(dateString.toLowerCase());
+        }
+        
+        // Process the title
+        const { title: processedTitle, description } = processTaskTitle(taskTitle);
+        
+        return {
+          title: processedTitle,
+          description,
+          dueDate,
+          priority: determinePriority(message)
+        };
+      }
+      
+      // Special handling for "[date] remind me to [action]" pattern
+      if (pattern.toString().includes('today|tomorrow|monday|tuesday|wednesday|thursday') && 
+          pattern.toString().includes('remind|remember|tell')) {
+        console.log("Matched '[date] remind me to [action]' pattern:", match);
+        const dateString = match[1];
+        const taskTitle = match[2];
+        
+        // Get due date from date string
+        let dueDate: Date | null = null;
+        if (dateString) {
+          dueDate = parseDateReference(dateString.toLowerCase());
+        }
+        
+        // Process the title
+        const { title: processedTitle, description } = processTaskTitle(taskTitle);
+        
+        return {
+          title: processedTitle,
+          description,
+          dueDate,
+          priority: determinePriority(message)
+        };
+      }
+      
+      // Special handling for "add task to [action] for the [date]" pattern
+      if (pattern.toString().includes('add\\s+task\\s+to\\s+(.*?)\\s+for\\s+the\\s+(\\d+)')) {
+        console.log("Matched 'add task to [action] for the [date]' pattern:", match);
+        const taskTitle = match[1];
+        const dayNumber = match[2];
+        
+        let monthName = '';
+        // Check if there's a month specified after the day number
+        const monthMatch = message.match(/for\s+the\s+\d+(?:st|nd|rd|th)?\s+of\s+([a-z]+)/i);
+        if (monthMatch && monthMatch[1]) {
+          monthName = monthMatch[1].toLowerCase();
+        }
+        
+        // Create a date string for parsing
+        let dateString;
+        if (monthName) {
+          dateString = `the ${dayNumber} of ${monthName}`;
+        } else {
+          dateString = `the ${dayNumber}`;
+        }
+        
+        // Get due date from date string
+        let dueDate: Date | null = parseDateReference(dateString.toLowerCase());
+        
+        // Process the title
+        const { title: processedTitle, description } = processTaskTitle(taskTitle);
+        
+        return {
+          title: processedTitle,
+          description,
+          dueDate,
+          priority: determinePriority(message)
+        };
+      }
+      
       let [_, rawTitle, dateString, priority] = match;
       
       // Further process the title to handle cases where "for" is both part of the task and a date marker
@@ -1613,6 +1540,11 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
 // Function to create a task from user input
 function createTask(message: string, taskStore: TaskStoreType): string {
   console.log("Creating task from message:", message);
+  
+  // First, check if this is a multi-task creation request
+  if (isMultiTaskCreationRequest(message)) {
+    return createMultipleTasks(message, taskStore);
+  }
   
   // Special pattern to handle "create a task to finish a cost plan for the 25th of March" format
   const specificPattern = /create\s+a\s+task\s+to\s+(.*?)\s+for\s+the\s+(\d+)(?:st|nd|rd|th)\s+of\s+([a-z]+)/i;
@@ -1674,22 +1606,14 @@ function createTask(message: string, taskStore: TaskStoreType): string {
       };
       
       // Add the task to the store
-      console.log("Adding task:", newTask);
       taskStore.addTask(newTask);
       
-      // Format due date for display
-      const dueDateDisplay = dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-      
-      // Return a confirmation message
-      return `✅ Added task: "${taskTitle}" due ${dueDateDisplay} with medium priority.`;
+      return `✅ Added task: "${taskTitle}" due ${dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}.`;
     }
   }
   
-  // Regular path for task creation using analyzeTaskMessage
-  console.log("Using standard task analysis path");
+  // For other task formats, use the standard analyzer
   const { title, description, dueDate, priority } = analyzeTaskMessage(message);
-  
-  console.log("Task analysis result:", { title, description, dueDate, priority });
   
   if (!title) {
     return "I couldn't identify a clear task in your message. Please try using phrases like 'add a task to...', 'remind me to...', or 'I need to...'";
@@ -1738,6 +1662,235 @@ function createTask(message: string, taskStore: TaskStoreType): string {
   
   // Return a confirmation message
   return `✅ Added task: "${title}"${description ? ` (${description})` : ""}${dueDateDisplay ? ` due ${dueDateDisplay}` : ""} with ${priority || "medium"} priority.`;
+}
+
+// Function to check if a message is requesting to create multiple tasks
+function isMultiTaskCreationRequest(message: string): boolean {
+  const normalizedMessage = message.toLowerCase().trim();
+  
+  // Pattern 1: "add the following tasks..."
+  if (/add\s+(?:the\s+)?(?:following|these)\s+tasks/i.test(normalizedMessage)) {
+    return true;
+  }
+  
+  // Pattern 2: "create multiple tasks..."
+  if (/create\s+(?:multiple|several|many|a\s+list\s+of)\s+tasks/i.test(normalizedMessage)) {
+    return true;
+  }
+  
+  // Pattern 3: Numbered list pattern with at least 2 items
+  const numberedItems = message.match(/\d+\s*\.\s*[^\n\d\.]+/g);
+  if (numberedItems && numberedItems.length >= 2) {
+    return true;
+  }
+  
+  // Pattern 4: Bulleted list pattern with at least 2 items
+  const bulletedItems = message.match(/[-*•]\s*[^\n-*•]+/g);
+  if (bulletedItems && bulletedItems.length >= 2) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Function to extract due date from multi-task message
+function extractDueDateFromMultiTaskMessage(message: string): Date | null {
+  const normalizedMessage = message.toLowerCase().trim();
+  
+  // Look for date indicators before the list starts
+  const datePatterns = [
+    // "for tomorrow", "for the 25th of March", etc.
+    /for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)/i,
+    // "due tomorrow"
+    /due\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)/i,
+    // "on tomorrow"
+    /on\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)/i,
+    // "tasks for tomorrow" or "tasks for the 25th"
+    /tasks\s+for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)/i,
+    // "tasks due tomorrow"
+    /tasks\s+due\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)/i,
+    // Bracketed date: (tomorrow) or (on the 25th)
+    /\((?:on|for|by|due)?\s*(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week|weekend|the\s+\d+(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?)\)/i
+  ];
+  
+  for (const pattern of datePatterns) {
+    const match = normalizedMessage.match(pattern);
+    if (match && match[1]) {
+      return parseDateReference(match[1]);
+    }
+  }
+  
+  // Check for date reference using our existing extraction function
+  const fullDateRef = extractFullDateReference(normalizedMessage);
+  if (fullDateRef.dateText) {
+    return parseDateReference(fullDateRef.dateText);
+  }
+  
+  return null; // No date found, will default to today
+}
+
+// Function to extract list items from message
+function extractListItems(message: string): string[] {
+  // Remove any text before the first number or bullet point to clean up the input
+  // This helps with messages like "add the following tasks for tomorrow: 1. Task A..."
+  let cleanedMessage = message;
+  const listStartIndex = message.search(/(?:\d+\s*\.|\s[-*•])\s/);
+  
+  if (listStartIndex > 0) {
+    cleanedMessage = message.substring(listStartIndex);
+  }
+  
+  // Extract numbered list items (1. Item, 2. Item, etc.)
+  const numberedItems = cleanedMessage.match(/\d+\s*\.\s*([^\n\d\.]+)/g);
+  if (numberedItems && numberedItems.length > 0) {
+    return numberedItems.map(item => {
+      // Remove the number and period, and trim whitespace
+      return item.replace(/^\d+\s*\.\s*/, '').trim();
+    });
+  }
+  
+  // Try to extract items separated by commas or new lines with numbers
+  // This handles "1. Clean House, 2. Wash dog, 3. Finish work"
+  const commaSeparatedItems = cleanedMessage.split(/,\s*(?=\d+\s*\.\s*)/);
+  if (commaSeparatedItems.length > 1) {
+    return commaSeparatedItems.map(item => {
+      // Remove the number and period, and trim whitespace
+      return item.replace(/^\d+\s*\.\s*/, '').trim();
+    });
+  }
+  
+  // Extract bulleted list items (- Item, * Item, • Item)
+  const bulletedItems = cleanedMessage.match(/[-*•]\s*([^\n-*•]+)/g);
+  if (bulletedItems && bulletedItems.length > 0) {
+    return bulletedItems.map(item => {
+      // Remove the bullet character and trim whitespace
+      return item.replace(/^[-*•]\s*/, '').trim();
+    });
+  }
+  
+  // If no structured list is found, try to split by lines and clean up
+  const lines = cleanedMessage.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.match(/^add\s+the\s+following|^create\s+tasks|^tasks:/i));
+  
+  if (lines.length > 0) {
+    return lines;
+  }
+  
+  // Last resort - try to split by commas if it looks like a list
+  if (cleanedMessage.includes(',')) {
+    const commaItems = cleanedMessage.split(',')
+      .map(item => item.trim())
+      .filter(item => item.length > 0);
+    
+    if (commaItems.length > 1) {
+      return commaItems;
+    }
+  }
+  
+  return [];
+}
+
+// Function to create multiple tasks from a single message
+function createMultipleTasks(message: string, taskStore: TaskStoreType): string {
+  console.log("Creating multiple tasks from message:", message);
+  
+  // Extract the common due date for all tasks (if specified)
+  const dueDate = extractDueDateFromMultiTaskMessage(message);
+  const useDefaultDate = !dueDate;
+  const effectiveDueDate = dueDate || new Date(); // Default to today if not specified
+  
+  // Extract list items that will become individual tasks
+  const taskItems = extractListItems(message);
+  
+  if (taskItems.length === 0) {
+    return "I couldn't identify any tasks in your list. Please provide a numbered or bulleted list of tasks.";
+  }
+  
+  console.log("Extracted task items:", taskItems);
+  console.log("Common due date:", effectiveDueDate);
+  
+  // Create each task
+  const createdTasks: Task[] = [];
+  
+  for (const taskText of taskItems) {
+    // Analyze each task item to see if it has its own priority setting
+    let priority: 'high' | 'medium' | 'low' = 'medium';
+    let taskTitle = taskText;
+    
+    // Check for priority indicators in the task text
+    if (/\b(?:high|important|urgent|critical)\s+priority\b/i.test(taskText)) {
+      priority = 'high';
+      taskTitle = taskText.replace(/\s*\b(?:high|important|urgent|critical)\s+priority\b/i, '');
+    } else if (/\b(?:low|minor)\s+priority\b/i.test(taskText)) {
+      priority = 'low';
+      taskTitle = taskText.replace(/\s*\b(?:low|minor)\s+priority\b/i, '');
+    }
+    
+    // Process the title to potentially extract a description
+    const { title, description } = processTaskTitle(taskTitle);
+    
+    // Create the task
+    const id = Date.now().toString() + createdTasks.length; // Ensure unique IDs
+    const newTask: Task = {
+      id,
+      title,
+      description: description || "",
+      dueDate: effectiveDueDate,
+      priority,
+      status: "todo",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      aiGenerated: true
+    };
+    
+    // Add to store and to our tracking array
+    taskStore.addTask(newTask);
+    createdTasks.push(newTask);
+  }
+  
+  // Format due date for display
+  let dueDateDisplay = useDefaultDate ? "today" : "";
+  if (dueDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dueDateTime = new Date(dueDate);
+    dueDateTime.setHours(0, 0, 0, 0);
+    
+    if (dueDateTime.getTime() === today.getTime()) {
+      dueDateDisplay = "today";
+    } else if (dueDateTime.getTime() === tomorrow.getTime()) {
+      dueDateDisplay = "tomorrow";
+    } else {
+      dueDateDisplay = dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    }
+  }
+  
+  // Create a nice formatted response message
+  let response = `✅ Added ${createdTasks.length} tasks`;
+  if (dueDateDisplay) {
+    response += ` due ${dueDateDisplay}`;
+  } else {
+    response += " due today (default)";
+  }
+  response += ":\n\n";
+  
+  // List the tasks in the response
+  createdTasks.forEach((task, index) => {
+    const priorityDot = task.priority === 'high' ? '🔴' : 
+                         task.priority === 'medium' ? '🟡' : '🟢';
+    response += `${index + 1}. ${priorityDot} ${task.title}`;
+    if (task.description) {
+      response += ` - ${task.description}`;
+    }
+    response += '\n';
+  });
+  
+  return response;
 }
 
 function formatDateForDisplay(date: Date): string {
@@ -2239,7 +2392,7 @@ function parseDateReference(dateRef: string): Date | null {
 }
 
 // Helper function to extract full date references like "the 25th of March"
-function extractFullDateReference(text: string): { dateText: string; } {
+function extractFullDateReference(text: string): { dateText: string; fullMatch?: string } {
   const patterns = [
     // "the 25th of March"
     /(?:on|by|for|due|before|after|this|next)\s+(the\s+\d+(?:st|nd|rd|th)(?:\s+of\s+[a-z]+)?)/i,
@@ -2255,7 +2408,10 @@ function extractFullDateReference(text: string): { dateText: string; } {
   for (const pattern of patterns) {
     const match = text.match(pattern);
     if (match && match[1]) {
-      return { dateText: match[1] };
+      return { 
+        dateText: match[1],
+        fullMatch: match[0]
+      };
     }
   }
   
@@ -2495,4 +2651,161 @@ function changeMultipleTasksDueDateByNumbers(taskNumbers: number[], dateRef: str
   }
   
   return response;
+}
+
+
+// Helper function to determine priority from message text
+function determinePriority(message: string): 'high' | 'medium' | 'low' {
+  const normalizedMessage = message.toLowerCase();
+  
+  if (/\b(?:high|important|urgent|critical)\s+priority\b/i.test(normalizedMessage)) {
+    return 'high';
+  } else if (/\b(?:low|minor)\s+priority\b/i.test(normalizedMessage)) {
+    return 'low';
+  } else {
+    return 'medium'; // Default to medium priority
+  }
+}
+
+// Helper function to complete all tasks
+function completeAllTasks(taskStore: TaskStoreType, dateFilter?: string): string {
+  console.log("Completing all tasks with date filter:", dateFilter);
+  
+  let tasksToComplete: Task[] = [];
+  
+  // Get all incomplete tasks
+  const allTasks = taskStore.tasks.filter(task => task.status !== 'done');
+  
+  if (dateFilter) {
+    // Apply date filter
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (dateFilter.toLowerCase() === 'today') {
+      tasksToComplete = allTasks.filter(task => {
+        if (!task.dueDate) return false;
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === today.getTime();
+      });
+    } else if (dateFilter.toLowerCase() === 'tomorrow') {
+      tasksToComplete = allTasks.filter(task => {
+        if (!task.dueDate) return false;
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === tomorrow.getTime();
+      });
+    } else {
+      // Try to parse the date filter
+      const dateRef = parseDateReference(dateFilter.toLowerCase());
+      if (dateRef) {
+        tasksToComplete = allTasks.filter(task => {
+          if (!task.dueDate) return false;
+          const taskDate = new Date(task.dueDate);
+          taskDate.setHours(0, 0, 0, 0);
+          const filterDate = new Date(dateRef);
+          filterDate.setHours(0, 0, 0, 0);
+          return taskDate.getTime() === filterDate.getTime();
+        });
+      } else {
+        return `I couldn't understand the date "${dateFilter}". Please try using formats like "today", "tomorrow", or specific dates.`;
+      }
+    }
+  } else {
+    // No date filter, complete all tasks
+    tasksToComplete = allTasks;
+  }
+  
+  if (tasksToComplete.length === 0) {
+    if (dateFilter) {
+      return `There are no incomplete tasks for ${dateFilter}.`;
+    } else {
+      return `There are no incomplete tasks to mark as complete.`;
+    }
+  }
+  
+  // Mark all matching tasks as complete
+  tasksToComplete.forEach(task => {
+    taskStore.updateTask(task.id, { 
+      status: 'done',
+      updatedAt: new Date()
+    });
+  });
+  
+  const dateMessage = dateFilter ? ` for ${dateFilter}` : '';
+  return `✅ Marked all ${tasksToComplete.length} incomplete ${tasksToComplete.length === 1 ? 'task' : 'tasks'}${dateMessage} as complete:\n` +
+    tasksToComplete.map(task => `• ${task.title}`).join('\n');
+}
+
+// Helper function to delete all tasks
+function deleteAllTasks(taskStore: TaskStoreType, dateFilter?: string): string {
+  console.log("Deleting all tasks with date filter:", dateFilter);
+  
+  let tasksToDelete: Task[] = [];
+  
+  // Get all tasks
+  const allTasks = taskStore.tasks;
+  
+  if (dateFilter) {
+    // Apply date filter
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (dateFilter.toLowerCase() === 'today') {
+      tasksToDelete = allTasks.filter(task => {
+        if (!task.dueDate) return false;
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === today.getTime();
+      });
+    } else if (dateFilter.toLowerCase() === 'tomorrow') {
+      tasksToDelete = allTasks.filter(task => {
+        if (!task.dueDate) return false;
+        const taskDate = new Date(task.dueDate);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate.getTime() === tomorrow.getTime();
+      });
+    } else {
+      // Try to parse the date filter
+      const dateRef = parseDateReference(dateFilter.toLowerCase());
+      if (dateRef) {
+        tasksToDelete = allTasks.filter(task => {
+          if (!task.dueDate) return false;
+          const taskDate = new Date(task.dueDate);
+          taskDate.setHours(0, 0, 0, 0);
+          const filterDate = new Date(dateRef);
+          filterDate.setHours(0, 0, 0, 0);
+          return taskDate.getTime() === filterDate.getTime();
+        });
+      } else {
+        return `I couldn't understand the date "${dateFilter}". Please try using formats like "today", "tomorrow", or specific dates.`;
+      }
+    }
+  } else {
+    // No date filter, delete all tasks
+    tasksToDelete = allTasks;
+  }
+  
+  if (tasksToDelete.length === 0) {
+    if (dateFilter) {
+      return `There are no tasks for ${dateFilter} to delete.`;
+    } else {
+      return `There are no tasks to delete.`;
+    }
+  }
+  
+  // Delete all matching tasks
+  tasksToDelete.forEach(task => {
+    taskStore.deleteTask(task.id);
+  });
+  
+  const dateMessage = dateFilter ? ` for ${dateFilter}` : '';
+  return `🗑️ Deleted all ${tasksToDelete.length} ${tasksToDelete.length === 1 ? 'task' : 'tasks'}${dateMessage}:\n` +
+    tasksToDelete.map(task => `• ${task.title}`).join('\n');
 }
