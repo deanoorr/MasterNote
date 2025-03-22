@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image } from '@mantine/core';
-import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore, AIModeType } from '../store';
 import { getAIResponse } from '../services/ai';
@@ -144,7 +144,9 @@ export default function AIChat({ model }: AIChatProps) {
       console.error("Error processing message:", error);
       const errorMessage: Message = {
         id: (Date.now() + 2).toString(),
-        content: "Sorry, I encountered an error processing your request. Please try again.",
+        content: model === 'deepseek-r1' 
+          ? "I encountered an error processing your request. Please try again or check your API settings."
+          : "Sorry, I encountered an error processing your request. Please try again.",
         role: 'assistant' as const,
         timestamp: new Date(),
       };
@@ -177,17 +179,6 @@ export default function AIChat({ model }: AIChatProps) {
           <Group>
             <IconRobot size={20} style={{ color: isDark ? '#C1C2C5' : '#5c5f66' }} />
             <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>MasterNote AI</Text>
-            
-            {model === 'deepseek-r1' && (
-              <Badge 
-                color="blue" 
-                variant="light"
-                size="sm"
-                style={{ marginLeft: 10 }}
-              >
-                Reasoning Mode
-              </Badge>
-            )}
             
             {aiMode === 'task' && (
               <Badge 
@@ -308,60 +299,14 @@ export default function AIChat({ model }: AIChatProps) {
                           color: isDark ? '#C1C2C5' : '#212529',
                         }}
                       >
-                        {/* Special styling for DeepSeek R1 model to show reasoning */}
+                        {/* Display DeepSeek responses like normal responses */}
                         {model === 'deepseek-r1' && msg.role === 'assistant' ? (
-                          <div>
-                            <div style={{
-                              marginBottom: '12px',
-                              padding: '8px 12px',
-                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.25)' : 'rgba(51, 136, 255, 0.15)',
-                              borderRadius: '8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}>
-                              <IconBrandOpenai size={16} style={{ color: isDark ? '#70B0FF' : '#3388FF' }}/>
-                              <Text size="sm" fw={600} c={isDark ? 'blue.3' : 'blue.7'}>
-                                DeepSeek R1 Reasoning Process
-                              </Text>
-                            </div>
-                            <div style={{ 
-                              padding: '16px 20px',
-                              backgroundColor: isDark ? 'rgba(51, 136, 255, 0.12)' : 'rgba(51, 136, 255, 0.08)',
-                              borderRadius: '8px',
-                              border: `1px solid ${isDark ? 'rgba(51, 136, 255, 0.25)' : 'rgba(51, 136, 255, 0.2)'}`,
-                              whiteSpace: 'pre-wrap',
-                              fontFamily: 'monospace',
-                              lineHeight: '1.8',
-                              fontSize: '14px',
-                              overflow: 'auto',
-                              maxHeight: '500px',
-                              boxShadow: isDark ? '0 2px 8px rgba(0, 0, 0, 0.2)' : '0 2px 8px rgba(0, 0, 0, 0.05)'
-                            }}>
-                              {/* Transform numbered lists to be more visually distinct */}
-                              {msg.content.split('\n').map((line, i) => {
-                                // Check if line starts with a number followed by a period (like "1." or "2.")
-                                const numberedListMatch = line.match(/^(\d+)\.\s(.*)/);
-                                if (numberedListMatch) {
-                                  // It's a numbered step in the reasoning
-                                  return (
-                                    <div key={i} style={{ marginBottom: '10px' }}>
-                                      <Text 
-                                        span 
-                                        c={isDark ? 'blue.4' : 'blue.7'} 
-                                        fw={700}
-                                      >
-                                        {numberedListMatch[1]}.
-                                      </Text>{' '}
-                                      <Text span fw={600}>{numberedListMatch[2]}</Text>
-                                    </div>
-                                  );
-                                } else {
-                                  // Regular text
-                                  return <div key={i}>{line}</div>;
-                                }
-                              })}
-                            </div>
+                          <div style={{ 
+                            whiteSpace: 'pre-wrap', 
+                            wordBreak: 'break-word',
+                            lineHeight: 1.7,
+                          }}>
+                            {msg.content}
                           </div>
                         ) : (
                           msg.content
@@ -393,7 +338,6 @@ export default function AIChat({ model }: AIChatProps) {
                       padding: '20px 20px',
                     }}
                   >
-                    {/* Remove the DeepSeek R1 reasoning display and show the same loader for all models */}
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Loader color="teal" size="sm" />
                     </div>

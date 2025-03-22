@@ -1,6 +1,6 @@
+import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code, Switch, Image } from '@mantine/core';
+import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff, IconX } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
-import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code } from '@mantine/core';
-import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff } from '@tabler/icons-react';
 import { testOpenAIConnection } from '../services/ai';
 
 interface SettingsModalProps {
@@ -250,6 +250,48 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
           <Text size="sm" c="dimmed" mt="xs">
             Optional: Required only if you want to use the DeepSeek R1 model.
           </Text>
+          
+          <Button 
+            variant="light" 
+            color="blue" 
+            mt="md" 
+            size="sm"
+            onClick={async () => {
+              if (!deepseekApiKey.trim()) {
+                alert("Please enter a DeepSeek API key first");
+                return;
+              }
+              
+              // Save key temporarily for the test
+              localStorage.setItem('deepseek_api_key', deepseekApiKey);
+              
+              try {
+                // Simple fetch test to check if key is valid
+                const response = await fetch('https://api.deepseek.com/v1/models', {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${deepseekApiKey}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log("DeepSeek API test successful:", data);
+                  alert("DeepSeek API key is valid!");
+                } else {
+                  const errorData = await response.json().catch(() => ({}));
+                  console.error("DeepSeek API test failed:", response.status, errorData);
+                  alert(`DeepSeek API key test failed: ${response.status} ${response.statusText}`);
+                }
+              } catch (error) {
+                console.error("DeepSeek API test error:", error);
+                alert(`Error testing DeepSeek API key: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }}
+          >
+            Test DeepSeek API Key
+          </Button>
         </Box>
         
         <Divider my="sm" />

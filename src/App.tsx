@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, Tooltip } from '@mantine/core';
-import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconNotes, IconChecklist, IconSearch, IconEraser } from '@tabler/icons-react';
+import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconNotes, IconChecklist, IconSearch, IconEraser, IconBulb } from '@tabler/icons-react';
 import AIChat from './components/AIChat';
 import TaskList from './components/TaskList';
 import SettingsModal from './components/SettingsModal';
@@ -19,6 +19,22 @@ const cssStyles = `
     100% {
       box-shadow: 0 0 0 0 rgba(250, 82, 82, 0);
     }
+  }
+  
+  @keyframes reasoningGlow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(32, 201, 151, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 8px 2px rgba(32, 201, 151, 0.6);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(32, 201, 151, 0.4);
+    }
+  }
+  
+  .reasoning-active {
+    animation: reasoningGlow 2s infinite;
   }
   
   .logo-container {
@@ -116,10 +132,23 @@ function App() {
     }
   }, [aiMode, selectedModel]);
 
+  // Save the selected model to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('selected_model', selectedModel);
+    console.log('Saved model to localStorage:', selectedModel);
+  }, [selectedModel]);
+
   useEffect(() => {
     // Check if API key is set in localStorage
     const apiKey = localStorage.getItem('openai_api_key');
     setApiKeySet(!!apiKey);
+    
+    // Load the saved model preference from localStorage
+    const savedModel = localStorage.getItem('selected_model');
+    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'o3-mini' || 
+        savedModel === 'perplexity-sonar' || savedModel === 'deepseek-r1')) {
+      setSelectedModel(savedModel as AIModel);
+    }
     
     // If no API key is set, open settings modal automatically
     if (!apiKey) {
@@ -208,28 +237,51 @@ function App() {
                 }}
               >
                 <Group>
-                  <Select
-                    value={selectedModel}
-                    onChange={(value) => value && setSelectedModel(value as AIModel)}
-                    data={[
-                      { value: 'gpt4o', label: 'GPT-4o' },
-                      { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
-                      { value: 'perplexity-sonar', label: 'Perplexity Sonar' },
-                    ]}
-                    style={{ width: 180 }}
-                    styles={{
-                      input: {
-                        backgroundColor: '#2C2E33',
-                        border: '1px solid #373A40',
+                  {selectedModel === 'deepseek-r1' ? (
+                    <div
+                      style={{
+                        width: 200,
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: 'rgba(32, 201, 151, 0.15)',
+                        border: '1px solid #20C997',
                         borderRadius: '6px',
-                        transition: 'all 0.2s ease',
-                        '&:focus': {
-                          borderColor: '#20C997',
-                          backgroundColor: '#373A40'
+                        padding: '0 12px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Group gap={5}>
+                        <IconBulb size={15} color="#20C997" />
+                        <Text size="sm" c="teal" fw={600}>Reasoning Mode</Text>
+                      </Group>
+                    </div>
+                  ) : (
+                    <Select
+                      value={selectedModel}
+                      onChange={(value) => value && setSelectedModel(value as AIModel)}
+                      data={[
+                        { value: 'gpt4o', label: 'GPT-4o' },
+                        { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
+                        { value: 'perplexity-sonar', label: 'Perplexity Sonar' },
+                      ]}
+                      style={{ width: 180 }}
+                      styles={{
+                        input: {
+                          backgroundColor: '#2C2E33',
+                          border: '1px solid #373A40',
+                          borderRadius: '6px',
+                          transition: 'all 0.2s ease',
+                          cursor: 'pointer',
+                          '&:focus': {
+                            borderColor: '#20C997',
+                            backgroundColor: '#373A40'
+                          }
                         }
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  )}
                   
                   <Select
                     value={aiMode}
@@ -261,16 +313,25 @@ function App() {
                       size="md"
                       radius="md"
                       color={selectedModel === 'deepseek-r1' ? "teal" : "gray"}
+                      className={selectedModel === 'deepseek-r1' ? 'reasoning-active' : ''}
                       onClick={() => {
                         // Toggle DeepSeek R1 model
                         if (selectedModel === 'deepseek-r1') {
-                          setSelectedModel('gpt4o');
+                          // Store the previous model in localStorage
+                          const previousModel = localStorage.getItem('previous_model') || 'gpt4o';
+                          setSelectedModel(previousModel as AIModel);
+                          localStorage.setItem('selected_model', previousModel);
+                          console.log(`Switched back to ${previousModel} model`);
                         } else {
+                          // Save current model before switching to reasoning mode
+                          localStorage.setItem('previous_model', selectedModel);
                           setSelectedModel('deepseek-r1');
+                          localStorage.setItem('selected_model', 'deepseek-r1');
+                          console.log("Switched to DeepSeek R1 Reasoning mode");
                         }
                       }}
                     >
-                      <IconBrandOpenai size={18} />
+                      <IconBulb size={18} />
                     </ActionIcon>
                   </Tooltip>
                   <Tooltip label="Clear conversation">

@@ -27,8 +27,14 @@ const getPerplexityApiKey = () => {
 // Get DeepSeek API key from localStorage or env variable
 const getDeepSeekApiKey = () => {
   const localStorageKey = localStorage.getItem('deepseek_api_key');
+  console.log("DeepSeek API key from localStorage:", localStorageKey ? "Present (length: " + localStorageKey.length + ")" : "Not found");
+  
   if (localStorageKey) return localStorageKey;
-  return import.meta.env.VITE_DEEPSEEK_API_KEY || '';
+  
+  const envKey = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
+  console.log("DeepSeek API key from env:", envKey ? "Present" : "Not found");
+  
+  return envKey;
 };
 
 // Helper function to map month names to month numbers (0-based index)
@@ -113,37 +119,80 @@ const callPerplexityAPI = async (message: string) => {
 const callDeepSeekAPI = async (message: string) => {
   const apiKey = getDeepSeekApiKey();
   if (!apiKey) {
+    console.error('DeepSeek API key not found');
     throw new Error('DeepSeek API key not found. Please set it in the settings.');
   }
   
+  console.log(`DeepSeek API key length: ${apiKey.length}`);
+  console.log(`First/last chars: ${apiKey.substring(0, 3)}...${apiKey.substring(apiKey.length - 3)}`);
+  
   try {
+    // Updated endpoint URL to the correct DeepSeek API endpoint
+    const url = 'https://api.deepseek.com/v1/chat/completions';
+    console.log(`Calling DeepSeek API at ${url}`);
+    
+    const data = {
+      model: 'deepseek-chat',  // Using their base chat model instead of reasoner
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that can manage tasks as well as answer general questions. When creating a task, ALWAYS use the format "TASK: [task title] | [task description]" to clearly mark it as a task to be added to the task list. The title should be brief (2-5 words) and the description should provide more details. For example: "TASK: Buy groceries | Need to get milk, eggs, and bread for the weekend." If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix. Please think step-by-step about your response and provide reasoning.'
+        },
+        { role: 'user', content: message }
+      ],
+      max_tokens: 2048,
+      temperature: 0.7,
+    };
+    
+    console.log("Request payload:", JSON.stringify(data, null, 2));
+    
     const response = await axios.post(
-      'https://api.deepseek.com/v1/chat/completions',
-      {
-        model: 'deepseek-reasoner',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that can manage tasks as well as answer general questions. When creating a task, ALWAYS use the format "TASK: [task title] | [task description]" to clearly mark it as a task to be added to the task list. The title should be brief (2-5 words) and the description should provide more details. For example: "TASK: Buy groceries | Need to get milk, eggs, and bread for the weekend." If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix.'
-          },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 2048,
-        temperature: 0.7,
-        stream: false,
-      },
+      url,
+      data,
       {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
-        }
+        },
+        timeout: 60000 // 60 second timeout
       }
     );
     
+    console.log("DeepSeek API response status:", response.status);
+    console.log("DeepSeek API response headers:", response.headers);
+    console.log("DeepSeek API response data:", JSON.stringify(response.data, null, 2));
+    
+    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+      console.error('Invalid response from DeepSeek API:', response.data);
+      throw new Error('Received an invalid response from DeepSeek API.');
+    }
+    
     return response.data.choices[0].message.content;
-  } catch (error) {
+  } catch (error: any) {
     console.error('DeepSeek API Error:', error);
-    throw error;
+    
+    // Handle specific error types
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('DeepSeek API response error status:', error.response.status);
+      console.error('DeepSeek API response error data:', JSON.stringify(error.response.data, null, 2));
+      
+      if (error.response.status === 401) {
+        throw new Error('Invalid DeepSeek API key. Please check your API settings.');
+      } else if (error.response.status === 429) {
+        throw new Error('DeepSeek API rate limit exceeded. Please try again later.');
+      } else {
+        throw new Error(`DeepSeek API error: ${error.response.status} - ${JSON.stringify(error.response.data || 'Unknown error')}`);
+      }
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.error('DeepSeek API no response error:', error.request);
+      throw new Error('No response from DeepSeek API. Please check your internet connection.');
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      throw new Error(`Error with DeepSeek API request: ${error.message}`);
+    }
   }
 };
 
@@ -547,26 +596,45 @@ async function getCompletionResponse(message: string, mode: 'normal' | 'task', u
   try {
     const taskStore = useStore.getState(); // Add this line to get the taskStore in this scope
     
+    // Get the currently selected model from localStorage
+    const selectedModel = localStorage.getItem('selected_model') || 'gpt4o';
+    console.log(`Using model: ${selectedModel} in mode: ${mode}`);
+    
     if (mode === 'normal') {
-      // Get the OpenAI client
-      const openai = getOpenAIClient();
-      
-      // Set up a system prompt that focuses on general assistance
-      const systemPrompt = "You are a helpful AI assistant called MasterNote AI. You can answer questions, provide information, and help with a variety of tasks. Provide concise, accurate, and helpful responses. You are running in Normal Mode - your responses should be informative and comprehensive. Your knowledge cutoff is September 2023, but try to provide the most up-to-date information you have.";
-      
-      // Send the request to OpenAI
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 1000,
-        temperature: 0.7,
-      });
-      
-      // Return the response content
-      return response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+      // In normal mode, use the selected model
+      if (selectedModel === 'deepseek-r1') {
+        console.log('Using DeepSeek R1 API');
+        return await callDeepSeekAPI(message);
+      } else if (selectedModel === 'perplexity-sonar') {
+        console.log('Using Perplexity Sonar API');
+        return await callPerplexityAPI(message);
+      } else {
+        // Default to OpenAI
+        console.log('Using OpenAI API');
+        
+        // Get the OpenAI client
+        const openai = getOpenAIClient();
+        
+        // Set up a system prompt that focuses on general assistance
+        const systemPrompt = "You are a helpful AI assistant called MasterNote AI. You can answer questions, provide information, and help with a variety of tasks. Provide concise, accurate, and helpful responses. You are running in Normal Mode - your responses should be informative and comprehensive. Your knowledge cutoff is September 2023, but try to provide the most up-to-date information you have.";
+        
+        // Choose the model based on the selection
+        const modelName = selectedModel === 'o3-mini' ? 'gpt-3.5-turbo' : 'gpt-4o';
+        
+        // Send the request to OpenAI
+        const response = await openai.chat.completions.create({
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message }
+          ],
+          max_tokens: 1000,
+          temperature: 0.7,
+        });
+        
+        // Return the response content
+        return response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+      }
     } else {
       // In task mode, use AI to interpret the request if it doesn't match standard patterns
       // This provides a more intelligent fallback for task commands that don't match the predefined patterns
