@@ -1752,10 +1752,11 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
 function createTask(message: string, taskStore: TaskStoreType): string {
   console.log("Creating task from message:", message);
   
-  // First, check if this is a multi-task creation request
-  if (isMultiTaskCreationRequest(message)) {
-    return createMultipleTasks(message, taskStore);
-  }
+  // We no longer need to check for multi-task creation here since it's handled in getAIResponse
+  // Remove this check to prevent duplicate task creation
+  // if (isMultiTaskCreationRequest(message)) {
+  //   return createMultipleTasks(message, taskStore);
+  // }
   
   // Special pattern to handle "for [day] add a task called [title]" format
   const forDayPattern = /^for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week)\s+add\s+(?:a\s+)?task\s+(?:called|named|titled)\s+(.+)$/i;

@@ -114,31 +114,6 @@ export default function AIChat({ model }: AIChatProps) {
             addTask(task);
           }
         }
-        
-        // Also look for direct task references in the format "1. task name", "2. another task"
-        // This handles cases where the AI gives a numbered list of tasks
-        const numberedTaskRegex = /^\s*(\d+)\.\s+(.+)$/gm;
-        while ((match = numberedTaskRegex.exec(response)) !== null) {
-          const taskText = match[2]?.trim();
-          
-          // Skip if it's too short or already handled by the TASK: format
-          if (taskText && taskText.length > 2 && !taskText.startsWith('TASK:')) {
-            const task: Task = {
-              id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              title: taskText,
-              description: '',
-              priority: 'medium',
-              status: 'todo',
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              aiGenerated: true,
-              dueDate: undefined
-            };
-            
-            console.log('Adding numbered task from AIChat component:', task);
-            addTask(task);
-          }
-        }
       }
     } catch (error) {
       console.error("Error processing message:", error);
