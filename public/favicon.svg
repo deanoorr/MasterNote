@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <!-- Background rounded square -->
+  <rect x="5" y="5" width="90" height="90" rx="20" ry="20" fill="url(#grad)" />
+  
+  <!-- Gradient for the background -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2d9d78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#20634d;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Document/list icon -->
+  <rect x="30" y="30" width="40" height="50" rx="5" ry="5" fill="white" />
+  
+  <!-- List lines -->
+  <line x1="40" y1="45" x2="60" y2="45" stroke="#20634d" stroke-width="4" />
+  <line x1="40" y1="55" x2="60" y2="55" stroke="#20634d" stroke-width="4" />
+  <line x1="40" y1="65" x2="60" y2="65" stroke="#20634d" stroke-width="4" />
+  
+  <!-- Pin/location marker -->
+  <circle cx="70" cy="30" r="15" fill="white" />
+  <path d="M70,20 C64,20 59,25 59,30 C59,35 70,45 70,45 C70,45 81,35 81,30 C81,25 76,20 70,20 Z" fill="#2d9d78" />
+  <circle cx="70" cy="30" r="4" fill="white" />
+</svg>

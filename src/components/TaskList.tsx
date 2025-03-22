@@ -37,7 +37,7 @@ const getNextWeekday = (weekday: number): Date => {
 export default function TaskList() {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === 'dark';
-  const { tasks, updateTask, addTask, deleteTask, setSortOrder, getSortedTasks, sortOrder } = useStore();
+  const { tasks, updateTask, addTask, deleteTask, deleteCompletedTasks, setSortOrder, getSortedTasks, sortOrder } = useStore();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [addingTask, setAddingTask] = useState(false);
   const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
@@ -49,6 +49,7 @@ export default function TaskList() {
   const [editModalOpened, setEditModalOpened] = useState(false);
   const [dueDateMenuOpened, setDueDateMenuOpened] = useState(false);
   const [taskWithDueDateMenu, setTaskWithDueDateMenu] = useState<string | null>(null);
+  const [viewingCompletedTasks, setViewingCompletedTasks] = useState(false);
 
   // Calendar styles for the date picker
   const calendarStyles = {
@@ -103,7 +104,7 @@ export default function TaskList() {
     },
     monthPicker: { 
       background: isDark ? '#25262b' : '#ffffff',
-      color: isDark ? '#C1C2C5' : '#495057',
+      color: isDark ? '#C1C2C5' : '#495057', 
       padding: '16px'
     },
     weekday: { 
@@ -177,12 +178,19 @@ export default function TaskList() {
     e.stopPropagation(); // Prevent propagation to parent elements
     const task = tasks.find((t) => t.id === taskId);
     if (task) {
-      // Simply toggle between todo and done for simplicity
-      const newStatus = task.status === 'done' ? 'todo' : 'done';
+      // Mark task as done (don't toggle back to todo in the handler)
+      if (task.status !== 'done') {
       updateTask(taskId, { 
-        status: newStatus,
+          status: 'done',
+          updatedAt: new Date()
+        });
+      } else {
+        // If task is already done, we can toggle it back to todo
+        updateTask(taskId, { 
+          status: 'todo',
         updatedAt: new Date()
       });
+      }
     }
   };
 
@@ -284,6 +292,31 @@ export default function TaskList() {
       case 'overdue': return 'red';
       case 'due-soon': return 'orange';
       default: return 'dimmed';
+    }
+  };
+
+  // Format due date as "Today" or "Tomorrow" for those dates,
+  // otherwise use the regular date format
+  const formatDueDate = (dueDate: Date): string => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dueDay = new Date(dueDate);
+    dueDay.setHours(0, 0, 0, 0);
+    
+    if (dueDay.getTime() === today.getTime()) {
+      return 'Today';
+    } else if (dueDay.getTime() === tomorrow.getTime()) {
+      return 'Tomorrow';
+    } else {
+      return dueDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: dueDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+      });
     }
   };
 
@@ -415,6 +448,10 @@ export default function TaskList() {
     return () => observer.disconnect();
   }, [isDark]); // Add isDark as a dependency
 
+  // Filter tasks based on completed status
+  const activeTasks = sortedTasks.filter(task => task.status !== 'done');
+  const completedTasks = sortedTasks.filter(task => task.status === 'done');
+
   return (
     <DatesProvider settings={{ locale: 'en', firstDayOfWeek: 0 }}>
       <Paper style={{ 
@@ -434,8 +471,42 @@ export default function TaskList() {
           }}
         >
           <Group justify="space-between" mb="md">
-            <Text size="xl" fw={600} c={isDark ? undefined : 'gray.8'}>Tasks</Text>
+            <Text size="xl" fw={600} c={isDark ? undefined : 'gray.8'}>
+              {viewingCompletedTasks ? 'Completed Tasks' : 'Tasks'}
+            </Text>
             <Group>
+              <Button 
+                variant={viewingCompletedTasks ? "filled" : "light"}
+                color={viewingCompletedTasks ? "blue" : "gray"} 
+                size="sm" 
+                onClick={() => setViewingCompletedTasks(!viewingCompletedTasks)}
+                leftSection={<IconCheck size={16} />}
+                style={{
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {viewingCompletedTasks ? 'Back to Tasks' : 'View Completed'}
+              </Button>
+              {viewingCompletedTasks && completedTasks.length > 0 && (
+                <Button
+                  variant="light"
+                  color="red"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to delete all completed tasks? This action cannot be undone.')) {
+                      deleteCompletedTasks();
+                    }
+                  }}
+                  leftSection={<IconTrash size={16} />}
+                  style={{
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  Clear All
+                </Button>
+              )}
+              {!viewingCompletedTasks && (
+                <>
               <Select
                 placeholder="Sort by"
                 data={sortOptions}
@@ -464,6 +535,8 @@ export default function TaskList() {
               >
                 Add Task
               </Button>
+                </>
+              )}
             </Group>
           </Group>
 
@@ -708,7 +781,78 @@ export default function TaskList() {
               </Paper>
             )}
 
-            {sortedTasks.map((task) => {
+            {viewingCompletedTasks ? (
+              // Completed tasks view
+              completedTasks.length > 0 ? (
+                completedTasks.map((task) => (
+                  <Paper
+                    key={task.id}
+                    p="md"
+                    mb="md"
+                    style={{
+                      backgroundColor: isDark ? '#25262B' : '#ffffff',
+                      borderRadius: '10px',
+                      opacity: 0.7,
+                      border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                      transition: 'all 0.2s ease',
+                      boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.05)',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Group justify="space-between" align="flex-start">
+                      <Box style={{ flex: 1 }}>
+                        <Group justify="space-between" mb="xs">
+                          <Text fw={600} size="sm" style={{ 
+                            textDecoration: 'line-through',
+                            color: isDark ? '#909296' : '#adb5bd',
+                            fontSize: '15px'
+                          }}>
+                            {task.title}
+                          </Text>
+                          <Group gap="xs">
+                            <Badge color={getPriorityColor(task.priority)} size="sm" variant="light">
+                              {task.priority}
+                            </Badge>
+                            <ActionIcon 
+                              size="sm" 
+                              variant="subtle" 
+                              color="blue"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateTask(task.id, { 
+                                  status: 'todo',
+                                  updatedAt: new Date()
+                                });
+                              }}
+                            >
+                              <IconClock size={16} />
+                            </ActionIcon>
+                            <ActionIcon 
+                              size="sm" 
+                              variant="subtle" 
+                              color="red"
+                              onClick={(e) => handleDeleteTask(task.id, e)}
+                            >
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Group>
+                        </Group>
+                        <Text size="xs" c="dimmed" style={{ marginTop: '4px' }}>
+                          Completed: {new Date(task.updatedAt).toLocaleDateString()}
+                        </Text>
+                      </Box>
+                    </Group>
+                  </Paper>
+                ))
+              ) : (
+                <Text ta="center" mt="xl" c="dimmed">No completed tasks</Text>
+              )
+            ) : (
+              // Active tasks view
+              activeTasks.length > 0 ? (
+                activeTasks.map((task) => {
               const dueDateStatus = task.dueDate ? getDueDateStatus(new Date(task.dueDate)) : 'ok';
               const dueDateColor = getDueDateColor(dueDateStatus);
               
@@ -719,8 +863,7 @@ export default function TaskList() {
                   style={{
                     backgroundColor: isDark ? '#25262B' : '#ffffff',
                     borderRadius: '10px',
-                    opacity: task.status === 'done' ? 0.7 : 1,
-                    border: `1px solid ${task.status === 'done' ? (isDark ? '#373A40' : '#e9ecef') : 
+                        border: `1px solid ${
                       task.priority === 'high' ? `rgba(255, 76, 76, ${isDark ? 0.3 : 0.2})` : 
                       task.priority === 'medium' ? `rgba(255, 193, 7, ${isDark ? 0.3 : 0.2})` : 
                       `rgba(3, 102, 214, ${isDark ? 0.3 : 0.2})`}`,
@@ -729,12 +872,20 @@ export default function TaskList() {
                     cursor: 'pointer',
                     position: 'relative',
                     overflow: 'hidden',
+                        marginBottom: '12px',
                     '&:hover': {
                       backgroundColor: isDark ? '#2C2E33' : '#f8f9fa',
                       transform: 'translateY(-2px)',
                       boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.25)' : '0 4px 12px rgba(0,0,0,0.1)'
                     }
                   }}
+                      onClick={() => {
+                        setEditTaskId(task.id);
+                        setEditTaskTitle(task.title);
+                        setEditTaskPriority(task.priority);
+                        setEditTaskDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
+                        setEditModalOpened(true);
+                      }}
                 >
                   {/* Priority indicator line */}
                   <Box style={{
@@ -744,21 +895,36 @@ export default function TaskList() {
                     width: '4px',
                     height: '100%',
                     backgroundColor: getPriorityColor(task.priority),
-                    opacity: task.status === 'done' ? 0.4 : 0.8
-                  }} />
-                  
-                  <Group justify="space-between" align="flex-start" style={{ marginLeft: '6px' }}>
+                      }} />
+                      
+                      {/* Task number badge */}
+                      <Box style={{
+                        position: 'absolute',
+                        top: '8px',
+                        left: '4px',
+                        borderRadius: '0 0 6px 0',
+                        padding: '2px 6px',
+                        backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa',
+                        opacity: 0.9,
+                        zIndex: 1
+                      }}>
+                        <Text size="xs" fw={700} c={isDark ? 'dimmed' : 'gray.6'}>
+                          #{activeTasks.indexOf(task) + 1}
+                        </Text>
+                      </Box>
+                      
+                      <Group justify="space-between" align="flex-start" style={{ marginLeft: '28px' }}>
                     <Box style={{ flex: 1 }}>
                       <Group justify="space-between" mb="xs">
                         <Text fw={600} size="sm" style={{ 
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
                           color: task.status === 'done' ? (isDark ? '#909296' : '#adb5bd') : (isDark ? '#C1C2C5' : '#495057'),
-                          fontSize: '15px'
+                              fontSize: '15px'
                         }}>
                           {task.title}
                         </Text>
                         <Group gap="xs">
-                          <Menu shadow="md" width={160} position="bottom-end" offset={12}>
+                              <Menu shadow="md" width={160} position="bottom-end" offset={12}>
                             <Menu.Target>
                               <Badge color={getPriorityColor(task.priority)} size="sm" variant="light" 
                                 style={{ cursor: 'pointer', transition: 'all 0.2s ease' }} 
@@ -768,19 +934,19 @@ export default function TaskList() {
                               </Badge>
                             </Menu.Target>
 
-                            <Menu.Dropdown style={{ 
-                              backgroundColor: isDark ? '#25262B' : '#ffffff', 
-                              border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                              padding: '8px',
-                              zIndex: 1000
-                            }}>
+                                <Menu.Dropdown style={{ 
+                                  backgroundColor: isDark ? '#25262B' : '#ffffff', 
+                                  border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                                  padding: '8px',
+                                  zIndex: 1000
+                                }}>
                               <Menu.Label>Change Priority</Menu.Label>
                               <Menu.Item 
                                 color="blue" 
                                 onClick={(e) => handlePriorityChange(task.id, 'low', e)}
                                 fw={task.priority === 'low' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
-                                style={{ borderRadius: '4px', margin: '2px 0' }}
+                                    style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 Low
                               </Menu.Item>
@@ -789,7 +955,7 @@ export default function TaskList() {
                                 onClick={(e) => handlePriorityChange(task.id, 'medium', e)}
                                 fw={task.priority === 'medium' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
-                                style={{ borderRadius: '4px', margin: '2px 0' }}
+                                    style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 Medium
                               </Menu.Item>
@@ -798,7 +964,7 @@ export default function TaskList() {
                                 onClick={(e) => handlePriorityChange(task.id, 'high', e)}
                                 fw={task.priority === 'high' ? 'bold' : 'normal'}
                                 leftSection={<IconFlag size={14} />}
-                                style={{ borderRadius: '4px', margin: '2px 0' }}
+                                    style={{ borderRadius: '4px', margin: '2px 0' }}
                               >
                                 High
                               </Menu.Item>
@@ -816,7 +982,7 @@ export default function TaskList() {
                       {task.description && (
                         <Text c="dimmed" size="sm" mt="xs" mb="xs" style={{
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                          fontSize: '13px',
+                              fontSize: '13px',
                           lineHeight: 1.5
                         }}>
                           {task.description}
@@ -824,7 +990,7 @@ export default function TaskList() {
                       )}
                       {task.dueDate && (
                         <Group gap="xs" mt="xs">
-                          <Menu shadow="md" width={280} position="bottom-end" offset={12}>
+                              <Menu shadow="md" width={280} position="bottom-end" offset={12}>
                             <Menu.Target>
                               <Group style={{ cursor: 'pointer' }}>
                                 <IconClock size={14} color={dueDateColor !== 'dimmed' ? `var(--mantine-color-${dueDateColor}-filled)` : undefined} />
@@ -833,11 +999,7 @@ export default function TaskList() {
                                 }}>
                                   {dueDateStatus === 'overdue' ? 'Overdue: ' : 
                                    dueDateStatus === 'due-soon' ? 'Due soon: ' : ''}
-                                  {new Date(task.dueDate).toLocaleDateString('en-US', { 
-                                    month: 'short', 
-                                    day: 'numeric',
-                                    year: new Date(task.dueDate).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                  })}
+                                  {formatDueDate(new Date(task.dueDate))}
                                 </Text>
                               </Group>
                             </Menu.Target>
@@ -852,8 +1014,8 @@ export default function TaskList() {
                                     handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
                                   }
                                   clearable
-                                  maxLevel="month"
-                                  firstDayOfWeek={0}
+                                      maxLevel="month"
+                                      firstDayOfWeek={0}
                                   leftSection={<IconCalendar size={16} />}
                                   styles={calendarStyles}
                                 />
@@ -886,8 +1048,8 @@ export default function TaskList() {
                                   handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
                                 }
                                 clearable
-                                maxLevel="month"
-                                firstDayOfWeek={0}
+                                    maxLevel="month"
+                                    firstDayOfWeek={0}
                                 leftSection={<IconCalendar size={16} />}
                                 styles={calendarStyles}
                               />
@@ -932,44 +1094,10 @@ export default function TaskList() {
                   </Group>
                 </Paper>
               );
-            })}
-            
-            {tasks.length === 0 && !addingTask && (
-              <Box 
-                style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  height: '50vh',
-                  opacity: 0.7
-                }}
-              >
-                <IconListCheck size={64} color="#20C997" style={{ marginBottom: '24px', opacity: 0.5 }} />
-                <Text size="xl" c={isDark ? "dimmed" : "gray.7"} fw={500} ta="center">No tasks yet</Text>
-                <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mt="xs" maw={400} style={{ lineHeight: 1.6 }}>
-                  Start chatting with the AI to create some tasks or add them manually.
-                </Text>
-                <Button 
-                  variant="light" 
-                  color="teal" 
-                  size="md" 
-                  leftSection={<IconPlus size={18} />}
-                  onClick={() => setAddingTask(true)}
-                  data-add-task-btn="true"
-                  mt="xl"
-                  style={{
-                    transition: 'all 0.3s ease',
-                    padding: '8px 20px',
-                    '&:hover': {
-                      transform: 'translateY(-2px)',
-                      boxShadow: '0 8px 15px rgba(32, 201, 151, 0.25)'
-                    }
-                  }}
-                >
-                  Add Task
-                </Button>
-              </Box>
+                })
+              ) : (
+                <Text ta="center" mt="xl" c="dimmed">No tasks to display. Add a new task to get started!</Text>
+              )
             )}
           </Stack>
         </Box>
@@ -1042,60 +1170,61 @@ export default function TaskList() {
           <Stack gap="lg">
             <Box>
               <Text size="sm" fw={500} mb="xs">Task Title</Text>
-              <TextInput
+          <TextInput
                 placeholder="Enter task title"
-                value={editTaskTitle}
-                onChange={(e) => setEditTaskTitle(e.target.value)}
-                autoFocus
-                styles={{
-                  input: {
+            value={editTaskTitle}
+            onChange={(e) => setEditTaskTitle(e.target.value)}
+            autoFocus
+            styles={{
+              input: {
                     backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    fontSize: '16px',
+                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                borderRadius: '8px',
+                padding: '12px 16px',
+                fontSize: '16px',
                     height: '50px',
-                    transition: 'all 0.2s ease',
-                    '&:focus': {
-                      borderColor: '#20C997',
+                transition: 'all 0.2s ease',
+                '&:focus': {
+                  borderColor: '#20C997',
                       backgroundColor: isDark ? '#2C2E33' : '#ffffff'
-                    }
+                }
                   },
                   wrapper: {
                     marginBottom: '8px'
-                  }
-                }}
-              />
+              }
+            }}
+          />
             </Box>
 
             <Box>
               <Text size="sm" fw={500} mb="xs">Due Date</Text>
-              <DatePickerInput
+            <DatePickerInput
                 valueFormat="MMMM D, YYYY"
                 placeholder="Select due date"
-                value={editTaskDueDate}
-                onChange={handleEditTaskDueDateChange}
-                clearable
+              value={editTaskDueDate}
+              onChange={handleEditTaskDueDateChange}
+              clearable
+                leftSectionWidth={42}
                 leftSection={<IconCalendar size={18} color="#20C997" />}
                 maxLevel="month"
                 firstDayOfWeek={0}
-                styles={{
-                  input: {
+              styles={{
+                input: {
                     backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    fontSize: '16px',
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                  borderRadius: '8px',
+                  padding: '12px 16px 12px 42px',
+                  fontSize: '16px',
                     height: '50px',
-                    transition: 'all 0.2s ease',
-                    '&:focus': {
-                      borderColor: '#20C997',
+                  transition: 'all 0.2s ease',
+                  '&:focus': {
+                    borderColor: '#20C997',
                       backgroundColor: isDark ? '#2C2E33' : '#ffffff'
-                    }
-                  },
-                  ...calendarStyles
-                }}
-              />
+                  }
+                },
+                ...calendarStyles
+              }}
+            />
             </Box>
 
             <Box>
@@ -1108,14 +1237,15 @@ export default function TaskList() {
                   { value: 'medium', label: '🟡 Medium Priority' },
                   { value: 'high', label: '🔴 High Priority' }
                 ]}
+                leftSectionWidth={42}
                 leftSection={<IconFlag size={18} color="#20C997" />}
                 style={{ position: 'relative', zIndex: 1 }}
                 styles={{
                   input: {
                     backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
                     borderRadius: '8px',
-                    padding: '12px 16px',
+                    padding: '12px 16px 12px 42px',
                     fontSize: '16px',
                     height: '50px',
                     transition: 'all 0.2s ease',
@@ -1126,7 +1256,7 @@ export default function TaskList() {
                   },
                   dropdown: {
                     backgroundColor: isDark ? '#25262B' : '#ffffff',
-                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
                     borderRadius: '8px',
                     padding: '6px',
@@ -1147,27 +1277,27 @@ export default function TaskList() {
                   }
                 }}
               />
-            </Box>
+          </Box>
 
-            <Group justify="space-between" mt="md">
-              <Button 
+          <Group justify="space-between" mt="md">
+            <Button 
                 variant="default" 
                 onClick={closeEditModal}
-                style={{ 
+              style={{ 
                   fontSize: '15px',
                   fontWeight: 500,
                   padding: '8px 20px',
                   borderRadius: '8px',
                   transition: 'all 0.2s ease',
-                  backgroundColor: isDark ? '#25262b' : '#f1f3f5',
-                  color: isDark ? '#909296' : '#495057'
-                }}
-              >
-                Cancel
-              </Button>
-              <Button 
-                onClick={saveEditedTask}
-                disabled={!editTaskTitle.trim()}
+                backgroundColor: isDark ? '#25262b' : '#f1f3f5',
+                color: isDark ? '#909296' : '#495057'
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={saveEditedTask}
+              disabled={!editTaskTitle.trim()}
                 style={{ 
                   backgroundColor: '#20C997', 
                   color: 'white',
@@ -1179,10 +1309,10 @@ export default function TaskList() {
                   boxShadow: '0 4px 12px rgba(32, 201, 151, 0.2)'
                 }}
                 rightSection={<IconCheck size={18} />}
-              >
-                Save Changes
-              </Button>
-            </Group>
+            >
+              Save Changes
+            </Button>
+          </Group>
           </Stack>
         </Modal>
       </Paper>

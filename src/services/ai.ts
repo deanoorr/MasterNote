@@ -539,6 +539,7 @@ interface TaskStoreType {
   updateTask: (id: string, updates: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   getTasksByDate: (filter: string) => Task[];
+  getSortedTasks?: () => Task[];
 }
 
 // Define the getCompletionResponse function
@@ -833,6 +834,13 @@ export async function getAIResponse(message: string, mode: 'normal' | 'task', us
     
     // Check for task completion commands
     if (/\b(?:complete|mark|finish|done|check off|tick off|check|fix)\b/i.test(normalizedMessage)) {
+      // Check for task number reference (e.g., "complete task 1" or "mark task #3 as done")
+      const numberMatch = normalizedMessage.match(/\b(?:task|tasks|item|number|#)\s*#?(\d+)\b/i);
+      if (numberMatch && numberMatch[1]) {
+        const taskNumber = parseInt(numberMatch[1], 10);
+        return completeTaskByNumber(taskNumber, taskStore);
+      }
+      
       // Check if completing tasks by date filter
       if (/\b(?:today|tomorrow|this week|next week|upcoming|weekend|all)\b/i.test(normalizedMessage)) {
         let dateFilter = 'all';
@@ -872,6 +880,13 @@ export async function getAIResponse(message: string, mode: 'normal' | 'task', us
     
     // Check for deletion commands
     if (/\b(?:delete|remove|clear|trash|bin|erase|get rid of)\b/i.test(normalizedMessage)) {
+      // Check for task number reference (e.g., "delete task 2" or "remove #4")
+      const numberMatch = normalizedMessage.match(/\b(?:task|tasks|item|number|#)\s*#?(\d+)\b/i);
+      if (numberMatch && numberMatch[1]) {
+        const taskNumber = parseInt(numberMatch[1], 10);
+        return deleteTaskByNumber(taskNumber, taskStore);
+      }
+      
       // Check for "delete all tasks" pattern
       if (/\ball\b/i.test(normalizedMessage)) {
         if (/\b(?:confirm|yes|sure|absolutely|proceed|do it)\b/i.test(normalizedMessage)) {
@@ -1022,16 +1037,41 @@ function handleTaskDeletionByStatus(status: 'todo' | 'in_progress' | 'done', tas
 function changeTaskStatus(taskName: string, newStatus: 'todo' | 'in_progress' | 'done', taskStore: TaskStoreType): string {
   const allTasks = taskStore.tasks;
   
-  // First try to find an exact match
+  // Remove any starting/ending whitespace
+  const cleanTaskName = taskName.trim();
+  
+  // Skip if task name is too short (likely to cause incorrect matches)
+  if (cleanTaskName.length < 3) {
+    return `Please provide a more specific task name to update.`;
+  }
+  
+  // First try to find an exact match (case insensitive)
   let taskToUpdate = allTasks.find(t => 
-    t.title.toLowerCase() === taskName.toLowerCase()
+    t.title.toLowerCase() === cleanTaskName.toLowerCase()
   );
   
-  // If no exact match, try to find a partial match
+  // If no exact match, look for tasks that start with the provided name
   if (!taskToUpdate) {
     taskToUpdate = allTasks.find(t => 
-      t.title.toLowerCase().includes(taskName.toLowerCase())
+      t.title.toLowerCase().startsWith(cleanTaskName.toLowerCase())
     );
+  }
+  
+  // If still no match, try to find a task that contains the name
+  if (!taskToUpdate) {
+    // Filter all tasks that contain the provided name
+    const matchingTasks = allTasks.filter(t => 
+      t.title.toLowerCase().includes(cleanTaskName.toLowerCase())
+    );
+    
+    if (matchingTasks.length > 1) {
+      // Multiple matches found - provide list of potential tasks
+      return `I found multiple tasks matching "${cleanTaskName}". Please be more specific or use the task number:\n` +
+        matchingTasks.map((task, index) => `• ${task.title}`).join('\n');
+    } else if (matchingTasks.length === 1) {
+      // Found exactly one match
+      taskToUpdate = matchingTasks[0];
+    }
   }
   
   if (taskToUpdate) {
@@ -1054,7 +1094,7 @@ function changeTaskStatus(taskName: string, newStatus: 'todo' | 'in_progress' | 
     
     return `${statusEmoji} Task "${taskToUpdate.title}" is now ${statusDisplay}.`;
   } else {
-    return `I couldn't find a task matching "${taskName}". Please check the task name and try again.`;
+    return `I couldn't find a task matching "${cleanTaskName}". Please check the task name and try again.`;
   }
 }
 
@@ -1222,18 +1262,44 @@ function handleTaskCompletion(dateFilter: string, taskStore: TaskStoreType): str
 function completeTaskByName(taskName: string, taskStore: TaskStoreType): string {
   const allTasks = taskStore.tasks;
   
-  // First try to find an exact match
+  // Remove any starting/ending whitespace
+  const cleanTaskName = taskName.trim();
+  
+  // Skip if task name is too short (likely to cause incorrect matches)
+  if (cleanTaskName.length < 3) {
+    return `Please provide a more specific task name to complete.`;
+  }
+  
+  // First try to find an exact match (case insensitive)
   let taskToComplete = allTasks.find(t => 
-    t.title.toLowerCase() === taskName.toLowerCase() && 
+    t.title.toLowerCase() === cleanTaskName.toLowerCase() && 
     t.status !== 'done'
   );
   
-  // If no exact match, try to find a partial match
+  // If no exact match, look for tasks that start with the provided name
   if (!taskToComplete) {
     taskToComplete = allTasks.find(t => 
-      t.title.toLowerCase().includes(taskName.toLowerCase()) && 
+      t.title.toLowerCase().startsWith(cleanTaskName.toLowerCase()) && 
       t.status !== 'done'
     );
+  }
+  
+  // If still no match, try to find a task that contains the name
+  if (!taskToComplete) {
+    // Filter all tasks that contain the provided name
+    const matchingTasks = allTasks.filter(t => 
+      t.title.toLowerCase().includes(cleanTaskName.toLowerCase()) && 
+      t.status !== 'done'
+    );
+    
+    if (matchingTasks.length > 1) {
+      // Multiple matches found - provide list of potential tasks
+      return `I found multiple tasks matching "${cleanTaskName}". Please be more specific or use the task number:\n` +
+        matchingTasks.map((task, index) => `• ${task.title}`).join('\n');
+    } else if (matchingTasks.length === 1) {
+      // Found exactly one match
+      taskToComplete = matchingTasks[0];
+    }
   }
   
   if (taskToComplete) {
@@ -1243,7 +1309,7 @@ function completeTaskByName(taskName: string, taskStore: TaskStoreType): string 
     });
     return `✅ Task "${taskToComplete.title}" marked as complete.`;
   } else {
-    return `I couldn't find a task matching "${taskName}" that isn't already completed. Please check the task name and try again.`;
+    return `I couldn't find a task matching "${cleanTaskName}" that isn't already completed. Please check the task name and try again.`;
   }
 }
 
@@ -1277,19 +1343,48 @@ function handleTaskDeletion(dateFilter: string, taskStore: TaskStoreType): strin
 function deleteTaskByName(taskName: string, taskStore: TaskStoreType): string {
   const allTasks = taskStore.tasks;
   
-  // First try to find an exact match
-  let taskToDelete = allTasks.find(t => t.title.toLowerCase() === taskName.toLowerCase());
+  // Remove any starting/ending whitespace
+  const cleanTaskName = taskName.trim();
   
-  // If no exact match, try to find a partial match
+  // Skip if task name is too short (likely to cause incorrect matches)
+  if (cleanTaskName.length < 3) {
+    return `Please provide a more specific task name to delete.`;
+  }
+  
+  // First try to find an exact match (case insensitive)
+  let taskToDelete = allTasks.find(t => 
+    t.title.toLowerCase() === cleanTaskName.toLowerCase()
+  );
+  
+  // If no exact match, look for tasks that start with the provided name
   if (!taskToDelete) {
-    taskToDelete = allTasks.find(t => t.title.toLowerCase().includes(taskName.toLowerCase()));
+    taskToDelete = allTasks.find(t => 
+      t.title.toLowerCase().startsWith(cleanTaskName.toLowerCase())
+    );
+  }
+  
+  // If still no match, try to find a task that contains the name
+  if (!taskToDelete) {
+    // Filter all tasks that contain the provided name
+    const matchingTasks = allTasks.filter(t => 
+      t.title.toLowerCase().includes(cleanTaskName.toLowerCase())
+    );
+    
+    if (matchingTasks.length > 1) {
+      // Multiple matches found - provide list of potential tasks
+      return `I found multiple tasks matching "${cleanTaskName}". Please be more specific or use the task number:\n` +
+        matchingTasks.map((task, index) => `• ${task.title}`).join('\n');
+    } else if (matchingTasks.length === 1) {
+      // Found exactly one match
+      taskToDelete = matchingTasks[0];
+    }
   }
   
   if (taskToDelete) {
     taskStore.deleteTask(taskToDelete.id);
     return `🗑️ Task "${taskToDelete.title}" has been deleted.`;
   } else {
-    return `I couldn't find a task matching "${taskName}". Please check the task name and try again.`;
+    return `I couldn't find a task matching "${cleanTaskName}". Please check the task name and try again.`;
   }
 }
 
@@ -1303,8 +1398,347 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
   let description: string | null = null;
   let dueDate: Date | null = null;
   let priority: string | null = 'medium'; // Default priority
-  
-  // Check for common time references first
+
+  // Enhanced date extraction - will detect dates in many formats
+  // Different date patterns people might use in natural language
+  const datePatterns = [
+    // Exact dates like "January 15", "Jan 15", "15th of January", "15 January", etc.
+    {
+      regex: /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const monthName = match[1].toLowerCase();
+        const day = parseInt(match[2]);
+        // If year is specified, use it, otherwise use current year
+        const year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+        
+        // Map of month names to their numeric values (0-11)
+        const monthMap: Record<string, number> = {
+          'jan': 0, 'january': 0,
+          'feb': 1, 'february': 1,
+          'mar': 2, 'march': 2,
+          'apr': 3, 'april': 3,
+          'may': 4,
+          'jun': 5, 'june': 5,
+          'jul': 6, 'july': 6,
+          'aug': 7, 'august': 7,
+          'sep': 8, 'sept': 8, 'september': 8,
+          'oct': 9, 'october': 9,
+          'nov': 10, 'november': 10,
+          'dec': 11, 'december': 11
+        };
+        
+        if (monthMap[monthName] !== undefined && day >= 1 && day <= 31) {
+          return new Date(year, monthMap[monthName], day);
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // Alternative format: "15th of January", "15 of January", etc.
+    {
+      regex: /\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s*,?\s*(\d{4}))?\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const day = parseInt(match[1]);
+        const monthName = match[2].toLowerCase();
+        const year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+        
+        const monthMap: Record<string, number> = {
+          'jan': 0, 'january': 0,
+          'feb': 1, 'february': 1,
+          'mar': 2, 'march': 2,
+          'apr': 3, 'april': 3,
+          'may': 4,
+          'jun': 5, 'june': 5,
+          'jul': 6, 'july': 6,
+          'aug': 7, 'august': 7,
+          'sep': 8, 'sept': 8, 'september': 8,
+          'oct': 9, 'october': 9,
+          'nov': 10, 'november': 10,
+          'dec': 11, 'december': 11
+        };
+        
+        if (monthMap[monthName] !== undefined && day >= 1 && day <= 31) {
+          return new Date(year, monthMap[monthName], day);
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // Numeric dates: MM/DD/YYYY, MM-DD-YYYY, MM.DD.YYYY
+    {
+      regex: /\b(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?\b/,
+      handler: (match: RegExpMatchArray): Date => {
+        // Assuming US format MM/DD/YYYY
+        const month = parseInt(match[1]) - 1; // 0-based months
+        const day = parseInt(match[2]);
+        let year = match[3] ? parseInt(match[3]) : new Date().getFullYear();
+        
+        // If year is given as 2 digits
+        if (year < 100) {
+          year += year < 50 ? 2000 : 1900;
+        }
+        
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          return new Date(year, month, day);
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // YYYY-MM-DD ISO format
+    {
+      regex: /\b(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})\b/,
+      handler: (match: RegExpMatchArray): Date => {
+        const year = parseInt(match[1]);
+        const month = parseInt(match[2]) - 1; // 0-based months
+        const day = parseInt(match[3]);
+        
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+          return new Date(year, month, day);
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // Special cases like "this Monday", "next Friday", etc.
+    {
+      regex: /\b(?:(?:on|for|by|due|before|after|next|this|coming)\s+)?(monday|mon|tuesday|tue|tues|wednesday|wed|thursday|thu|thur|thurs|friday|fri|saturday|sat|sunday|sun)\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const dayText = match[1].toLowerCase();
+        const qualifier = match[0].toLowerCase().includes('next') ? 'next' : 
+                          match[0].toLowerCase().includes('this') || match[0].toLowerCase().includes('coming') ? 'this' : 'this';
+        
+        // Map to standardize day abbreviations
+        const dayMap: Record<string, number> = {
+          'monday': 1, 'mon': 1,
+          'tuesday': 2, 'tue': 2, 'tues': 2,
+          'wednesday': 3, 'wed': 3,
+          'thursday': 4, 'thu': 4, 'thur': 4, 'thurs': 4,
+          'friday': 5, 'fri': 5,
+          'saturday': 6, 'sat': 6,
+          'sunday': 0, 'sun': 0
+        };
+        
+        if (dayMap[dayText] !== undefined) {
+          const today = new Date();
+          const currentDay = today.getDay();
+          const targetDay = dayMap[dayText];
+          
+          // Calculate days until the specified day
+          let daysToAdd = (targetDay - currentDay + 7) % 7;
+          
+          // If "next" is specified or it's the same day and not "this", go to next week
+          if (qualifier === 'next' || (daysToAdd === 0 && qualifier !== 'this')) {
+            daysToAdd += 7;
+          }
+          
+          const result = new Date();
+          result.setDate(result.getDate() + daysToAdd);
+          return result;
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // Simple relative dates: "tomorrow", "today", "in 3 days", etc.
+    {
+      regex: /\b(tomorrow|tmrw|today|in\s+(\d+)\s+days?)\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const term = match[1].toLowerCase();
+        const result = new Date();
+        
+        if (term === 'tomorrow' || term === 'tmrw') {
+          result.setDate(result.getDate() + 1);
+        } else if (term.startsWith('in ')) {
+          const daysMatch = term.match(/in\s+(\d+)\s+days?/i);
+          if (daysMatch && daysMatch[1]) {
+            const days = parseInt(daysMatch[1]);
+            result.setDate(result.getDate() + days);
+          }
+        }
+        // today is already handled by default date
+        
+        return result;
+      }
+    },
+    
+    // "Next week", "this week", "next month", etc.
+    {
+      regex: /\b(next|this)\s+(week|month|weekend|year)\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const qualifier = match[1].toLowerCase();
+        const timeUnit = match[2].toLowerCase();
+        const result = new Date();
+        
+        if (timeUnit === 'week') {
+          // For week, we'll use Friday as the target day
+          const currentDay = result.getDay();
+          const daysToFriday = (5 - currentDay + 7) % 7; // 5 = Friday
+          
+          if (qualifier === 'next') {
+            result.setDate(result.getDate() + daysToFriday + 7);
+          } else { // this week
+            result.setDate(result.getDate() + daysToFriday);
+          }
+        } 
+        else if (timeUnit === 'weekend') {
+          // For weekend, we'll use Saturday
+          const currentDay = result.getDay();
+          const daysToSaturday = (6 - currentDay + 7) % 7; // 6 = Saturday
+          
+          if (qualifier === 'next') {
+            result.setDate(result.getDate() + daysToSaturday + 7);
+          } else { // this weekend
+            result.setDate(result.getDate() + daysToSaturday);
+          }
+        }
+        else if (timeUnit === 'month') {
+          if (qualifier === 'next') {
+            result.setMonth(result.getMonth() + 1);
+          } else { // this month
+            // Set to the end of current month
+            result.setDate(28);
+            const month = result.getMonth();
+            result.setDate(31); // Try to go to 31st
+            // If month changed, go back to last day of previous month
+            if (result.getMonth() !== month) {
+              result.setDate(0);
+            }
+          }
+        }
+        else if (timeUnit === 'year') {
+          if (qualifier === 'next') {
+            result.setFullYear(result.getFullYear() + 1);
+          } else { // this year
+            // Set to December 31st
+            result.setMonth(11);
+            result.setDate(31);
+          }
+        }
+        
+        return result;
+      }
+    },
+    
+    // "End of month", "beginning of next month", etc.
+    {
+      regex: /\b(begin(?:ning)?|start|end)\s+of\s+(next|this)?\s*(week|month|year)\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const position = match[1].toLowerCase();
+        const qualifier = match[2] ? match[2].toLowerCase() : 'this';
+        const timeUnit = match[3].toLowerCase();
+        const result = new Date();
+        
+        if (timeUnit === 'week') {
+          // Beginning of week = Monday, End of week = Friday
+          const currentDay = result.getDay() || 7; // Convert Sunday (0) to 7 for easier calculation
+          let targetDay = position.startsWith('begin') || position === 'start' ? 1 : 5; // 1 = Monday, 5 = Friday
+          
+          let daysToAdd = (targetDay - currentDay + 7) % 7;
+          if (qualifier === 'next' || (daysToAdd <= 0 && qualifier !== 'this')) {
+            daysToAdd += 7;
+          }
+          
+          result.setDate(result.getDate() + daysToAdd);
+        }
+        else if (timeUnit === 'month') {
+          if (qualifier === 'next') {
+            result.setMonth(result.getMonth() + 1);
+          }
+          
+          if (position.startsWith('begin') || position === 'start') {
+            result.setDate(1);
+          } else { // end
+            // Go to the last day of the month
+            result.setMonth(result.getMonth() + 1);
+            result.setDate(0);
+          }
+        }
+        else if (timeUnit === 'year') {
+          const year = qualifier === 'next' ? result.getFullYear() + 1 : result.getFullYear();
+          
+          if (position.startsWith('begin') || position === 'start') {
+            result.setFullYear(year, 0, 1); // January 1st
+          } else { // end
+            result.setFullYear(year, 11, 31); // December 31st
+          }
+        }
+        
+        return result;
+      }
+    },
+    
+    // Specific month without day: "in January", "during March", etc.
+    {
+      regex: /\b(?:in|during|for)\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t)?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+(\d{4}))?\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const monthName = match[1].toLowerCase();
+        const year = match[2] ? parseInt(match[2]) : new Date().getFullYear();
+        
+        const monthMap: Record<string, number> = {
+          'jan': 0, 'january': 0,
+          'feb': 1, 'february': 1,
+          'mar': 2, 'march': 2,
+          'apr': 3, 'april': 3,
+          'may': 4,
+          'jun': 5, 'june': 5,
+          'jul': 6, 'july': 6,
+          'aug': 7, 'august': 7,
+          'sep': 8, 'sept': 8, 'september': 8,
+          'oct': 9, 'october': 9,
+          'nov': 10, 'november': 10,
+          'dec': 11, 'december': 11
+        };
+        
+        if (monthMap[monthName] !== undefined) {
+          // Set to the 15th of the month as a reasonable default
+          return new Date(year, monthMap[monthName], 15);
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // "on the 15th", "by the 20th", etc. (assumes current month)
+    {
+      regex: /\b(?:on|by|for|due|before|after)\s+(?:the\s+)?(\d{1,2})(?:st|nd|rd|th)?\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const day = parseInt(match[1]);
+        const result = new Date();
+        
+        if (day >= 1 && day <= 31) {
+          const currentDay = result.getDate();
+          
+          // If the target day has already passed this month, go to next month
+          if (day < currentDay) {
+            result.setMonth(result.getMonth() + 1);
+          }
+          
+          result.setDate(day);
+          return result;
+        }
+        
+        return new Date(); // Fallback
+      }
+    },
+    
+    // "in 2025", "for 2024", etc.
+    {
+      regex: /\b(?:in|for|during|by)\s+(\d{4})\b/i,
+      handler: (match: RegExpMatchArray): Date => {
+        const year = parseInt(match[1]);
+        // Set to middle of the year as default (July 1st)
+        return new Date(year, 6, 1);
+      }
+    }
+  ];
+
+  // First check standard common time references
   if (/\b(?:tomorrow|tmrw|tmw|tomorow)\b/i.test(normalizedMessage)) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1328,114 +1762,60 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     dueDate = nextMonth;
+  } else {
+    // If no standard pattern matched, try the enhanced date patterns
+    for (const { regex, handler } of datePatterns) {
+      const match = normalizedMessage.match(regex);
+      if (match) {
+        dueDate = handler(match);
+        break; // Stop after first match
+      }
+    }
   }
   
-  // SIMPLER TASK PATTERNS - match a wider range of natural expressions
-  // These are ordered from most explicit to least explicit
-  
-  // Pattern 1: Explicit "add/create a task" commands with various formulations
-  const explicitTaskPatterns = [
-    // Standard task creation with to/for
-    /^(?:please\s+)?(?:add|create|make)(?:\s+a(?:nother)?)?(?:\s+new)?\s+(?:task|reminder|to-do|todo)(?:\s+item)?(?:\s+to|for)?\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
+  // Look for task creation patterns
+  const taskPatterns = [
+    // Explicit task creation with due date reference
+    /^(?:.*?)\b(?:add|create|make|set up)\s+(?:a\s+)?(?:task|reminder|to-do|todo)\s+(?:to\s+|called\s+|named\s+|titled\s+)?(.*?)(?:\s+(?:on|by|for|due|before|after)\s+([^,]+))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
     
-    // Colon version: "add a task: do something"
-    /^(?:please\s+)?(?:add|create|make)(?:\s+a(?:nother)?)?(?:\s+new)?\s+(?:task|reminder|to-do|todo)(?:\s+item)?(?:\s*:\s*)(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
+    // More natural language like "I need to..." with due date
+    /^(?:i\s+(?:need|want|have)\s+to|don't\s+let\s+me\s+forget\s+to|remind\s+me\s+to)\s+(.*?)(?:\s+(?:on|by|for|due|before|after)\s+([^,]+))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
     
-    // "Called/named" version: "add a task called do something"
-    /^(?:please\s+)?(?:add|create|make)(?:\s+a(?:nother)?)?(?:\s+new)?\s+(?:task|reminder|to-do|todo)(?:\s+item)?(?:\s+called|\s+named|\s+titled)\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
-    
-    // Direct form first: "add do something to my tasks"
-    /^(?:please\s+)?(?:add|create|make)\s+(.+?)\s+(?:to|into|as|as\s+a)(?:\s+my|\s+the)?\s+(?:task|tasks|reminder|reminders|to-do|todo|to-dos|todos)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i
+    // Simple task description with due date
+    /^(.*?)(?:\s+(?:on|by|for|due|before|after)\s+([^,]+))?(?:\s+with\s+([a-z]+)\s+priority)?$/i
   ];
   
-  // Pattern 2: "Reminder" and "Don't forget" style patterns
-  const reminderPatterns = [
-    // Formal reminder request: "set a reminder to call mom"
-    /^(?:please\s+)?(?:set\s+(?:up|me)?|create|make)(?:\s+a)?\s+(?:reminder|note)(?:\s+for\s+me)?(?:\s+to)?\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
-    
-    // Memory aid: "don't let me forget to buy milk"
-    /^(?:don'?t\s+(?:let|allow)\s+me\s+(?:to\s+)?forget|remind\s+me)(?:\s+to)?\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
-    
-    // Need to pattern: "i need to call mom" or "need to call mom"
-    /^(?:i\s+)?(?:need|have|want|would\s+like|ought|should)(?:\s+to)?\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i
-  ];
-  
-  // Pattern 3: Conversational forms
-  const conversationalPatterns = [
-    // Question forms: "can you remind me to call mom?"
-    /^(?:can|could|would)(?:\s+you)?(?:\s+please)?(?:\s+help\s+me)?(?:\s+to)?(?:\s+remember|\s+remind\s+me)?\s+(?:to|about)?\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
-    
-    // Obligation: "I have to finish report"
-    /^(?:i\s+have\s+to|i've\s+got\s+to|gotta|i\s+must|must)\s+(.+?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i,
-    
-    // Simple statements: "call mom on Friday" or "call mom"
-    /^(.{3,}?)(?:\s+(?:on|by|for|at|in|with|due|before|after|this)\s+([a-z]+day|tomorrow|today|next week|this week|weekend))?(?:\s+with\s+([a-z]+)\s+priority)?$/i
-  ];
-  
-  // Try all patterns in sequence
-  const allPatterns = [...explicitTaskPatterns, ...reminderPatterns, ...conversationalPatterns];
-  
-  // Try each pattern in order
-  for (const pattern of allPatterns) {
+  // Try to match one of the task patterns
+  for (const pattern of taskPatterns) {
     const match = message.match(pattern);
     if (match) {
-      // Extract the title from the first capture group
       title = match[1].trim();
       
-      // If there's a time reference in the second capture group, process it
-      if (match[2]) {
-        const timeRef = match[2].toLowerCase();
-        
-        // Handle specific day references like "on Friday"
-        if (/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/.test(timeRef)) {
-          const dayMap: Record<string, number> = {
-            monday: 1, tuesday: 2, wednesday: 3, 
-            thursday: 4, friday: 5, saturday: 6, sunday: 0
-          };
-          
-          const today = new Date();
-          const currentDay = today.getDay();
-          const targetDay = dayMap[timeRef];
-          
-          // Calculate days until the target day
-          let daysUntilTarget = (targetDay - currentDay + 7) % 7;
-          
-          // If the target day is today, assume next week
-          if (daysUntilTarget === 0) {
-            daysUntilTarget = 7;
+      // Clean up "called" prefix if it still exists in the title
+      const calledPatterns = [
+        /^called\s+(.+)$/i,
+        /^add\s+(?:a\s+)?task\s+called\s+(.+)$/i,
+        /^create\s+(?:a\s+)?task\s+called\s+(.+)$/i,
+        /^set\s+up\s+(?:a\s+)?task\s+called\s+(.+)$/i,
+        /^make\s+(?:a\s+)?task\s+called\s+(.+)$/i
+      ];
+      
+      for (const calledPattern of calledPatterns) {
+        const calledMatch = title.match(calledPattern);
+        if (calledMatch) {
+          title = calledMatch[1].trim();
+          break;
+        }
+      }
+      
+      // If there's a time reference in the second capture group, set it if dueDate wasn't captured
+      if (match[2] && !dueDate) {
+        for (const { regex, handler } of datePatterns) {
+          const dateMatch = match[2].match(regex);
+          if (dateMatch) {
+            dueDate = handler(dateMatch);
+            break;
           }
-          
-          const targetDate = new Date();
-          targetDate.setDate(today.getDate() + daysUntilTarget);
-          dueDate = targetDate;
-        }
-        else if (timeRef === 'tomorrow') {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          dueDate = tomorrow;
-        }
-        else if (timeRef === 'today') {
-          dueDate = new Date();
-        }
-        else if (timeRef === 'next week') {
-          const nextWeek = new Date();
-          nextWeek.setDate(nextWeek.getDate() + 7);
-          dueDate = nextWeek;
-        }
-        else if (timeRef === 'this week') {
-          const friday = new Date();
-          const currentDay = friday.getDay();
-          const daysUntilFriday = (5 - currentDay + 7) % 7;
-          friday.setDate(friday.getDate() + daysUntilFriday);
-          dueDate = friday;
-        }
-        else if (timeRef === 'weekend') {
-          const weekend = new Date();
-          const currentDay = weekend.getDay();
-          // Calculate days until Saturday (day 6)
-          const daysUntilWeekend = (6 - currentDay + 7) % 7;
-          weekend.setDate(weekend.getDate() + daysUntilWeekend);
-          dueDate = weekend;
         }
       }
       
@@ -1479,19 +1859,13 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
       break;
     }
   }
-  
-  // Fallback - try additional extraction from the message
-  if (!title) {
-    // Look for verbs at the beginning which often indicate actions/tasks
-    const verbStartMatch = message.match(/^(call|email|text|message|contact|remind|send|buy|get|pick up|meet|write|finish|complete|review|read|edit|update|make|create|prepare|attend|visit|check|analyze|research|investigate|schedule|book|reserve|order|pay)\s+(.+)/i);
-    
-    if (verbStartMatch) {
-      title = message.trim();
-      // Process date references in this title later
-    }
-  }
-  
-  return { title, description, dueDate, priority };
+
+  return {
+    title: title || message.trim(), // Use full message as title if no pattern matched
+    description,
+    dueDate,
+    priority
+  };
 }
 
 // Function to create a task from user input
@@ -1807,4 +2181,60 @@ function getNextTaskRecommendations(taskStore: TaskStoreType): string {
       return `${index + 1}. ${statusEmoji} ${priorityDot} ${task.title}${dueDate}${reasonLabel}`;
     }).join('\n') +
     `\n\nBased on priority, due dates, and current status of your tasks.`;
-} 
+}
+
+// Helper function to complete task by number
+function completeTaskByNumber(taskNumber: number, taskStore: TaskStoreType): string {
+  const sortedTasks = getSortedTasksFromStore(taskStore);
+  
+  // Convert from 1-based to 0-based index
+  const index = taskNumber - 1;
+  
+  if (index < 0 || index >= sortedTasks.length) {
+    return `Task #${taskNumber} doesn't exist. Please check the task number and try again.`;
+  }
+  
+  const taskToComplete = sortedTasks[index];
+  
+  // Only update if not already done
+  if (taskToComplete.status === 'done') {
+    return `Task #${taskNumber} "${taskToComplete.title}" is already completed.`;
+  }
+  
+  taskStore.updateTask(taskToComplete.id, {
+    status: 'done',
+    updatedAt: new Date()
+  });
+  
+  return `✅ Completed task #${taskNumber}: "${taskToComplete.title}"`;
+}
+
+// Helper function to delete task by number
+function deleteTaskByNumber(taskNumber: number, taskStore: TaskStoreType): string {
+  const sortedTasks = getSortedTasksFromStore(taskStore);
+  
+  // Convert from 1-based to 0-based index
+  const index = taskNumber - 1;
+  
+  if (index < 0 || index >= sortedTasks.length) {
+    return `Task #${taskNumber} doesn't exist. Please check the task number and try again.`;
+  }
+  
+  const taskToDelete = sortedTasks[index];
+  const taskTitle = taskToDelete.title;
+  
+  taskStore.deleteTask(taskToDelete.id);
+  
+  return `🗑️ Deleted task #${taskNumber}: "${taskTitle}"`;
+}
+
+// Helper function to get sorted tasks based on current sort order
+function getSortedTasksFromStore(taskStore: TaskStoreType): Task[] {
+  // Use the getSortedTasks function if available
+  if (typeof taskStore.getSortedTasks === 'function') {
+    return taskStore.getSortedTasks();
+  }
+  
+  // Fallback - return unsorted tasks
+  return taskStore.tasks;
+}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge } from '@mantine/core';
+import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image } from '@mantine/core';
 import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore, AIModeType } from '../store';
@@ -203,7 +203,7 @@ export default function AIChat({ model }: AIChatProps) {
                 padding: '0 20px'
               }}
             >
-              <IconBrandOpenai size={64} color="#20C997" style={{ marginBottom: '24px', opacity: 0.6 }} />
+              <img src="/favicon.svg" alt="MasterNote Logo" width="64" height="64" style={{ marginBottom: '24px', opacity: 0.9 }} />
               <Text size="xl" fw={600} ta="center" c={isDark ? "dimmed" : "gray.7"}>
                 Welcome to MasterNote AI
                 {aiMode === 'task' ? ' - Task Mode' : ''}

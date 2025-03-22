@@ -14,6 +14,7 @@ interface Store {
   addTask: (task: Task) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
+  deleteCompletedTasks: () => void;
   clearMessages: () => void;
   setSortOrder: (order: SortOption) => void;
   getSortedTasks: () => Task[];
@@ -48,6 +49,10 @@ export const useStore = create<Store>()(
       deleteTask: (taskId) =>
         set((state) => ({
           tasks: state.tasks.filter((task) => task.id !== taskId),
+        })),
+      deleteCompletedTasks: () =>
+        set((state) => ({
+          tasks: state.tasks.filter((task) => task.status !== 'done'),
         })),
       clearMessages: () => 
         set(() => ({
