@@ -833,15 +833,16 @@ export default function TaskList() {
                   >
                     <Group justify="space-between" align="flex-start">
                       <Box style={{ flex: 1 }}>
-                        <Group justify="space-between" mb="xs">
+                        <Group justify="space-between" mb="xs" align="center" style={{ flexWrap: 'nowrap' }}>
                           <Text fw={600} size="sm" style={{ 
                             textDecoration: 'line-through',
                             color: isDark ? '#909296' : '#adb5bd',
-                            fontSize: '15px'
+                            fontSize: '15px',
+                            flex: '1'
                           }}>
                             {task.title}
                           </Text>
-                          <Group gap="xs">
+                          <Group gap="xs" style={{ flexWrap: 'nowrap', marginLeft: '8px' }}>
                             <Badge color={getPriorityColor(task.priority)} size="sm" variant="light">
                               {task.priority}
                             </Badge>
@@ -969,15 +970,16 @@ export default function TaskList() {
                       
                       <Group justify="space-between" align="flex-start" style={{ marginLeft: '28px' }}>
                     <Box style={{ flex: 1 }}>
-                      <Group justify="space-between" mb="xs">
+                      <Group justify="space-between" mb="xs" align="center" style={{ flexWrap: 'nowrap' }}>
                         <Text fw={600} size="sm" style={{ 
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
                           color: task.status === 'done' ? (isDark ? '#909296' : '#adb5bd') : (isDark ? '#C1C2C5' : '#495057'),
-                              fontSize: '15px'
+                          fontSize: '15px',
+                          flex: '1'
                         }}>
                           {task.title}
                         </Text>
-                        <Group gap="xs">
+                        <Group gap="xs" style={{ flexWrap: 'nowrap', marginLeft: '8px' }}>
                               <Menu shadow="md" width={160} position="bottom-end" offset={12}>
                             <Menu.Target>
                               <Badge color={getPriorityColor(task.priority)} size="sm" variant="light" 
