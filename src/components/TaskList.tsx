@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea } from '@mantine/core';
+import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea, Flex } from '@mantine/core';
 import { DatePickerInput, DatesProvider } from '@mantine/dates';
 import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes } from '@tabler/icons-react';
 import { useStore, SortOption } from '../store';
@@ -831,74 +831,110 @@ export default function TaskList() {
                       setNotesModalOpened(true);
                     }}
                   >
-                    <Group justify="space-between" align="flex-start">
-                      <Box style={{ flex: 1 }}>
-                        <Group justify="space-between" mb="xs" align="center" style={{ flexWrap: 'nowrap' }}>
-                          <Text fw={600} size="sm" style={{ 
-                            textDecoration: 'line-through',
-                            color: isDark ? '#909296' : '#adb5bd',
-                            fontSize: '15px',
-                            flex: '1'
-                          }}>
-                            {task.title}
-                          </Text>
-                          <Group gap="xs" style={{ flexWrap: 'nowrap', marginLeft: '8px' }}>
-                            <Badge color={getPriorityColor(task.priority)} size="sm" variant="light">
-                              {task.priority}
-                            </Badge>
-                            <ActionIcon 
-                              size="sm" 
-                              variant="subtle" 
-                              color="blue"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updateTask(task.id, { 
-                                  status: 'todo',
-                                  updatedAt: new Date()
-                                });
-                              }}
-                            >
-                              <IconClock size={16} />
-                            </ActionIcon>
-                            <ActionIcon 
-                              size="sm" 
-                              variant="subtle" 
-                              color={task.notes ? "teal" : "gray"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNotesOpen(task.id, task.notes, e);
-                              }}
-                            >
-                              <IconNotes size={16} />
-                            </ActionIcon>
-                            <ActionIcon 
-                              size="sm" 
-                              variant="subtle" 
-                              color="red"
-                              onClick={(e) => handleDeleteTask(task.id, e)}
-                            >
-                              <IconTrash size={16} />
-                            </ActionIcon>
-                          </Group>
-                        </Group>
-                        <Text size="xs" c="dimmed" style={{ marginTop: '4px' }}>
-                          Completed: {new Date(task.updatedAt).toLocaleDateString()}
+                    {/* Priority indicator line */}
+                    <Box style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '4px',
+                      height: '100%',
+                      backgroundColor: getPriorityColor(task.priority),
+                      opacity: 0.5
+                    }} />
+                    
+                    {/* Main content container */}
+                    <Box style={{ marginLeft: '12px' }}>
+                      {/* Header row with title and badges */}
+                      <Flex justify="space-between" align="flex-start" mb="xs">
+                        {/* Task title */}
+                        <Text fw={600} size="sm" style={{ 
+                          textDecoration: 'line-through',
+                          color: isDark ? '#909296' : '#adb5bd',
+                          fontSize: '15px',
+                          flex: 1
+                        }}>
+                          {task.title}
                         </Text>
                         
-                        {/* Display notes indicator if notes exist */}
-                        {task.notes && (
-                          <Group gap="xs" mt="xs" onClick={(e) => {
-                            e.stopPropagation();
-                            handleNotesOpen(task.id, task.notes, e);
-                          }} style={{ cursor: 'pointer' }}>
-                            <IconNotes size={14} />
-                            <Text size="xs" fw={500} c="dimmed" style={{ textDecoration: 'line-through' }}>
-                              {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
-                            </Text>
-                          </Group>
-                        )}
-                      </Box>
-                    </Group>
+                        {/* Badges container */}
+                        <Flex gap="xs" align="center">
+                          <Badge 
+                            color={getPriorityColor(task.priority)} 
+                            size="sm" 
+                            variant="light"
+                            style={{ 
+                              opacity: 0.7,
+                              height: '24px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            {task.priority.toUpperCase()}
+                          </Badge>
+                          
+                          {/* Action buttons */}
+                          <ActionIcon 
+                            size="md" 
+                            variant="filled" 
+                            color="blue"
+                            radius="md"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateTask(task.id, { 
+                                status: 'todo',
+                                updatedAt: new Date()
+                              });
+                            }}
+                            title="Mark as not done"
+                          >
+                            <IconClock size={16} />
+                          </ActionIcon>
+                          
+                          <ActionIcon 
+                            size="md" 
+                            variant="filled" 
+                            color={task.notes ? "teal" : "gray"}
+                            radius="md"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNotesOpen(task.id, task.notes, e);
+                            }}
+                            title={task.notes ? "View notes" : "Add notes"}
+                          >
+                            <IconNotes size={16} />
+                          </ActionIcon>
+                          
+                          <ActionIcon 
+                            size="md" 
+                            variant="filled" 
+                            color="red"
+                            radius="md"
+                            onClick={(e) => handleDeleteTask(task.id, e)}
+                            title="Delete task"
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
+                        </Flex>
+                      </Flex>
+                      
+                      {/* Completion date */}
+                      <Text size="xs" c="dimmed" style={{ marginTop: '4px' }}>
+                        Completed: {new Date(task.updatedAt).toLocaleDateString()}
+                      </Text>
+                      
+                      {/* Display notes indicator if notes exist */}
+                      {task.notes && (
+                        <Group gap="xs" mt="xs" onClick={(e) => {
+                          e.stopPropagation();
+                          handleNotesOpen(task.id, task.notes, e);
+                        }} style={{ cursor: 'pointer' }}>
+                          <IconNotes size={14} />
+                          <Text size="xs" fw={500} c="dimmed" style={{ textDecoration: 'line-through' }}>
+                            {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
+                          </Text>
+                        </Group>
+                      )}
+                    </Box>
                   </Paper>
                 ))
               ) : (
@@ -918,7 +954,7 @@ export default function TaskList() {
                   style={{
                     backgroundColor: isDark ? '#25262B' : '#ffffff',
                     borderRadius: '10px',
-                        border: `1px solid ${
+                    border: `1px solid ${
                       task.priority === 'high' ? `rgba(255, 76, 76, ${isDark ? 0.3 : 0.2})` : 
                       task.priority === 'medium' ? `rgba(255, 193, 7, ${isDark ? 0.3 : 0.2})` : 
                       `rgba(3, 102, 214, ${isDark ? 0.3 : 0.2})`}`,
@@ -927,20 +963,20 @@ export default function TaskList() {
                     cursor: 'pointer',
                     position: 'relative',
                     overflow: 'hidden',
-                        marginBottom: '12px',
+                    marginBottom: '12px',
                     '&:hover': {
                       backgroundColor: isDark ? '#2C2E33' : '#f8f9fa',
                       transform: 'translateY(-2px)',
                       boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.25)' : '0 4px 12px rgba(0,0,0,0.1)'
                     }
                   }}
-                      onClick={() => {
-                        setEditTaskId(task.id);
-                        setEditTaskTitle(task.title);
-                        setEditTaskPriority(task.priority);
-                        setEditTaskDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
-                        setEditModalOpened(true);
-                      }}
+                  onClick={() => {
+                    setEditTaskId(task.id);
+                    setEditTaskTitle(task.title);
+                    setEditTaskPriority(task.priority);
+                    setEditTaskDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
+                    setEditModalOpened(true);
+                  }}
                 >
                   {/* Priority indicator line */}
                   <Box style={{
@@ -950,230 +986,270 @@ export default function TaskList() {
                     width: '4px',
                     height: '100%',
                     backgroundColor: getPriorityColor(task.priority),
-                      }} />
+                  }} />
                       
-                      {/* Task number badge */}
-                      <Box style={{
-                        position: 'absolute',
-                        top: '8px',
-                        left: '4px',
-                        borderRadius: '0 0 6px 0',
-                        padding: '2px 6px',
-                        backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa',
-                        opacity: 0.9,
-                        zIndex: 1
-                      }}>
-                        <Text size="xs" fw={700} c={isDark ? 'dimmed' : 'gray.6'}>
-                          #{activeTasks.indexOf(task) + 1}
-                        </Text>
-                      </Box>
-                      
-                      <Group justify="space-between" align="flex-start" style={{ marginLeft: '28px' }}>
-                    <Box style={{ flex: 1 }}>
-                      <Group justify="space-between" mb="xs" align="center" style={{ flexWrap: 'nowrap' }}>
-                        <Text fw={600} size="sm" style={{ 
+                  {/* Task number badge */}
+                  <Box style={{
+                    position: 'absolute',
+                    top: '8px',
+                    left: '4px',
+                    borderRadius: '0 0 6px 0',
+                    padding: '2px 6px',
+                    backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa',
+                    opacity: 0.9,
+                    zIndex: 1
+                  }}>
+                    <Text size="xs" fw={700} c={isDark ? 'dimmed' : 'gray.6'}>
+                      #{activeTasks.indexOf(task) + 1}
+                    </Text>
+                  </Box>
+                  
+                  {/* Main content container */}
+                  <Box style={{ marginLeft: '28px' }}>
+                    {/* Header row with title and badge */}
+                    <Flex justify="space-between" align="flex-start" mb="xs">
+                      {/* Task title */}
+                      <Text 
+                        fw={600} 
+                        size="sm" 
+                        style={{ 
                           textDecoration: task.status === 'done' ? 'line-through' : 'none',
                           color: task.status === 'done' ? (isDark ? '#909296' : '#adb5bd') : (isDark ? '#C1C2C5' : '#495057'),
                           fontSize: '15px',
-                          flex: '1'
-                        }}>
-                          {task.title}
-                        </Text>
-                        <Group gap="xs" style={{ flexWrap: 'nowrap', marginLeft: '8px' }}>
-                              <Menu shadow="md" width={160} position="bottom-end" offset={12}>
-                            <Menu.Target>
-                              <Badge color={getPriorityColor(task.priority)} size="sm" variant="light" 
-                                style={{ cursor: 'pointer', transition: 'all 0.2s ease' }} 
-                                rightSection={<IconChevronDown size={12} />}
-                                leftSection={<IconFlag size={12} />}>
-                                {task.priority}
-                              </Badge>
-                            </Menu.Target>
-
-                                <Menu.Dropdown style={{ 
-                                  backgroundColor: isDark ? '#25262B' : '#ffffff', 
-                                  border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                                  padding: '8px',
-                                  zIndex: 1000
-                                }}>
-                              <Menu.Label>Change Priority</Menu.Label>
-                              <Menu.Item 
-                                color="blue" 
-                                onClick={(e) => handlePriorityChange(task.id, 'low', e)}
-                                fw={task.priority === 'low' ? 'bold' : 'normal'}
-                                leftSection={<IconFlag size={14} />}
-                                    style={{ borderRadius: '4px', margin: '2px 0' }}
-                              >
-                                Low
-                              </Menu.Item>
-                              <Menu.Item 
-                                color="yellow" 
-                                onClick={(e) => handlePriorityChange(task.id, 'medium', e)}
-                                fw={task.priority === 'medium' ? 'bold' : 'normal'}
-                                leftSection={<IconFlag size={14} />}
-                                    style={{ borderRadius: '4px', margin: '2px 0' }}
-                              >
-                                Medium
-                              </Menu.Item>
-                              <Menu.Item 
-                                color="red" 
-                                onClick={(e) => handlePriorityChange(task.id, 'high', e)}
-                                fw={task.priority === 'high' ? 'bold' : 'normal'}
-                                leftSection={<IconFlag size={14} />}
-                                    style={{ borderRadius: '4px', margin: '2px 0' }}
-                              >
-                                High
-                              </Menu.Item>
-                            </Menu.Dropdown>
-                          </Menu>
-                          
-                          {task.aiGenerated && (
-                            <Badge color="teal" size="sm" variant={isDark ? "light" : "outline"} 
-                              style={{ transition: 'all 0.2s ease' }}>
-                              AI
-                            </Badge>
-                          )}
-                        </Group>
-                      </Group>
-                      {task.description && (
-                        <Text c="dimmed" size="sm" mt="xs" mb="xs" style={{
-                          textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                              fontSize: '13px',
-                          lineHeight: 1.5
-                        }}>
-                          {task.description}
-                        </Text>
-                      )}
-                      {task.dueDate && (
-                        <Group gap="xs" mt="xs">
-                              <Menu shadow="md" width={280} position="bottom-end" offset={12}>
-                            <Menu.Target>
-                              <Group style={{ cursor: 'pointer' }}>
-                                <IconClock size={14} color={dueDateColor !== 'dimmed' ? `var(--mantine-color-${dueDateColor}-filled)` : undefined} />
-                                <Text size="xs" c={dueDateColor} style={{
-                                  fontWeight: dueDateColor !== 'dimmed' ? 600 : 400
-                                }}>
-                                  {dueDateStatus === 'overdue' ? 'Overdue: ' : 
-                                   dueDateStatus === 'due-soon' ? 'Due soon: ' : ''}
-                                  {formatDueDate(new Date(task.dueDate))}
-                                </Text>
-                              </Group>
-                            </Menu.Target>
-                            <Menu.Dropdown style={{ backgroundColor: isDark ? '#25262B' : '#ffffff', border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}` }}>
-                              <Menu.Label>Change Due Date</Menu.Label>
-                              <Box p="xs">
-                                <DatePickerInput
-                                  valueFormat="MMM D, YYYY"
-                                  placeholder="Select date"
-                                  value={task.dueDate ? new Date(task.dueDate) : null}
-                                  onChange={(date: Date | null) => 
-                                    handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
-                                  }
-                                  clearable
-                                      maxLevel="month"
-                                      firstDayOfWeek={0}
-                                  leftSection={<IconCalendar size={16} />}
-                                  styles={calendarStyles}
-                                />
-                              </Box>
-                            </Menu.Dropdown>
-                          </Menu>
-                        </Group>
-                      )}
+                          flex: 1,
+                          paddingRight: '12px'
+                        }}
+                      >
+                        {task.title}
+                      </Text>
                       
-                      {!task.dueDate && (
-                        <Menu shadow="md" width={280}>
+                      {/* Badges container */}
+                      <Flex gap="xs" align="center">
+                        {/* Priority badge */}
+                        <Menu shadow="md" width={160} position="bottom-end" offset={12}>
                           <Menu.Target>
-                            <Button 
-                              variant="subtle" 
-                              size="xs" 
-                              mt="xs" 
-                              leftSection={<IconCalendar size={14} />}
-                              style={{ padding: '2px 6px' }}
+                            <Badge 
+                              color={getPriorityColor(task.priority)} 
+                              size="sm" 
+                              variant="filled" 
+                              style={{ 
+                                cursor: 'pointer',
+                                height: '24px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
                             >
-                              Add due date
-                            </Button>
+                              <IconFlag size={12} style={{ marginRight: '2px' }} />
+                              {task.priority.toUpperCase()}
+                              <IconChevronDown size={12} />
+                            </Badge>
+                          </Menu.Target>
+
+                          <Menu.Dropdown style={{ 
+                            backgroundColor: isDark ? '#25262B' : '#ffffff', 
+                            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                            padding: '8px',
+                            zIndex: 1000
+                          }}>
+                            <Menu.Label>Change Priority</Menu.Label>
+                            <Menu.Item 
+                              color="blue" 
+                              onClick={(e) => handlePriorityChange(task.id, 'low', e)}
+                              fw={task.priority === 'low' ? 'bold' : 'normal'}
+                              leftSection={<IconFlag size={14} />}
+                              style={{ borderRadius: '4px', margin: '2px 0' }}
+                            >
+                              Low
+                            </Menu.Item>
+                            <Menu.Item 
+                              color="yellow" 
+                              onClick={(e) => handlePriorityChange(task.id, 'medium', e)}
+                              fw={task.priority === 'medium' ? 'bold' : 'normal'}
+                              leftSection={<IconFlag size={14} />}
+                              style={{ borderRadius: '4px', margin: '2px 0' }}
+                            >
+                              Medium
+                            </Menu.Item>
+                            <Menu.Item 
+                              color="red" 
+                              onClick={(e) => handlePriorityChange(task.id, 'high', e)}
+                              fw={task.priority === 'high' ? 'bold' : 'normal'}
+                              leftSection={<IconFlag size={14} />}
+                              style={{ borderRadius: '4px', margin: '2px 0' }}
+                            >
+                              High
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
+
+                        {/* AI Badge */}
+                        {task.aiGenerated && (
+                          <Badge 
+                            color="teal" 
+                            size="sm" 
+                            variant="filled" 
+                            style={{ 
+                              height: '24px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                          >
+                            AI
+                          </Badge>
+                        )}
+                      </Flex>
+                    </Flex>
+                    
+                    {/* Task description */}
+                    {task.description && (
+                      <Text 
+                        c="dimmed" 
+                        size="sm" 
+                        mb="xs" 
+                        style={{
+                          textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                          fontSize: '13px',
+                          lineHeight: 1.5
+                        }}
+                      >
+                        {task.description}
+                      </Text>
+                    )}
+                    
+                    {/* Due date */}
+                    {task.dueDate && (
+                      <Flex align="center" mt="xs" mb="xs">
+                        <Menu shadow="md" width={280} position="bottom-start">
+                          <Menu.Target>
+                            <Group style={{ cursor: 'pointer' }}>
+                              <IconClock size={14} color={dueDateColor !== 'dimmed' ? `var(--mantine-color-${dueDateColor}-filled)` : undefined} />
+                              <Text size="xs" c={dueDateColor} style={{
+                                fontWeight: dueDateColor !== 'dimmed' ? 600 : 400
+                              }}>
+                                {dueDateStatus === 'overdue' ? 'Overdue: ' : 
+                                dueDateStatus === 'due-soon' ? 'Due soon: ' : ''}
+                                {formatDueDate(new Date(task.dueDate))}
+                              </Text>
+                            </Group>
                           </Menu.Target>
                           <Menu.Dropdown>
-                            <Menu.Label>Set Due Date</Menu.Label>
+                            <Menu.Label>Change Due Date</Menu.Label>
                             <Box p="xs">
                               <DatePickerInput
                                 valueFormat="MMM D, YYYY"
                                 placeholder="Select date"
-                                value={null}
+                                value={task.dueDate ? new Date(task.dueDate) : null}
                                 onChange={(date: Date | null) => 
                                   handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
                                 }
                                 clearable
-                                    maxLevel="month"
-                                    firstDayOfWeek={0}
+                                maxLevel="month"
+                                firstDayOfWeek={0}
                                 leftSection={<IconCalendar size={16} />}
                                 styles={calendarStyles}
                               />
                             </Box>
                           </Menu.Dropdown>
                         </Menu>
-                      )}
+                      </Flex>
+                    )}
+                    
+                    {/* Add due date button */}
+                    {!task.dueDate && (
+                      <Menu shadow="md" width={280}>
+                        <Menu.Target>
+                          <Button 
+                            variant="subtle" 
+                            size="xs" 
+                            mt="xs" 
+                            leftSection={<IconCalendar size={14} />}
+                            style={{ padding: '2px 6px' }}
+                          >
+                            Add due date
+                          </Button>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Label>Set Due Date</Menu.Label>
+                          <Box p="xs">
+                            <DatePickerInput
+                              valueFormat="MMM D, YYYY"
+                              placeholder="Select date"
+                              value={null}
+                              onChange={(date: Date | null) => 
+                                handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
+                              }
+                              clearable
+                              maxLevel="month"
+                              firstDayOfWeek={0}
+                              leftSection={<IconCalendar size={16} />}
+                              styles={calendarStyles}
+                            />
+                          </Box>
+                        </Menu.Dropdown>
+                      </Menu>
+                    )}
+                    
+                    {/* Notes indicator */}
+                    {task.notes && (
+                      <Group gap="xs" mt="xs" onClick={(e) => {
+                        e.stopPropagation();
+                        handleNotesOpen(task.id, task.notes, e);
+                      }} style={{ cursor: 'pointer' }}>
+                        <IconNotes size={14} />
+                        <Text size="xs" fw={500}>
+                          {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
+                        </Text>
+                      </Group>
+                    )}
+                    
+                    {/* Action buttons */}
+                    <Flex justify="flex-end" gap="sm" mt="md">
+                      <ActionIcon 
+                        color={task.status === 'done' ? 'orange' : 'teal'} 
+                        variant="filled"
+                        radius="md"
+                        size="md"
+                        onClick={(e) => handleStatusChange(task.id, e)}
+                        title={task.status === 'done' ? 'Mark as not done' : 'Mark as done'}
+                      >
+                        {task.status === 'done' ? <IconClock size={16} /> : <IconCheck size={16} />}
+                      </ActionIcon>
                       
-                      {/* Display notes indicator if notes exist */}
-                      {task.notes && (
-                        <Group gap="xs" mt={task.dueDate ? "xs" : "md"} onClick={(e) => {
-                          e.stopPropagation();
-                          handleNotesOpen(task.id, task.notes, e);
-                        }} style={{ cursor: 'pointer' }}>
-                          <IconNotes size={14} />
-                          <Text size="xs" fw={500}>
-                            {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
-                          </Text>
-                        </Group>
-                      )}
-                    </Box>
-                    <Group justify="right" mt="md" style={{ marginTop: '5px' }}>
-                      <Tooltip label={task.status === 'done' ? 'Mark as not done' : 'Mark as done'} position="top">
-                        <ActionIcon 
-                          color={task.status === 'done' ? 'orange' : 'teal'} 
-                          variant="light"
-                          radius="xl"
-                          onClick={(e) => handleStatusChange(task.id, e)}
-                        >
-                          {task.status === 'done' ? <IconClock size={16} /> : <IconCheck size={16} />}
-                        </ActionIcon>
-                      </Tooltip>
-                      
-                      <Tooltip label="Edit task" position="top">
-                        <ActionIcon 
-                          color="blue" 
-                          variant="light"
-                          radius="xl"
-                          onClick={(e) => handleEditTask(task.id, e)}
-                        >
-                          <IconPencil size={16} />
-                        </ActionIcon>
-                      </Tooltip>
+                      <ActionIcon 
+                        color="blue" 
+                        variant="filled"
+                        radius="md"
+                        size="md"
+                        onClick={(e) => handleEditTask(task.id, e)}
+                        title="Edit task"
+                      >
+                        <IconPencil size={16} />
+                      </ActionIcon>
 
-                      <Tooltip label={task.notes ? "Edit notes" : "Add notes"} position="top">
-                        <ActionIcon 
-                          color={task.notes ? "teal" : "gray"} 
-                          variant="light"
-                          radius="xl"
-                          onClick={(e) => handleNotesOpen(task.id, task.notes, e)}
-                        >
-                          <IconNotes size={16} />
-                        </ActionIcon>
-                      </Tooltip>
+                      <ActionIcon 
+                        color={task.notes ? "teal" : "gray"} 
+                        variant="filled"
+                        radius="md"
+                        size="md"
+                        onClick={(e) => handleNotesOpen(task.id, task.notes, e)}
+                        title={task.notes ? "Edit notes" : "Add notes"}
+                      >
+                        <IconNotes size={16} />
+                      </ActionIcon>
                       
-                      <Tooltip label="Delete task" position="top">
-                        <ActionIcon 
-                          color="red" 
-                          variant="light"
-                          radius="xl"
-                          onClick={(e) => handleDeleteTask(task.id, e)}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
-                  </Group>
+                      <ActionIcon 
+                        color="red" 
+                        variant="filled"
+                        radius="md"
+                        size="md"
+                        onClick={(e) => handleDeleteTask(task.id, e)}
+                        title="Delete task"
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Flex>
+                  </Box>
                 </Paper>
               );
                 })
