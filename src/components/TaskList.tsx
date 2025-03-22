@@ -861,14 +861,15 @@ export default function TaskList() {
                           <Badge 
                             color={getPriorityColor(task.priority)} 
                             size="sm" 
-                            variant="light"
+                            variant="filled"
                             style={{ 
-                              opacity: 0.7,
                               height: '24px',
-                              display: 'flex',
-                              alignItems: 'center'
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              whiteSpace: 'nowrap'
                             }}
                           >
+                            <IconFlag size={12} style={{ marginRight: '4px' }} />
                             {task.priority.toUpperCase()}
                           </Badge>
                           
@@ -1026,62 +1027,20 @@ export default function TaskList() {
                       {/* Badges container */}
                       <Flex gap="xs" align="center">
                         {/* Priority badge */}
-                        <Menu shadow="md" width={160} position="bottom-end" offset={12}>
-                          <Menu.Target>
-                            <Badge 
-                              color={getPriorityColor(task.priority)} 
-                              size="sm" 
-                              variant="filled" 
-                              style={{ 
-                                cursor: 'pointer',
-                                height: '24px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <IconFlag size={12} style={{ marginRight: '2px' }} />
-                              {task.priority.toUpperCase()}
-                              <IconChevronDown size={12} />
-                            </Badge>
-                          </Menu.Target>
-
-                          <Menu.Dropdown style={{ 
-                            backgroundColor: isDark ? '#25262B' : '#ffffff', 
-                            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                            padding: '8px',
-                            zIndex: 1000
-                          }}>
-                            <Menu.Label>Change Priority</Menu.Label>
-                            <Menu.Item 
-                              color="blue" 
-                              onClick={(e) => handlePriorityChange(task.id, 'low', e)}
-                              fw={task.priority === 'low' ? 'bold' : 'normal'}
-                              leftSection={<IconFlag size={14} />}
-                              style={{ borderRadius: '4px', margin: '2px 0' }}
-                            >
-                              Low
-                            </Menu.Item>
-                            <Menu.Item 
-                              color="yellow" 
-                              onClick={(e) => handlePriorityChange(task.id, 'medium', e)}
-                              fw={task.priority === 'medium' ? 'bold' : 'normal'}
-                              leftSection={<IconFlag size={14} />}
-                              style={{ borderRadius: '4px', margin: '2px 0' }}
-                            >
-                              Medium
-                            </Menu.Item>
-                            <Menu.Item 
-                              color="red" 
-                              onClick={(e) => handlePriorityChange(task.id, 'high', e)}
-                              fw={task.priority === 'high' ? 'bold' : 'normal'}
-                              leftSection={<IconFlag size={14} />}
-                              style={{ borderRadius: '4px', margin: '2px 0' }}
-                            >
-                              High
-                            </Menu.Item>
-                          </Menu.Dropdown>
-                        </Menu>
+                        <Badge 
+                          color={getPriorityColor(task.priority)} 
+                          size="sm" 
+                          variant="filled" 
+                          style={{ 
+                            height: '24px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <IconFlag size={12} style={{ marginRight: '4px' }} />
+                          {task.priority.toUpperCase()}
+                        </Badge>
 
                         {/* AI Badge */}
                         {task.aiGenerated && (
