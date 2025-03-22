@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme } from '@mantine/core';
+import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea } from '@mantine/core';
 import { DatePickerInput, DatesProvider } from '@mantine/dates';
-import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent } from '@tabler/icons-react';
+import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes } from '@tabler/icons-react';
 import { useStore, SortOption } from '../store';
 import { Task } from '../types';
 
@@ -50,6 +50,9 @@ export default function TaskList() {
   const [dueDateMenuOpened, setDueDateMenuOpened] = useState(false);
   const [taskWithDueDateMenu, setTaskWithDueDateMenu] = useState<string | null>(null);
   const [viewingCompletedTasks, setViewingCompletedTasks] = useState(false);
+  const [notesModalOpened, setNotesModalOpened] = useState(false);
+  const [currentNotes, setCurrentNotes] = useState('');
+  const [noteTaskId, setNoteTaskId] = useState<string | null>(null);
 
   // Calendar styles for the date picker
   const calendarStyles = {
@@ -457,6 +460,23 @@ export default function TaskList() {
   const activeTasks = sortedTasks.filter(task => task.status !== 'done');
   const completedTasks = sortedTasks.filter(task => task.status === 'done');
 
+  const handleNotesOpen = (taskId: string, notes: string | undefined, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setNoteTaskId(taskId);
+    setCurrentNotes(notes || '');
+    setNotesModalOpened(true);
+  };
+
+  const saveNotes = () => {
+    if (noteTaskId) {
+      updateTask(noteTaskId, { 
+        notes: currentNotes,
+        updatedAt: new Date()
+      });
+      setNotesModalOpened(false);
+    }
+  };
+
   return (
     <DatesProvider settings={{ locale: 'en', firstDayOfWeek: 0 }}>
       <Paper style={{ 
@@ -805,6 +825,11 @@ export default function TaskList() {
                       position: 'relative',
                       overflow: 'hidden',
                     }}
+                    onClick={() => {
+                      setNoteTaskId(task.id);
+                      setCurrentNotes(task.notes || '');
+                      setNotesModalOpened(true);
+                    }}
                   >
                     <Group justify="space-between" align="flex-start">
                       <Box style={{ flex: 1 }}>
@@ -837,6 +862,17 @@ export default function TaskList() {
                             <ActionIcon 
                               size="sm" 
                               variant="subtle" 
+                              color={task.notes ? "teal" : "gray"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNotesOpen(task.id, task.notes, e);
+                              }}
+                            >
+                              <IconNotes size={16} />
+                            </ActionIcon>
+                            <ActionIcon 
+                              size="sm" 
+                              variant="subtle" 
                               color="red"
                               onClick={(e) => handleDeleteTask(task.id, e)}
                             >
@@ -847,6 +883,19 @@ export default function TaskList() {
                         <Text size="xs" c="dimmed" style={{ marginTop: '4px' }}>
                           Completed: {new Date(task.updatedAt).toLocaleDateString()}
                         </Text>
+                        
+                        {/* Display notes indicator if notes exist */}
+                        {task.notes && (
+                          <Group gap="xs" mt="xs" onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotesOpen(task.id, task.notes, e);
+                          }} style={{ cursor: 'pointer' }}>
+                            <IconNotes size={14} />
+                            <Text size="xs" fw={500} c="dimmed" style={{ textDecoration: 'line-through' }}>
+                              {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
+                            </Text>
+                          </Group>
+                        )}
                       </Box>
                     </Group>
                   </Paper>
@@ -1029,6 +1078,7 @@ export default function TaskList() {
                           </Menu>
                         </Group>
                       )}
+                      
                       {!task.dueDate && (
                         <Menu shadow="md" width={280}>
                           <Menu.Target>
@@ -1062,19 +1112,32 @@ export default function TaskList() {
                           </Menu.Dropdown>
                         </Menu>
                       )}
+                      
+                      {/* Display notes indicator if notes exist */}
+                      {task.notes && (
+                        <Group gap="xs" mt={task.dueDate ? "xs" : "md"} onClick={(e) => {
+                          e.stopPropagation();
+                          handleNotesOpen(task.id, task.notes, e);
+                        }} style={{ cursor: 'pointer' }}>
+                          <IconNotes size={14} />
+                          <Text size="xs" fw={500}>
+                            {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
+                          </Text>
+                        </Group>
+                      )}
                     </Box>
-                    <Group gap="xs">
-                      <Tooltip label={task.status === 'done' ? 'Mark as todo' : 'Mark as done'} position="top">
-                        <ActionIcon
-                          color={task.status === 'done' ? 'teal' : 'gray'}
-                          variant={task.status === 'done' ? 'filled' : 'light'}
-                          onClick={(e) => handleStatusChange(task.id, e)}
+                    <Group justify="right" mt="md" style={{ marginTop: '5px' }}>
+                      <Tooltip label={task.status === 'done' ? 'Mark as not done' : 'Mark as done'} position="top">
+                        <ActionIcon 
+                          color={task.status === 'done' ? 'orange' : 'teal'} 
+                          variant="light"
                           radius="xl"
-                          style={{ transition: 'all 0.2s ease', transform: task.status === 'done' ? 'scale(1.1)' : 'scale(1)' }}
+                          onClick={(e) => handleStatusChange(task.id, e)}
                         >
-                          <IconCheck size={16} />
+                          {task.status === 'done' ? <IconClock size={16} /> : <IconCheck size={16} />}
                         </ActionIcon>
                       </Tooltip>
+                      
                       <Tooltip label="Edit task" position="top">
                         <ActionIcon 
                           color="blue" 
@@ -1085,6 +1148,18 @@ export default function TaskList() {
                           <IconPencil size={16} />
                         </ActionIcon>
                       </Tooltip>
+
+                      <Tooltip label={task.notes ? "Edit notes" : "Add notes"} position="top">
+                        <ActionIcon 
+                          color={task.notes ? "teal" : "gray"} 
+                          variant="light"
+                          radius="xl"
+                          onClick={(e) => handleNotesOpen(task.id, task.notes, e)}
+                        >
+                          <IconNotes size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      
                       <Tooltip label="Delete task" position="top">
                         <ActionIcon 
                           color="red" 
@@ -1318,6 +1393,100 @@ export default function TaskList() {
               Save Changes
             </Button>
           </Group>
+          </Stack>
+        </Modal>
+
+        {/* Notes Modal */}
+        <Modal
+          opened={!!notesModalOpened}
+          onClose={() => setNotesModalOpened(false)}
+          title={<Text fw={600} size="lg">Edit Notes</Text>}
+          centered
+          radius="md"
+          size="md"
+          padding="xl"
+          styles={{
+            header: {
+              backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+              borderBottom: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+              padding: '20px 24px',
+              marginBottom: '10px'
+            },
+            title: {
+              fontSize: '20px',
+              fontWeight: 600
+            },
+            content: {
+              backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
+              borderRadius: '12px',
+              overflow: 'hidden'
+            },
+            body: {
+              padding: '10px 24px 24px'
+            },
+            close: {
+              color: isDark ? '#909296' : '#495057',
+              '&:hover': {
+                backgroundColor: isDark ? '#2C2E33' : '#e9ecef'
+              }
+            }
+          }}
+        >
+          <Stack gap="lg">
+            <Textarea
+              placeholder="Enter notes"
+              value={currentNotes}
+              onChange={(e) => setCurrentNotes(e.target.value)}
+              autoFocus
+              styles={{
+                input: {
+                  backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  height: '200px',
+                  transition: 'all 0.2s ease',
+                  '&:focus': {
+                    borderColor: '#20C997',
+                    backgroundColor: isDark ? '#2C2E33' : '#ffffff'
+                  }
+                }
+              }}
+            />
+            <Group justify="space-between" mt="md">
+              <Button 
+                variant="default" 
+                onClick={() => setNotesModalOpened(false)}
+                style={{ 
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease',
+                  backgroundColor: isDark ? '#25262b' : '#f1f3f5',
+                  color: isDark ? '#909296' : '#495057'
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={saveNotes}
+                style={{ 
+                  backgroundColor: '#20C997', 
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: 500,
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(32, 201, 151, 0.2)'
+                }}
+                rightSection={<IconCheck size={18} />}
+              >
+                Save Changes
+              </Button>
+            </Group>
           </Stack>
         </Modal>
       </Paper>

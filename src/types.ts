@@ -12,6 +12,7 @@ export interface Task {
   aiGenerated: boolean;
   dependencies?: string[];
   tags?: string[];
+  notes?: string;
 }
 
 export interface Message {
