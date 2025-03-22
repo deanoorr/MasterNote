@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, useMantineColorScheme, Tooltip } from '@mantine/core';
-import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconSun, IconMoon, IconNotes, IconChecklist, IconSearch, IconEraser } from '@tabler/icons-react';
+import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, Tooltip } from '@mantine/core';
+import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconNotes, IconChecklist, IconSearch, IconEraser } from '@tabler/icons-react';
 import AIChat from './components/AIChat';
 import TaskList from './components/TaskList';
 import SettingsModal from './components/SettingsModal';
 import { AIModel } from './types';
-import { useStore } from './store';
+import { useStore, AIModeType } from './store';
 
 // Add CSS for animations
 const cssStyles = `
@@ -103,15 +103,10 @@ function App() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('gpt4o');
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('dark');
   const { messages, clearMessages, aiMode } = useStore();
 
   // Set the effective model based on AI mode
   const effectiveModel: AIModel = aiMode === 'task' ? 'o3-mini' : selectedModel;
-
-  const toggleColorScheme = () => {
-    setColorScheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
 
   // Effect to handle model changes when aiMode changes
   useEffect(() => {
@@ -130,20 +125,7 @@ function App() {
     if (!apiKey) {
       setSettingsOpened(true);
     }
-    
-    // Check if color scheme preference is stored
-    const savedColorScheme = localStorage.getItem('color_scheme');
-    if (savedColorScheme === 'light' || savedColorScheme === 'dark') {
-      setColorScheme(savedColorScheme);
-    }
   }, []);
-  
-  // Save color scheme preference when it changes
-  useEffect(() => {
-    localStorage.setItem('color_scheme', colorScheme);
-  }, [colorScheme]);
-
-  const isDark = colorScheme === 'dark';
 
   const handleClearChat = () => {
     if (messages.length > 0) {
@@ -152,16 +134,14 @@ function App() {
   };
 
   return (
-    <MantineProvider theme={theme} defaultColorScheme={colorScheme}>
+    <MantineProvider theme={theme} defaultColorScheme="dark">
       <style>{cssStyles}</style>
       <AppShell
         padding="md"
         style={{ 
           height: '100vh', 
-          backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa',
-          backgroundImage: isDark 
-            ? 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%)'
-            : 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.03) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.02) 0%, rgba(15, 95, 95, 0) 50%)'
+          backgroundColor: '#1A1B1E',
+          backgroundImage: 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%)'
         }}
       >
         <Container fluid style={{ height: '100%', padding: '16px' }}>
@@ -170,10 +150,10 @@ function App() {
             style={{
               borderRadius: '12px',
               padding: '12px 20px',
-              backgroundColor: isDark ? 'rgba(37, 38, 43, 0.6)' : 'rgba(255, 255, 255, 0.8)',
+              backgroundColor: 'rgba(37, 38, 43, 0.6)',
               backdropFilter: 'blur(12px)',
-              border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-              boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.15)' : '0 4px 20px rgba(0,0,0,0.05)'
+              border: '1px solid #373A40',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
             }}
           >
             <Group justify="space-between" align="center">
@@ -182,21 +162,19 @@ function App() {
                   <IconNotes size={22} color="white" stroke={2} />
                   <div className="logo-checkmark"></div>
                 </div>
-                <Title order={3} c={isDark ? "gray.1" : "gray.8"}>MasterNote</Title>
+                <Title order={3} c="gray.1">MasterNote</Title>
               </Group>
               <Group>
                 <Text size="sm" c="dimmed">AI Task Management</Text>
-                <Tooltip label={isDark ? "Switch to light mode" : "Switch to dark mode"}>
-                  <ActionIcon 
-                    onClick={toggleColorScheme} 
-                    variant="subtle" 
-                    radius="xl"
-                    color={isDark ? "yellow" : "blue"}
-                    size="lg"
-                  >
-                    {isDark ? <IconSun size={20} /> : <IconMoon size={20} />}
-                  </ActionIcon>
-                </Tooltip>
+                <ActionIcon 
+                  onClick={() => setSettingsOpened(true)} 
+                  variant="subtle" 
+                  radius="xl"
+                  color="gray"
+                  size="lg"
+                >
+                  <IconSettings size={20} />
+                </ActionIcon>
               </Group>
             </Group>
           </Box>
@@ -215,18 +193,18 @@ function App() {
               minWidth: 0,
               borderRadius: '12px',
               overflow: 'hidden',
-              boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.08)',
-              border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
+              border: '1px solid #373A40',
               backdropFilter: 'blur(12px)',
-              backgroundColor: isDark ? 'rgba(37, 38, 43, 0.5)' : 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: 'rgba(37, 38, 43, 0.5)'
             }}>
               <Group 
                 justify="space-between" 
                 mb={0} 
                 p="sm" 
                 style={{ 
-                  backgroundColor: isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(245, 247, 250, 0.9)', 
-                  borderBottom: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`
+                  backgroundColor: 'rgba(37, 38, 43, 0.9)', 
+                  borderBottom: '1px solid #373A40'
                 }}
               >
                 <Group>
@@ -242,106 +220,91 @@ function App() {
                     style={{ width: 180 }}
                     styles={{
                       input: {
-                        backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                        border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                        backgroundColor: '#2C2E33',
+                        border: '1px solid #373A40',
                         borderRadius: '6px',
                         transition: 'all 0.2s ease',
                         '&:focus': {
                           borderColor: '#20C997',
-                          backgroundColor: isDark ? '#373A40' : '#e9ecef'
+                          backgroundColor: '#373A40'
                         }
                       }
                     }}
-                    rightSection={
-                      selectedModel === 'perplexity-sonar' ? 
-                        <IconSearch size={16} color="#20C997" /> : 
-                        selectedModel === 'deepseek-r1' ?
-                        <IconBrandOpenai size={16} color="#3388FF" /> :
-                        <IconBrandOpenai size={16} color="#20C997" />
-                    }
+                  />
+                  
+                  <Select
+                    value={aiMode}
+                    onChange={(value) => value && useStore.setState({ aiMode: value as AIModeType })}
+                    data={[
+                      { value: 'normal', label: 'Normal Chat' },
+                      { value: 'task', label: 'Task Manager' },
+                    ]}
+                    style={{ width: 150 }}
+                    styles={{
+                      input: {
+                        backgroundColor: '#2C2E33',
+                        border: '1px solid #373A40',
+                        borderRadius: '6px',
+                        transition: 'all 0.2s ease',
+                        '&:focus': {
+                          borderColor: '#20C997',
+                          backgroundColor: '#373A40'
+                        }
+                      }
+                    }}
                   />
                 </Group>
+                
                 <Group>
-                  {messages.length > 0 && (
-                    <Tooltip label="Clear chat">
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        radius="xl"
-                        onClick={handleClearChat}
-                      >
-                        <IconEraser size={18} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )}
-                  <ActionIcon 
-                    variant={apiKeySet ? "subtle" : "filled"} 
-                    color={apiKeySet ? (isDark ? "gray" : "gray") : "red"}
-                    onClick={() => setSettingsOpened(true)}
-                    radius="xl"
-                    data-settings-btn="true"
-                    style={{ 
-                      transition: 'all 0.2s ease',
-                      animation: apiKeySet ? 'none' : 'pulse 1.5s infinite'
-                    }}
-                  >
-                    <IconSettings size={18} />
-                  </ActionIcon>
+                  <Tooltip label="Clear conversation">
+                    <ActionIcon
+                      variant="subtle"
+                      size="md"
+                      radius="md"
+                      color="gray"
+                      onClick={handleClearChat}
+                      disabled={messages.length === 0}
+                    >
+                      <IconEraser size={18} />
+                    </ActionIcon>
+                  </Tooltip>
                 </Group>
               </Group>
+              
               <AIChat model={effectiveModel} />
             </div>
-
+            
             {/* Right Panel - Task List */}
             <div style={{ 
               flex: 1, 
-              display: 'flex', 
-              flexDirection: 'column', 
-              minWidth: 0,
               borderRadius: '12px',
               overflow: 'hidden',
-              boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.08)',
-              border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+              border: '1px solid #373A40',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
               backdropFilter: 'blur(12px)',
-              backgroundColor: isDark ? 'rgba(37, 38, 43, 0.5)' : 'rgba(255, 255, 255, 0.7)'
+              backgroundColor: 'rgba(37, 38, 43, 0.5)'
             }}>
               <Group 
                 justify="space-between" 
                 mb={0} 
                 p="sm" 
                 style={{ 
-                  backgroundColor: isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(245, 247, 250, 0.9)', 
-                  borderBottom: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`
+                  backgroundColor: 'rgba(37, 38, 43, 0.9)', 
+                  borderBottom: '1px solid #373A40'
                 }}
               >
                 <Group>
-                  <IconListCheck size={18} color="#20C997" />
-                  <Text fw={600} size="sm">Tasks</Text>
-                </Group>
-                <Group>
-                  <ActionIcon 
-                    variant="subtle" 
-                    color="teal" 
-                    radius="xl"
-                    onClick={() => {
-                      // Find and trigger the Add Task button in the TaskList component
-                      const addTaskBtn = document.querySelector('[data-add-task-btn="true"]');
-                      if (addTaskBtn) {
-                        (addTaskBtn as HTMLButtonElement).click();
-                      }
-                    }}
-                  >
-                    <IconPlus size={18} />
-                  </ActionIcon>
+                  <IconListCheck size={20} color="#20C997" stroke={2.5} />
+                  <Text fw={600} size="sm" c="gray.1">Task List</Text>
                 </Group>
               </Group>
+              
               <TaskList />
             </div>
           </div>
         </Container>
       </AppShell>
       
-      {/* Settings Modal */}
       <SettingsModal
         opened={settingsOpened}
         onClose={() => setSettingsOpened(false)}

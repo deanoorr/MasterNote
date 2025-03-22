@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, useMantineColorScheme, Code } from '@mantine/core';
+import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code } from '@mantine/core';
 import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff } from '@tabler/icons-react';
 import { testOpenAIConnection } from '../services/ai';
 
@@ -9,8 +9,7 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
-  const { colorScheme } = useMantineColorScheme();
-  const isDark = colorScheme === 'dark';
+  const isDark = true; // Always use dark mode
   const [apiKey, setApiKey] = useState('');
   const [perplexityApiKey, setPerplexityApiKey] = useState('');
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
