@@ -5,6 +5,43 @@ import { SortOption, AIModeType } from '../store';
 import { format } from 'date-fns';
 import { useStore } from '../store';
 
+// Define conversation history types
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+// Function to get conversation history from local storage
+async function getConversationHistory(userId: string): Promise<Message[]> {
+  try {
+    const historyString = localStorage.getItem(`conversation_history_${userId}`);
+    if (!historyString) return [];
+    
+    const history = JSON.parse(historyString) as Message[];
+    // Return last 10 messages to keep context window manageable
+    return history.slice(-10);
+  } catch (error) {
+    console.error("Error retrieving conversation history:", error);
+    return [];
+  }
+}
+
+// Function to save a message to conversation history
+async function saveMessageToHistory(userId: string, role: 'user' | 'assistant' | 'system', content: string): Promise<void> {
+  try {
+    const historyString = localStorage.getItem(`conversation_history_${userId}`);
+    const history: Message[] = historyString ? JSON.parse(historyString) : [];
+    
+    history.push({ role, content });
+    
+    // Keep history to max 50 messages to avoid storage issues
+    const trimmedHistory = history.slice(-50);
+    localStorage.setItem(`conversation_history_${userId}`, JSON.stringify(trimmedHistory));
+  } catch (error) {
+    console.error("Error saving message to history:", error);
+  }
+}
+
 // Get API key from localStorage or env variable
 const getApiKey = () => {
   console.log("Retrieving OpenAI API key...");
@@ -33,6 +70,19 @@ const getDeepSeekApiKey = () => {
   
   const envKey = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
   console.log("DeepSeek API key from env:", envKey ? "Present" : "Not found");
+  
+  return envKey;
+};
+
+// Get Claude API key from localStorage or env variable
+const getClaudeApiKey = () => {
+  const localStorageKey = localStorage.getItem('claude_api_key');
+  console.log("Claude API key from localStorage:", localStorageKey ? "Present (length: " + localStorageKey.length + ")" : "Not found");
+  
+  if (localStorageKey) return localStorageKey;
+  
+  const envKey = import.meta.env.VITE_CLAUDE_API_KEY || '';
+  console.log("Claude API key from env:", envKey ? "Present" : "Not found");
   
   return envKey;
 };
@@ -86,113 +136,106 @@ const callPerplexityAPI = async (message: string) => {
   }
   
   try {
+    // Get user ID for conversation tracking
+    const userId = localStorage.getItem('user_id') || 'default_user';
+    
+    // Get conversation history
+    const conversationHistory = await getConversationHistory(userId);
+    
+    // Convert history to Perplexity format
+    const perplexityMessages = [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant that can manage tasks as well as answer general questions using internet search. IMPORTANT INSTRUCTION: Only create tasks when the user explicitly asks to create, add, or manage a task. When creating a task, ALWAYS use the format "TASK: [task title] | [task description]" to clearly mark it as a task to be added to the task list. The title should be brief (2-5 words) and the description should provide more details. For example: "TASK: Buy groceries | Need to get milk, eggs, and bread for the weekend." Any other responses should be normal conversation without the TASK prefix. When users ask you to do something or give you instructions, DO NOT convert those instructions into tasks unless they explicitly ask for a task to be created. If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix. Remember previous messages in the conversation to maintain context.'
+      },
+      ...conversationHistory,
+      { role: 'user', content: message }
+    ];
+    
     const response = await axios.post(
       'https://api.perplexity.ai/chat/completions',
       {
         model: 'sonar-pro',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that can manage tasks as well as answer general questions using internet search. IMPORTANT INSTRUCTION: Only create tasks when the user explicitly asks to create, add, or manage a task. When creating a task, ALWAYS use the format "TASK: [task title] | [task description]" to clearly mark it as a task to be added to the task list. The title should be brief (2-5 words) and the description should provide more details. For example: "TASK: Buy groceries | Need to get milk, eggs, and bread for the weekend." Any other responses should be normal conversation without the TASK prefix. When users ask you to do something or give you instructions, DO NOT convert those instructions into tasks unless they explicitly ask for a task to be created. If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix.'
-          },
-          { role: 'user', content: message }
-        ],
+        messages: perplexityMessages,
         max_tokens: 1024,
         temperature: 0.7,
       },
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
         }
       }
     );
     
-    return response.data.choices[0].message.content;
+    const responseContent = response.data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+    
+    // Save this interaction to conversation history
+    await saveMessageToHistory(userId, 'user', message);
+    await saveMessageToHistory(userId, 'assistant', responseContent);
+    
+    return responseContent;
   } catch (error) {
-    console.error('Perplexity API Error:', error);
-    throw error;
+    console.error("Error calling Perplexity API:", error);
+    return "Sorry, I encountered an error connecting to the Perplexity API. Please check your API key in settings.";
   }
 };
 
-// Call DeepSeek R1 API
+// Call DeepSeek API
 const callDeepSeekAPI = async (message: string) => {
   const apiKey = getDeepSeekApiKey();
   if (!apiKey) {
-    console.error('DeepSeek API key not found');
     throw new Error('DeepSeek API key not found. Please set it in the settings.');
   }
   
-  console.log(`DeepSeek API key length: ${apiKey.length}`);
-  console.log(`First/last chars: ${apiKey.substring(0, 3)}...${apiKey.substring(apiKey.length - 3)}`);
-  
   try {
-    // Updated endpoint URL to the correct DeepSeek API endpoint
-    const url = 'https://api.deepseek.com/v1/chat/completions';
-    console.log(`Calling DeepSeek API at ${url}`);
+    // Get user ID for conversation tracking
+    const userId = localStorage.getItem('user_id') || 'default_user';
     
-    const data = {
-      model: 'deepseek-chat',  // Using their base chat model instead of reasoner
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that can manage tasks as well as answer general questions. When creating a task, ALWAYS use the format "TASK: [task title] | [task description]" to clearly mark it as a task to be added to the task list. The title should be brief (2-5 words) and the description should provide more details. For example: "TASK: Buy groceries | Need to get milk, eggs, and bread for the weekend." If the user asks you to "add a task", "create a task", or uses similar wording, then format your response with "TASK:" prefix. Please think step-by-step about your response and provide reasoning.'
-        },
-        { role: 'user', content: message }
-      ],
-      max_tokens: 2048,
-      temperature: 0.7,
-    };
+    // Get conversation history
+    const conversationHistory = await getConversationHistory(userId);
     
-    console.log("Request payload:", JSON.stringify(data, null, 2));
+    // Full endpoint with API key
+    const endpoint = 'https://api.deepseek.com/v1/chat/completions';
+    
+    const systemPrompt = 'You are MasterNote AI, a helpful AI assistant powered by DeepSeek R1. You have two modes of operation. In task mode, you help users manage their to-do lists by creating tasks with a title, date, and priority. In normal mode (which you are in now), you serve as a general purpose assistant who can have conversations, answer questions, and provide insights on a wide range of topics. Remember previous messages in the conversation to maintain context when answering follow-up questions. Be concise but thorough in your responses.';
+    
+    // Convert history to DeepSeek format
+    const deepseekMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory,
+      { role: 'user', content: message }
+    ];
     
     const response = await axios.post(
-      url,
-      data,
+      endpoint,
+      {
+        model: 'deepseek-ai/deepseek-research-1-mini-4k',
+        messages: deepseekMessages,
+        temperature: 0.7,
+        max_tokens: 1024,
+      },
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        timeout: 60000 // 60 second timeout
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
     
-    console.log("DeepSeek API response status:", response.status);
-    console.log("DeepSeek API response headers:", response.headers);
-    console.log("DeepSeek API response data:", JSON.stringify(response.data, null, 2));
+    const responseContent = response.data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
     
-    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
-      console.error('Invalid response from DeepSeek API:', response.data);
-      throw new Error('Received an invalid response from DeepSeek API.');
+    // Save this interaction to conversation history
+    await saveMessageToHistory(userId, 'user', message);
+    await saveMessageToHistory(userId, 'assistant', responseContent);
+    
+    return responseContent;
+  } catch (error) {
+    console.error("Error calling DeepSeek API:", error);
+    if (axios.isAxiosError(error) && error.response) {
+      console.error("DeepSeek API Response:", error.response.data);
     }
-    
-    return response.data.choices[0].message.content;
-  } catch (error: any) {
-    console.error('DeepSeek API Error:', error);
-    
-    // Handle specific error types
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('DeepSeek API response error status:', error.response.status);
-      console.error('DeepSeek API response error data:', JSON.stringify(error.response.data, null, 2));
-      
-      if (error.response.status === 401) {
-        throw new Error('Invalid DeepSeek API key. Please check your API settings.');
-      } else if (error.response.status === 429) {
-        throw new Error('DeepSeek API rate limit exceeded. Please try again later.');
-      } else {
-        throw new Error(`DeepSeek API error: ${error.response.status} - ${JSON.stringify(error.response.data || 'Unknown error')}`);
-      }
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('DeepSeek API no response error:', error.request);
-      throw new Error('No response from DeepSeek API. Please check your internet connection.');
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      throw new Error(`Error with DeepSeek API request: ${error.message}`);
-    }
+    return "Sorry, I encountered an error connecting to the DeepSeek API. Please check your API key in settings.";
   }
 };
 
@@ -594,206 +637,58 @@ interface TaskStoreType {
 // Define the getCompletionResponse function
 async function getCompletionResponse(message: string, mode: 'normal' | 'task', userId: string): Promise<string> {
   try {
-    const taskStore = useStore.getState(); // Add this line to get the taskStore in this scope
+    // Get selected model from localStorage
+    const selectedModel = localStorage.getItem('selected_model') as AIModel || 'gpt4o';
+    console.log('Selected model for completion:', selectedModel);
     
-    // Get the currently selected model from localStorage
-    const selectedModel = localStorage.getItem('selected_model') || 'gpt4o';
-    console.log(`Using model: ${selectedModel} in mode: ${mode}`);
-    
-    if (mode === 'normal') {
-      // In normal mode, use the selected model
-      if (selectedModel === 'deepseek-r1') {
-        console.log('Using DeepSeek R1 API');
-        return await callDeepSeekAPI(message);
-      } else if (selectedModel === 'perplexity-sonar') {
-        console.log('Using Perplexity Sonar API');
-        return await callPerplexityAPI(message);
-      } else {
-        // Default to OpenAI
-        console.log('Using OpenAI API');
-        
-        // Get the OpenAI client
-        const openai = getOpenAIClient();
-        
-        // Set up a system prompt that focuses on general assistance
-        const systemPrompt = "You are a helpful AI assistant called MasterNote AI. You can answer questions, provide information, and help with a variety of tasks. Provide concise, accurate, and helpful responses. You are running in Normal Mode - your responses should be informative and comprehensive. Your knowledge cutoff is September 2023, but try to provide the most up-to-date information you have.";
-        
-        // Choose the model based on the selection
-        const modelName = selectedModel === 'o3-mini' ? 'gpt-3.5-turbo' : 'gpt-4o';
-        
-        // Send the request to OpenAI
-        const response = await openai.chat.completions.create({
-          model: modelName,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: message }
-          ],
-          max_tokens: 1000,
-          temperature: 0.7,
-        });
-        
-        // Return the response content
-        return response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
-      }
+    if (selectedModel === 'perplexity-sonar') {
+      console.log('Using Perplexity API');
+      return await callPerplexityAPI(message);
+    } else if (selectedModel === 'deepseek-r1') {
+      console.log('Using DeepSeek API');
+      return await callDeepSeekAPI(message);
     } else {
-      // In task mode, use AI to interpret the request if it doesn't match standard patterns
-      // This provides a more intelligent fallback for task commands that don't match the predefined patterns
+      // Default to OpenAI
+      console.log('Using OpenAI API');
       
+      // Get the OpenAI client
       const openai = getOpenAIClient();
       
-      // Create a specialized prompt for interpreting task commands
-      const systemPrompt = `You are MasterNote AI's task interpreter component. Your job is to analyze the user's input and determine:
-1. If they are trying to create a task, and if so, extract the task title, description (if any), due date (if any), and priority (if any)
-2. If they are trying to manage existing tasks (search, list, complete, delete, etc.)
-3. If they are asking about their tasks (like "what tasks do I have today?" or "what tasks do I have coming up?")
-
-Respond in a structured JSON format only, like this:
-{
-  "intent": "create_task | manage_tasks | task_inquiry | unclear",
-  "taskDetails": {
-    "title": "Task title here",
-    "description": "Description here or null",
-    "dueDate": "tomorrow | today | specific date in YYYY-MM-DD format | null",
-    "priority": "high | medium | low | null"
-  },
-  "managementAction": "search | list | complete | delete | null",
-  "inquiryType": "today | tomorrow | upcoming | overdue | all | null",
-  "filterCriteria": {
-    "status": "todo | in_progress | done | null",
-    "priority": "high | medium | low | null",
-    "dateFilter": "today | tomorrow | this week | next week | all | null",
-    "keyword": "search term or null"
-  }
-}
-
-No need for explanations or conversation - just provide the structured JSON.`;
+      // Get conversation history for context
+      const conversationHistory = await getConversationHistory(userId);
       
-      try {
-        // Send the request to OpenAI
-        const aiResponse = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: message }
-          ],
-          max_tokens: 500,
-          temperature: 0.3,
-          response_format: { type: "json_object" }
-        });
-        
-        const jsonResponse = aiResponse.choices[0]?.message?.content || "{}";
-        try {
-          // Parse the AI's JSON response
-          const parsedResponse = JSON.parse(jsonResponse);
-          
-          // Handle different intents
-          if (parsedResponse.intent === "create_task" && parsedResponse.taskDetails?.title) {
-            // Create a task with the AI-extracted details
-            const taskTitle = parsedResponse.taskDetails.title;
-            let dueDate: Date | undefined = undefined;
-            
-            // Process the due date
-            if (parsedResponse.taskDetails.dueDate) {
-              if (parsedResponse.taskDetails.dueDate === "tomorrow") {
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                dueDate = tomorrow;
-              } else if (parsedResponse.taskDetails.dueDate === "today") {
-                dueDate = new Date();
-              } else if (/^\d{4}-\d{2}-\d{2}$/.test(parsedResponse.taskDetails.dueDate)) {
-                // Handle YYYY-MM-DD format
-                dueDate = new Date(parsedResponse.taskDetails.dueDate);
-              }
-            }
-            
-            // Create and return the new task
-            const newTask = {
-              id: Date.now().toString(),
-              title: taskTitle,
-              description: parsedResponse.taskDetails.description || "",
-              dueDate: dueDate,
-              priority: (parsedResponse.taskDetails.priority || "medium") as "low" | "medium" | "high",
-              status: "todo" as "todo" | "in_progress" | "done",
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              aiGenerated: true
-            };
-            
-            console.log("Adding AI-interpreted task:", newTask);
-            taskStore.addTask(newTask);
-            
-            // Format due date for display
-            let dueDateDisplay = dueDate ? formatDateForDisplay(dueDate) : "not specified";
-            
-            // Return a confirmation message
-            return `✅ I've created a task: "${taskTitle}"${parsedResponse.taskDetails.description ? ` (${parsedResponse.taskDetails.description})` : ""} due ${dueDateDisplay} with ${parsedResponse.taskDetails.priority || "medium"} priority.`;
-          } 
-          else if (parsedResponse.intent === "manage_tasks") {
-            if (parsedResponse.managementAction === "list") {
-              // List tasks with the extracted filters
-              const dateFilter = parsedResponse.filterCriteria?.dateFilter || "all";
-              const priority = parsedResponse.filterCriteria?.priority;
-              const status = parsedResponse.filterCriteria?.status;
-              
-              if (priority) {
-                return handleTaskListByPriority(priority as 'high' | 'medium' | 'low', taskStore);
-              } else if (status) {
-                return handleTaskListByStatus(status as 'todo' | 'in_progress' | 'done', taskStore);
-              } else {
-                return handleTaskListRequest(dateFilter, taskStore);
-              }
-            }
-            else if (parsedResponse.managementAction === "search" && parsedResponse.filterCriteria?.keyword) {
-              return searchTasks(parsedResponse.filterCriteria.keyword, taskStore);
-            }
-            else if (parsedResponse.managementAction === "complete") {
-              if (parsedResponse.filterCriteria?.dateFilter && parsedResponse.filterCriteria.dateFilter !== "null") {
-                return handleTaskCompletion(parsedResponse.filterCriteria.dateFilter, taskStore);
-              } else {
-                // Default to completing all tasks if no specific filter
-                return "Please specify which tasks you want to complete (e.g., 'complete tasks for today' or 'complete high priority tasks').";
-              }
-            }
-            else if (parsedResponse.managementAction === "delete") {
-              if (parsedResponse.filterCriteria?.dateFilter && parsedResponse.filterCriteria.dateFilter !== "null") {
-                return handleTaskDeletion(parsedResponse.filterCriteria.dateFilter, taskStore);
-              } else {
-                // Default response for deletion without specific filter
-                return "Please specify which tasks you want to delete (e.g., 'delete tasks for today' or 'delete completed tasks').";
-              }
-            }
-          }
-          // Add handler for task inquiries
-          else if (parsedResponse.intent === "task_inquiry") {
-            console.log("Handling task inquiry:", parsedResponse);
-            
-            // Default to today for "what tasks do I have today"
-            let dateFilter = "today";
-            
-            // For "what tasks do I have coming up", use the upcoming filter
-            if (parsedResponse.inquiryType === "upcoming" || 
-                (message.toLowerCase().includes("coming up") || 
-                 message.toLowerCase().includes("upcoming"))) {
-              dateFilter = "upcoming";
-            }
-            
-            return handleTaskListRequest(dateFilter, taskStore);
-          }
-          
-          // If we reach this point, the AI couldn't properly interpret the command
-          return "I couldn't understand your task request. Try using commands like 'add a task for finish report by Friday', 'show my tasks for today', or 'complete high priority tasks'.";
-        } catch (parseError) {
-          console.error("Error parsing AI response:", parseError);
-          return "I'm having trouble understanding your request. Please try phrasing it differently.";
-        }
-      } catch (aiError) {
-        console.error("Error calling AI interpreter:", aiError);
-        return "I'm in task mode but couldn't understand your request as a task command. Try being more specific or use a different phrasing.";
-      }
+      // Set up a system prompt that focuses on general assistance
+      const systemPrompt = "You are a helpful AI assistant called MasterNote AI. You can answer questions, provide information, and help with a variety of tasks. Provide concise, accurate, and helpful responses. You are running in Normal Mode - your responses should be informative and comprehensive. Your knowledge cutoff is September 2023, but try to provide the most up-to-date information you have. Remember previous messages in the conversation to maintain context and properly answer follow-up questions.";
+      
+      // Create messages array including conversation history
+      const messages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...conversationHistory,
+        { role: 'user' as const, content: message }
+      ];
+      
+      // Choose the model based on the selection
+      const modelName = selectedModel === 'o3-mini' ? 'gpt-3.5-turbo' : 'gpt-4o-mini';
+      
+      // Send the request to OpenAI
+      const response = await openai.chat.completions.create({
+        model: modelName,
+        messages: messages,
+        max_tokens: 1000,
+        temperature: 0.7,
+      });
+      
+      const responseContent = response.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+      
+      // Save this interaction to conversation history
+      await saveMessageToHistory(userId, 'user', message);
+      await saveMessageToHistory(userId, 'assistant', responseContent);
+      
+      return responseContent;
     }
   } catch (error) {
-    console.error("Error getting AI response:", error);
-    return "I encountered an error processing your request. Please try again or check your API settings.";
+    console.error("Error getting completion response:", error);
+    return "I'm sorry, I encountered an error while processing your request. Please try again.";
   }
 }
 
@@ -3255,3 +3150,10 @@ function extractDueDateFromMultiTaskMessage(message: string): Date | null {
   
   return null; // No date found, will default to today
 }
+
+// Comment out the Claude API call function
+/*
+const callClaudeAPI = async (message: string) => {
+  // Code is commented out
+};
+*/

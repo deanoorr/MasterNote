@@ -23,13 +23,13 @@ const cssStyles = `
   
   @keyframes reasoningGlow {
     0% {
-      box-shadow: 0 0 0 0 rgba(32, 201, 151, 0.4);
+      box-shadow: 0 0 0 0 rgba(250, 82, 82, 0.4);
     }
     50% {
-      box-shadow: 0 0 8px 2px rgba(32, 201, 151, 0.6);
+      box-shadow: 0 0 8px 2px rgba(250, 82, 82, 0.6);
     }
     100% {
-      box-shadow: 0 0 0 0 rgba(32, 201, 151, 0.4);
+      box-shadow: 0 0 0 0 rgba(250, 82, 82, 0.4);
     }
   }
   
@@ -253,72 +253,32 @@ function App() {
                 }}
               >
                 <Group>
-                  {selectedModel === 'deepseek-r1' ? (
-                    <div
-                      style={{
-                        width: 200,
-                        height: 36,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        backgroundColor: 'rgba(32, 201, 151, 0.15)',
-                        border: '1px solid #20C997',
+                  <Select
+                    placeholder="AI Model"
+                    data={[
+                      { value: 'gpt4o', label: 'GPT-4o Mini' },
+                      { value: 'o3-mini', label: 'GPT-3.5-Turbo' },
+                    ]}
+                    value={selectedModel}
+                    onChange={(value) => value && setSelectedModel(value as AIModel)}
+                    style={{ width: 180 }}
+                    styles={{
+                      input: {
+                        backgroundColor: aiMode === 'reasoning' as AIModeType ? 'rgba(250, 82, 82, 0.1)' : '#2C2E33',
+                        borderColor: aiMode === 'reasoning' as AIModeType ? 'rgba(250, 82, 82, 0.5)' : '#373A40',
+                        fontWeight: aiMode === 'reasoning' as AIModeType ? 'bold' : undefined,
                         borderRadius: '6px',
-                        padding: '0 12px',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Group gap={5}>
-                        <IconBulb size={15} color="#20C997" />
-                        <Text size="sm" c="teal" fw={600}>Reasoning Mode</Text>
-                      </Group>
-                    </div>
-                  ) : selectedModel === 'perplexity-sonar' ? (
-                    <div
-                      style={{
-                        width: 200,
-                        height: 36,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        backgroundColor: 'rgba(82, 130, 255, 0.15)',
-                        border: '1px solid #5282FF',
-                        borderRadius: '6px',
-                        padding: '0 12px',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Group gap={5}>
-                        <IconSearch size={15} color="#5282FF" />
-                        <Text size="sm" c="#5282FF" fw={600}>Search Mode</Text>
-                      </Group>
-                    </div>
-                  ) : (
-                    <Select
-                      value={selectedModel}
-                      onChange={(value) => value && setSelectedModel(value as AIModel)}
-                      data={[
-                        { value: 'gpt4o', label: 'GPT-4o' },
-                        { value: 'o3-mini', label: 'GPT-3.5 Turbo' },
-                      ]}
-                      style={{ width: 180 }}
-                      styles={{
-                        input: {
-                          backgroundColor: '#2C2E33',
-                          border: '1px solid #373A40',
-                          borderRadius: '6px',
-                          transition: 'all 0.2s ease',
-                          cursor: 'pointer',
-                          '&:focus': {
-                            borderColor: '#20C997',
-                            backgroundColor: '#373A40'
-                          }
+                        transition: 'all 0.2s ease',
+                        '&:focus': {
+                          borderColor: '#FA5252',
+                          backgroundColor: '#373A40'
                         }
-                      }}
-                    />
-                  )}
+                      }
+                    }}
+                  />
                   
                   <Select
+                    placeholder="Chat Mode"
                     value={aiMode}
                     onChange={(value) => value && useStore.setState({ aiMode: value as AIModeType })}
                     data={[
@@ -347,7 +307,7 @@ function App() {
                       variant="subtle"
                       size="md"
                       radius="md"
-                      color={selectedModel === 'deepseek-r1' ? "teal" : "gray"}
+                      color={selectedModel === 'deepseek-r1' ? "red" : "gray"}
                       className={selectedModel === 'deepseek-r1' ? 'reasoning-active' : ''}
                       onClick={() => {
                         // Toggle DeepSeek R1 model

@@ -17,6 +17,10 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const [saved, setSaved] = useState(false);
   const [testingApi, setTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<any>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [taskTemplate, setTaskTemplate] = useState('');
 
   useEffect(() => {
     // Load saved API key from localStorage
@@ -30,6 +34,10 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
     // Load saved DeepSeek API key from localStorage
     const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
     setDeepseekApiKey(savedDeepseekApiKey);
+    
+    // Load saved dark mode preference from localStorage
+    const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
+    setDarkMode(savedDarkMode);
   }, []);
 
   const handleSave = () => {
@@ -42,6 +50,9 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
     
     // Save DeepSeek API key to localStorage
     localStorage.setItem('deepseek_api_key', deepseekApiKey);
+    
+    // Save dark mode preference to localStorage
+    localStorage.setItem('dark_mode', darkMode.toString());
     
     setSaved(true);
     setTimeout(() => {

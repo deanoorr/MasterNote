@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image } from '@mantine/core';
-import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb } from '@tabler/icons-react';
+import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore, AIModeType } from '../store';
 import { getAIResponse } from '../services/ai';
@@ -157,6 +157,26 @@ export default function AIChat({ model }: AIChatProps) {
     }
   };
 
+  // Get model name for display
+  const getModelDisplayName = () => {
+    switch(model) {
+      case 'gpt4o': return 'GPT-4o';
+      case 'o3-mini': return 'GPT-3.5 Turbo';
+      case 'perplexity-sonar': return 'Search Mode';
+      case 'deepseek-r1': return 'Reasoning Mode';
+      default: return 'AI Assistant';
+    }
+  };
+
+  // Get model color for UI elements
+  const getModelColor = () => {
+    switch(model) {
+      case 'perplexity-sonar': return '#5282FF';
+      case 'deepseek-r1': return '#FA5252';
+      default: return '#20C997';
+    }
+  };
+
   return (
     <Paper style={{ 
       height: '100%', 
@@ -165,31 +185,44 @@ export default function AIChat({ model }: AIChatProps) {
       flexDirection: 'column',
       borderRadius: '12px',
       boxShadow: isDark ? '0 8px 30px rgba(0, 0, 0, 0.2)' : '0 8px 30px rgba(0, 0, 0, 0.05)',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundImage: isDark ? 
+        'linear-gradient(to bottom, rgba(17, 75, 95, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' : 
+        'linear-gradient(to bottom, rgba(32, 201, 151, 0.03) 0%, rgba(255, 255, 255, 0) 100%)'
     }}>
       {/* Mode Switch Header */}
       <Box 
         p="md" 
         style={{ 
           borderBottom: `1px solid ${isDark ? '#2C2E33' : '#E9ECEF'}`,
-          backgroundColor: isDark ? '#25262B' : '#F8F9FA'
+          backgroundColor: isDark ? 'rgba(37, 38, 43, 0.8)' : 'rgba(248, 249, 250, 0.9)',
+          backdropFilter: 'blur(8px)',
+          position: 'relative',
+          zIndex: 10
         }}
       >
         <Group justify="space-between">
           <Group>
-            <IconRobot size={20} style={{ color: isDark ? '#C1C2C5' : '#5c5f66' }} />
-            <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>MasterNote AI</Text>
-            
-            {aiMode === 'task' && (
-              <Badge 
-                color="teal" 
-                variant="light"
-                size="sm"
-                style={{ marginLeft: 10 }}
-              >
-                Task Mode
-              </Badge>
-            )}
+            <Avatar size="sm" radius="xl" color={model === 'perplexity-sonar' ? 'blue' : model === 'deepseek-r1' ? 'red' : 'teal'} style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
+              {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
+            </Avatar>
+            <div>
+              <Group gap={8}>
+                <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>{getModelDisplayName()}</Text>
+                {aiMode === 'task' && (
+                  <Badge 
+                    color="teal" 
+                    variant="light"
+                    size="xs"
+                    radius="sm"
+                  >
+                    Task Mode
+                  </Badge>
+                )}
+              </Group>
+              <Text size="xs" c="dimmed">Powered by {model === 'perplexity-sonar' ? 'Perplexity' : model === 'deepseek-r1' ? 'DeepSeek' : model.includes('claude') ? 'Anthropic' : 'OpenAI'}</Text>
+            </div>
           </Group>
           
           <SegmentedControl
@@ -205,14 +238,21 @@ export default function AIChat({ model }: AIChatProps) {
             }}
             styles={{
               root: {
-                background: isDark ? '#2C2E33' : '#f1f3f5',
-                border: `1px solid ${isDark ? '#3f4245' : '#dee2e6'}`
+                background: isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(241, 243, 245, 0.8)',
+                border: `1px solid ${isDark ? '#3f4245' : '#dee2e6'}`,
+                backdropFilter: 'blur(8px)',
+                borderRadius: '8px',
+                overflow: 'hidden'
               },
               indicator: {
-                backgroundColor: isDark ? '#20C997' : '#20C997'
+                backgroundColor: getModelColor(),
+                boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
               },
               label: {
                 color: isDark ? '#C1C2C5' : '#495057',
+                fontSize: '12px',
+                fontWeight: 500,
+                padding: '6px 12px',
                 '&[data-active]': {
                   color: isDark ? 'white' : 'white'
                 }
@@ -223,8 +263,8 @@ export default function AIChat({ model }: AIChatProps) {
       </Box>
       
       <ScrollArea
-        style={{ flex: 1, padding: '10px 5px' }}
-        scrollbarSize={8}
+        style={{ flex: 1, padding: '4px 0' }}
+        scrollbarSize={6}
         scrollHideDelay={500}
         type="hover"
         viewportRef={scrollRef}
@@ -237,21 +277,199 @@ export default function AIChat({ model }: AIChatProps) {
                 flexDirection: 'column', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                height: '60vh',
-                opacity: 0.8,
+                height: '70vh',
                 padding: '0 20px'
               }}
             >
-              <img src="/favicon.svg" alt="MasterNote Logo" width="64" height="64" style={{ marginBottom: '24px', opacity: 0.9 }} />
-              <Text size="xl" fw={600} ta="center" c={isDark ? "dimmed" : "gray.7"}>
-                Welcome to MasterNote AI
-                {aiMode === 'task' ? ' - Task Mode' : ''}
-              </Text>
-              <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mt="md" maw={450} style={{ lineHeight: 1.6 }}>
-                {aiMode === 'task' 
-                  ? "I can help you create and manage tasks from natural language. Just describe what you need to do, and I'll handle the rest."
-                  : "Type a message to start a conversation. I can answer questions, provide information, and help with a variety of tasks."}
-              </Text>
+              <Box 
+                style={{
+                  width: '560px',
+                  maxWidth: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center'
+                }}
+              >
+                <Text size="xl" fw={700} ta="center" mb="md" c={isDark ? "gray.3" : "gray.8"}>
+                  MasterNote AI
+                </Text>
+                
+                <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mb="xl" maw={450} style={{ lineHeight: 1.6 }}>
+                  {aiMode === 'task' 
+                    ? "I can help you create and manage tasks from natural language. Just describe what you need to do, and I'll handle the rest."
+                    : "Type a message to start a conversation. I can answer questions, provide information, and help with a variety of tasks."}
+                </Text>
+                
+                <Box mb="xl" w="100%">
+                  <Group justify="space-between" mb="lg">
+                    <Text size="sm" fw={600} c={isDark ? "gray.4" : "gray.7"}>Examples</Text>
+                  </Group>
+                  
+                  <Stack gap="sm">
+                    {aiMode === 'task' ? (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Create a task for buying groceries tomorrow")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          Create a task for buying groceries tomorrow
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("I need to finish my project report by Friday")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          I need to finish my project report by Friday
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("What tasks do I have today?")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          What tasks do I have today?
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("What's the best way to learn programming?")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          What's the best way to learn programming?
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Explain quantum computing in simple terms")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          Explain quantum computing in simple terms
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Give me a healthy meal plan for the week")}
+                          fullWidth
+                          h={54}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start'
+                            }
+                          }}
+                        >
+                          Give me a healthy meal plan for the week
+                        </Button>
+                      </>
+                    )}
+                  </Stack>
+                </Box>
+                
+                <Group justify="space-between" style={{ width: '100%' }}>
+                  <Text size="sm" fw={600} c={isDark ? "gray.4" : "gray.7"}>Capabilities</Text>
+                </Group>
+                <Box 
+                  mt="md" 
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                    gap: '10px',
+                    width: '100%'
+                  }}
+                >
+                  <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
+                    <Text size="sm" c="dimmed">Remembers what's said earlier in conversations</Text>
+                  </Box>
+                  <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
+                    <Text size="sm" c="dimmed">Allows follow-up corrections and conversations</Text>
+                  </Box>
+                  {aiMode === 'task' && (
+                    <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
+                      <Text size="sm" c="dimmed">Creates and manages tasks from natural language</Text>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
             </Box>
           ) : (
             <Stack gap="md">
@@ -261,88 +479,119 @@ export default function AIChat({ model }: AIChatProps) {
                   style={{
                     animation: 'fadeIn 0.3s ease-out',
                     animationFillMode: 'both',
-                    animationDelay: `${i * 0.1}s`
+                    animationDelay: `${i * 0.1}s`,
+                    width: '100%'
                   }}
                 >
-                  <Group align="flex-start" wrap="nowrap" gap="xs">
+                  {/* Message header with role */}
+                  <Group 
+                    gap={8} 
+                    style={{
+                      padding: '4px 0 6px 0',
+                      alignItems: 'center',
+                      backgroundColor: msg.role === 'assistant' ? 'transparent' : 'transparent',
+                      borderRadius: '8px 8px 0 0'
+                    }}
+                  >
                     <Avatar 
-                      size="md" 
+                      size="sm" 
                       radius="xl" 
-                      bg={msg.role === 'assistant' ? 'teal' : (isDark ? 'blue.8' : 'blue.5')}
+                      bg={msg.role === 'assistant' 
+                        ? (model === 'perplexity-sonar' ? 'blue.6' : model === 'deepseek-r1' ? 'red.6' : 'teal.6') 
+                        : (isDark ? 'blue.7' : 'blue.5')}
                       style={{ 
-                        marginTop: '4px',
-                        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
+                        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
                       }}
                     >
-                      {msg.role === 'assistant' ? <IconRobot size={18} /> : <IconUser size={18} />}
+                      {msg.role === 'assistant' 
+                        ? (model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />) 
+                        : <IconUser size={14} />}
                     </Avatar>
-                    <Box 
+                    <Text fw={600} size="sm" c={msg.role === 'assistant' 
+                      ? (model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5') 
+                      : (isDark ? 'blue.4' : 'blue.6')}>
+                      {msg.role === 'assistant' 
+                        ? (model === 'perplexity-sonar' ? 'Search' : getModelDisplayName()) 
+                        : 'You'}
+                    </Text>
+                  </Group>
+                  
+                  {/* Message content */}
+                  <Box 
+                    style={{
+                      backgroundColor: msg.role === 'assistant' 
+                        ? (isDark ? 'rgba(37, 38, 43, 0.4)' : 'white') 
+                        : 'transparent',
+                      borderRadius: '0 12px 12px 12px',
+                      padding: msg.role === 'assistant' ? '12px 16px' : '0px 8px 12px 34px',
+                      marginBottom: '24px',
+                    }}
+                  >
+                    <div 
                       style={{ 
-                        flex: 1,
-                        backgroundColor: msg.role === 'assistant' 
-                          ? (isDark ? 'rgba(32, 201, 151, 0.1)' : 'rgba(32, 201, 151, 0.08)')
-                          : (isDark ? '#25262B' : '#f1f3f5'),
-                        padding: '12px 16px',
-                        borderRadius: '14px',
-                        borderTopLeftRadius: msg.role === 'assistant' ? '4px' : '14px',
-                        borderTopRightRadius: msg.role === 'user' ? '4px' : '14px',
-                        marginBottom: '4px'
+                        whiteSpace: 'pre-wrap', 
+                        wordBreak: 'break-word',
+                        maxWidth: '100%',
+                        fontSize: '15px',
+                        lineHeight: 1.7,
+                        color: isDark ? '#C1C2C5' : '#212529',
                       }}
                     >
-                      <div 
-                        style={{ 
+                      {model === 'deepseek-r1' && msg.role === 'assistant' ? (
+                        <div style={{ 
                           whiteSpace: 'pre-wrap', 
                           wordBreak: 'break-word',
-                          maxWidth: '100%',
-                          fontSize: '15px',
                           lineHeight: 1.7,
-                          color: isDark ? '#C1C2C5' : '#212529',
-                        }}
-                      >
-                        {/* Display DeepSeek responses like normal responses */}
-                        {model === 'deepseek-r1' && msg.role === 'assistant' ? (
-                          <div style={{ 
-                            whiteSpace: 'pre-wrap', 
-                            wordBreak: 'break-word',
-                            lineHeight: 1.7,
-                          }}>
-                            {msg.content}
-                          </div>
-                        ) : (
-                          msg.content
-                        )}
-                      </div>
-                    </Box>
-                  </Group>
+                        }}>
+                          {msg.content}
+                        </div>
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </Box>
                 </Box>
               ))}
               {isLoading && (
-                <Group align="flex-start" wrap="nowrap" gap="xs">
-                  <Avatar 
-                    size="md" 
-                    radius="xl" 
-                    bg="teal" 
-                    style={{ 
-                      marginTop: '4px',
-                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
+                <Box style={{ width: '100%' }}>
+                  {/* Loading message header */}
+                  <Group 
+                    gap={8} 
+                    style={{
+                      padding: '4px 0 6px 0',
+                      alignItems: 'center',
                     }}
                   >
-                    <IconRobot size={18} />
-                  </Avatar>
+                    <Avatar 
+                      size="sm" 
+                      radius="xl" 
+                      bg={model === 'perplexity-sonar' ? 'blue.6' : model === 'deepseek-r1' ? 'red.6' : 'teal.6'} 
+                      style={{ boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)' }}
+                    >
+                      {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
+                    </Avatar>
+                    <Text fw={600} size="sm" c={model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5'}>
+                      {model === 'perplexity-sonar' ? 'Search' : model === 'deepseek-r1' ? 'Reasoning' : getModelDisplayName()}
+                    </Text>
+                  </Group>
+                  
+                  {/* Loading indicator */}
                   <Box 
                     style={{ 
-                      flex: 1,
-                      borderRadius: '14px',
-                      borderTopLeftRadius: '4px',
-                      backgroundColor: isDark ? 'rgba(32, 201, 151, 0.1)' : 'rgba(32, 201, 151, 0.08)',
-                      padding: '20px 20px',
+                      backgroundColor: isDark ? 'rgba(37, 38, 43, 0.4)' : 'white',
+                      borderRadius: '0 12px 12px 12px',
+                      padding: '16px 20px',
+                      marginBottom: '24px'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <Loader color="teal" size="sm" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Loader color={model === 'perplexity-sonar' ? "blue" : model === 'deepseek-r1' ? 'red' : 'teal'} size="sm" />
+                      <Text size="xs" c="dimmed" style={{ animation: 'pulse 2s infinite' }}>
+                        {model === 'perplexity-sonar' ? 'Searching...' : model === 'deepseek-r1' ? 'Reasoning...' : 'Thinking...'}
+                      </Text>
                     </div>
                   </Box>
-                </Group>
+                </Box>
               )}
             </Stack>
           )}
@@ -353,14 +602,17 @@ export default function AIChat({ model }: AIChatProps) {
         component="form"
         onSubmit={handleSubmit}
         style={{
-          borderTop: `1px solid ${isDark ? '#2C2E33' : '#e9ecef'}`,
-          padding: '14px 16px',
-          backgroundColor: isDark ? '#212326' : '#f8f9fa',
+          borderTop: `1px solid ${isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(233, 236, 239, 0.8)'}`,
+          padding: '16px 18px',
+          backgroundColor: isDark ? 'rgba(33, 35, 38, 0.9)' : 'rgba(248, 249, 250, 0.9)',
+          backdropFilter: 'blur(8px)',
+          position: 'relative',
+          zIndex: 10
         }}
       >
-        <Group align="flex-end">
+        <Group align="flex-end" gap="sm">
           <Textarea
-            placeholder="Type your message..."
+            placeholder={aiMode === 'task' ? "Create a task or ask about your tasks..." : "Type your message..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -375,39 +627,45 @@ export default function AIChat({ model }: AIChatProps) {
             style={{ flex: 1 }}
             styles={{
               input: {
-                backgroundColor: isDark ? '#2C2E33' : '#fff',
+                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(255, 255, 255, 0.9)',
                 border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                borderRadius: '8px',
-                padding: '12px 14px',
+                borderRadius: '12px',
+                padding: '14px 18px',
                 fontSize: '15px',
                 transition: 'all 0.2s ease',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+                backdropFilter: 'blur(8px)',
                 '&:focus': {
-                  borderColor: '#20C997',
-                  backgroundColor: isDark ? '#373A40' : '#f8f9fa'
+                  borderColor: getModelColor(),
+                  boxShadow: `0 0 0 1px ${getModelColor()}20`
                 }
               }
             }}
             disabled={isLoading}
           />
-          <Tooltip label="Send message">
-            <Button
-              color="teal"
-              type="submit"
-              style={{ 
-                height: '40px', 
-                width: '40px',
-                borderRadius: '12px',
-                padding: 0,
-                transition: 'all 0.2s ease',
+          <Button
+            color={model === 'perplexity-sonar' ? "blue" : model === 'deepseek-r1' ? 'red' : 'teal'}
+            type="submit"
+            style={{ 
+              height: '44px', 
+              width: '44px',
+              borderRadius: '12px',
+              padding: 0,
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+              transition: 'all 0.2s ease',
+            }}
+            styles={{
+              root: {
                 '&:hover': {
-                  transform: 'translateY(-2px)'
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)'
                 }
-              }}
-              disabled={isLoading || !input.trim()}
-            >
-              <IconSend size={18} />
-            </Button>
-          </Tooltip>
+              }
+            }}
+            disabled={isLoading || !input.trim()}
+          >
+            <IconSend size={18} />
+          </Button>
         </Group>
       </Box>
       
@@ -424,9 +682,27 @@ export default function AIChat({ model }: AIChatProps) {
           }
           
           @keyframes pulse {
-            0% { opacity: 0.4; }
+            0% { opacity: 0.6; }
             50% { opacity: 1; }
-            100% { opacity: 0.4; }
+            100% { opacity: 0.6; }
+          }
+          
+          .ai-welcome-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.15) 0%, rgba(250, 82, 82, 0.05)' : 'rgba(32, 201, 151, 0.15) 0%, rgba(32, 201, 151, 0.05)'} 100%);
+            border-radius: 20px;
+            width: 100px;
+            height: 100px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 20px ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.15)' : 'rgba(32, 201, 151, 0.15)'};
+            transition: all 0.3s ease;
+          }
+          
+          .ai-welcome-icon:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 28px ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.2)' : 'rgba(32, 201, 151, 0.2)'};
           }
         `}
       </style>
