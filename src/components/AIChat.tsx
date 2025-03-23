@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover } from '@mantine/core';
-import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch, IconArrowRight } from '@tabler/icons-react';
+import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover, ActionIcon } from '@mantine/core';
+import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch, IconArrowRight, IconEraser } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore } from '../store';
 import { getAIResponse } from '../services/ai';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface AIChatProps {
   model: AIModel;
@@ -189,6 +190,19 @@ export default function AIChat({ model }: AIChatProps) {
               <Text size="xs" c="dimmed">Powered by {model === 'perplexity-sonar' ? 'Perplexity' : model === 'deepseek-r1' ? 'DeepSeek' : model.includes('claude') ? 'Anthropic' : 'OpenAI'}</Text>
             </div>
           </Group>
+          
+          <Tooltip label="Clear conversation">
+            <ActionIcon
+              variant="subtle"
+              size="md"
+              radius="md"
+              color="gray"
+              onClick={() => useStore.getState().clearMessages()}
+              disabled={messages.length === 0}
+            >
+              <IconEraser size={18} />
+            </ActionIcon>
+          </Tooltip>
         </Group>
       </Box>
       
@@ -405,28 +419,22 @@ export default function AIChat({ model }: AIChatProps) {
                       marginBottom: '24px',
                     }}
                   >
-                    <div 
-                      style={{ 
-                        whiteSpace: 'pre-wrap', 
-                        wordBreak: 'break-word',
-                        maxWidth: '100%',
-                        fontSize: '15px',
-                        lineHeight: 1.7,
-                        color: isDark ? '#C1C2C5' : '#212529',
-                      }}
-                    >
-                      {model === 'deepseek-r1' && msg.role === 'assistant' ? (
-                        <div style={{ 
+                    {msg.role === 'assistant' ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      <div 
+                        style={{ 
                           whiteSpace: 'pre-wrap', 
                           wordBreak: 'break-word',
+                          maxWidth: '100%',
+                          fontSize: '15px',
                           lineHeight: 1.7,
-                        }}>
-                          {msg.content}
-                        </div>
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
+                          color: isDark ? '#C1C2C5' : '#212529',
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    )}
                   </Box>
                 </Box>
               ))}

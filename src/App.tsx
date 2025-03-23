@@ -255,8 +255,6 @@ function App() {
                     placeholder="AI Model"
                     data={[
                       { value: 'gpt4o', label: 'GPT-4o (All-purpose)' },
-                      { value: 'perplexity-sonar', label: 'Perplexity (Search focus)' },
-                      { value: 'deepseek-r1', label: 'DeepSeek (Reasoning focus)' },
                     ]}
                     value={selectedModel}
                     onChange={(value) => value && setSelectedModel(value as AIModel)}
@@ -278,19 +276,6 @@ function App() {
                 </Group>
                 
                 <Group>
-                  <Tooltip label="Clear conversation">
-                    <ActionIcon
-                      variant="subtle"
-                      size="md"
-                      radius="md"
-                      color="gray"
-                      onClick={handleClearChat}
-                      disabled={messages.length === 0}
-                    >
-                      <IconEraser size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                   
                   <Tooltip label="Use search-focused AI (Perplexity Sonar) - still handles tasks">
                     <ActionIcon
                       variant="subtle"
