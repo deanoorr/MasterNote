@@ -2,6 +2,8 @@ import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code
 import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff, IconX } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import { testOpenAIConnection } from '../services/ai';
+import { storageService } from '../services/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SettingsModalProps {
   opened: boolean;
@@ -21,48 +23,92 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const [errorMessage, setErrorMessage] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [taskTemplate, setTaskTemplate] = useState('');
+  const [loading, setLoading] = useState(true);
+  const { user, userId } = useAuth();
 
   useEffect(() => {
-    // Load saved API key from localStorage
-    const savedApiKey = localStorage.getItem('openai_api_key') || '';
-    setApiKey(savedApiKey);
+    const loadApiKeys = async () => {
+      setLoading(true);
+      try {
+        let openaiKey, perplexityKey, deepseekKey;
+        
+        // If user is logged in, try to get keys from Supabase first
+        if (userId) {
+          console.log("Loading API keys for user:", userId);
+          openaiKey = await storageService.getItem('openai_api_key', userId);
+          perplexityKey = await storageService.getItem('perplexity_api_key', userId);
+          deepseekKey = await storageService.getItem('deepseek_api_key', userId);
+        } 
+        
+        // Fall back to localStorage if not found in Supabase
+        if (!openaiKey) openaiKey = localStorage.getItem('openai_api_key') || '';
+        if (!perplexityKey) perplexityKey = localStorage.getItem('perplexity_api_key') || '';
+        if (!deepseekKey) deepseekKey = localStorage.getItem('deepseek_api_key') || '';
+        
+        setApiKey(openaiKey);
+        setPerplexityApiKey(perplexityKey);
+        setDeepseekApiKey(deepseekKey);
+        
+        // Load saved dark mode preference
+        const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
+        setDarkMode(savedDarkMode);
+      } catch (error) {
+        console.error("Error loading API keys:", error);
+        // Fall back to localStorage
+        const savedApiKey = localStorage.getItem('openai_api_key') || '';
+        setApiKey(savedApiKey);
+        
+        const savedPerplexityApiKey = localStorage.getItem('perplexity_api_key') || '';
+        setPerplexityApiKey(savedPerplexityApiKey);
+        
+        const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
+        setDeepseekApiKey(savedDeepseekApiKey);
+        
+        const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
+        setDarkMode(savedDarkMode);
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    // Load saved Perplexity API key from localStorage
-    const savedPerplexityApiKey = localStorage.getItem('perplexity_api_key') || '';
-    setPerplexityApiKey(savedPerplexityApiKey);
-    
-    // Load saved DeepSeek API key from localStorage
-    const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
-    setDeepseekApiKey(savedDeepseekApiKey);
-    
-    // Load saved dark mode preference from localStorage
-    const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
-    setDarkMode(savedDarkMode);
-  }, []);
+    if (opened) {
+      loadApiKeys();
+    }
+  }, [opened, userId]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    // Save API key to localStorage
-    localStorage.setItem('openai_api_key', apiKey);
     
-    // Save Perplexity API key to localStorage
-    localStorage.setItem('perplexity_api_key', perplexityApiKey);
-    
-    // Save DeepSeek API key to localStorage
-    localStorage.setItem('deepseek_api_key', deepseekApiKey);
-    
-    // Save dark mode preference to localStorage
-    localStorage.setItem('dark_mode', darkMode.toString());
-    
-    setSaved(true);
-    setTimeout(() => {
-      setSaving(false);
-      setSaved(false);
-      onClose();
+    try {
+      // Always save to localStorage as fallback
+      localStorage.setItem('openai_api_key', apiKey);
+      localStorage.setItem('perplexity_api_key', perplexityApiKey);
+      localStorage.setItem('deepseek_api_key', deepseekApiKey);
+      localStorage.setItem('dark_mode', darkMode.toString());
       
-      // Refresh the page to ensure the API key is used in new requests
-      window.location.reload();
-    }, 1500);
+      // If user is logged in, also save to Supabase
+      if (userId) {
+        await storageService.setItem('openai_api_key', apiKey, userId);
+        await storageService.setItem('perplexity_api_key', perplexityApiKey, userId);
+        await storageService.setItem('deepseek_api_key', deepseekApiKey, userId);
+        // Dark mode is only stored in localStorage
+      }
+      
+      setSaved(true);
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaving(false);
+        setSaved(false);
+        onClose();
+        
+        // Refresh the page to ensure the API key is used in new requests
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error("Error saving API keys:", error);
+      setSaving(false);
+      setErrorMessage("Failed to save API keys. Please try again.");
+    }
   };
 
   const handleApiTest = async () => {

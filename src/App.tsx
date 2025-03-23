@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthModal from './components/Auth/AuthModal';
 import UserProfile from './components/Auth/UserProfile';
 import { isSupabaseConfigured } from './lib/supabase';
+import { storageService } from './services/storage';
 
 // Add CSS for animations
 const cssStyles = `
@@ -150,11 +151,46 @@ function AppContent() {
     console.log('Saved model to localStorage:', selectedModel);
   }, [selectedModel]);
 
+  // Open settings modal if no API key is set
   useEffect(() => {
-    // Check if API key is set in localStorage
-    const apiKey = localStorage.getItem('openai_api_key');
-    setApiKeySet(!!apiKey);
+    const checkApiKey = async () => {
+      try {
+        // First check if we're logged in
+        if (user && user.id) {
+          // Try to load API key from Supabase via the storage service
+          const apiKeyFromSupabase = await storageService.getItem('openai_api_key', user.id);
+          setApiKeySet(!!apiKeyFromSupabase);
+          
+          // Only open settings if we've confirmed no API key exists in Supabase
+          if (!apiKeyFromSupabase) {
+            setSettingsOpened(true);
+          }
+        } else {
+          // Not logged in, check localStorage directly
+          const apiKey = localStorage.getItem('openai_api_key');
+          setApiKeySet(!!apiKey);
+          if (!apiKey) {
+            setSettingsOpened(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking API key:", error);
+        // On error, fall back to localStorage check
+        const apiKey = localStorage.getItem('openai_api_key');
+        setApiKeySet(!!apiKey);
+        if (!apiKey) {
+          setSettingsOpened(true);
+        }
+      }
+    };
     
+    // Run the check after a short delay to allow auth to complete
+    const timeoutId = setTimeout(checkApiKey, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [user]);
+
+  // Load model preference
+  useEffect(() => {
     // Load the saved model preference from localStorage
     const savedModel = localStorage.getItem('selected_model');
     // Allow gpt4o, perplexity-sonar, deepseek-r1, or gpt-o3-mini
@@ -165,11 +201,6 @@ function AppContent() {
       // Default to gpt-o3-mini
       setSelectedModel('gpt-o3-mini');
       localStorage.setItem('selected_model', 'gpt-o3-mini');
-    }
-    
-    // If no API key is set, open settings modal automatically
-    if (!apiKey) {
-      setSettingsOpened(true);
     }
   }, []);
 
