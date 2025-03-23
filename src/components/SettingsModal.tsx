@@ -1,7 +1,9 @@
 import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code, Switch, Image } from '@mantine/core';
 import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff, IconX } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
-import { testOpenAIConnection } from '../services/ai';
+import { testOpenAIConnection, testGrokAPIConnection } from '../services/ai';
+import { storageService } from '../services/storage';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SettingsModalProps {
   opened: boolean;
@@ -10,59 +12,73 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const isDark = true; // Always use dark mode
+  const { user } = useAuth();
+  const userId = user?.id;
   const [apiKey, setApiKey] = useState('');
   const [perplexityApiKey, setPerplexityApiKey] = useState('');
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
+  const [grokApiKey, setGrokApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingApi, setTestingApi] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<any>(null);
+  const [testingGrokApi, setTestingGrokApi] = useState(false);
+  const [grokApiTestResult, setGrokApiTestResult] = useState<any>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [taskTemplate, setTaskTemplate] = useState('');
 
   useEffect(() => {
-    // Load saved API key from localStorage
-    const savedApiKey = localStorage.getItem('openai_api_key') || '';
-    setApiKey(savedApiKey);
-    
-    // Load saved Perplexity API key from localStorage
-    const savedPerplexityApiKey = localStorage.getItem('perplexity_api_key') || '';
-    setPerplexityApiKey(savedPerplexityApiKey);
-    
-    // Load saved DeepSeek API key from localStorage
-    const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
-    setDeepseekApiKey(savedDeepseekApiKey);
-    
-    // Load saved dark mode preference from localStorage
-    const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
-    setDarkMode(savedDarkMode);
-  }, []);
-
-  const handleSave = () => {
-    setSaving(true);
-    // Save API key to localStorage
-    localStorage.setItem('openai_api_key', apiKey);
-    
-    // Save Perplexity API key to localStorage
-    localStorage.setItem('perplexity_api_key', perplexityApiKey);
-    
-    // Save DeepSeek API key to localStorage
-    localStorage.setItem('deepseek_api_key', deepseekApiKey);
-    
-    // Save dark mode preference to localStorage
-    localStorage.setItem('dark_mode', darkMode.toString());
-    
-    setSaved(true);
-    setTimeout(() => {
-      setSaving(false);
-      setSaved(false);
-      onClose();
+    const loadApiKeys = async () => {
+      // Load saved API keys using the storage service
+      const savedApiKey = await storageService.getItem('openai_api_key', userId) || '';
+      setApiKey(savedApiKey);
       
-      // Refresh the page to ensure the API key is used in new requests
-      window.location.reload();
-    }, 1500);
+      const savedPerplexityApiKey = await storageService.getItem('perplexity_api_key', userId) || '';
+      setPerplexityApiKey(savedPerplexityApiKey);
+      
+      const savedDeepseekApiKey = await storageService.getItem('deepseek_api_key', userId) || '';
+      setDeepseekApiKey(savedDeepseekApiKey);
+      
+      const savedGrokApiKey = await storageService.getItem('grok_api_key', userId) || '';
+      setGrokApiKey(savedGrokApiKey);
+      
+      // Load saved dark mode preference
+      const savedDarkMode = await storageService.getItem('dark_mode', userId) === 'true';
+      setDarkMode(savedDarkMode);
+    };
+    
+    loadApiKeys();
+  }, [userId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    
+    try {
+      // Save API keys using the storage service
+      await storageService.setItem('openai_api_key', apiKey, userId);
+      await storageService.setItem('perplexity_api_key', perplexityApiKey, userId);
+      await storageService.setItem('deepseek_api_key', deepseekApiKey, userId);
+      await storageService.setItem('grok_api_key', grokApiKey, userId);
+      await storageService.setItem('dark_mode', darkMode.toString(), userId);
+      
+      setSaved(true);
+      setSaveSuccess(true);
+      
+      setTimeout(() => {
+        setSaving(false);
+        setSaved(false);
+        onClose();
+        
+        // Refresh the page to ensure the API key is used in new requests
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      setSaving(false);
+      setErrorMessage("Failed to save settings. Please try again.");
+    }
   };
 
   const handleApiTest = async () => {
@@ -78,6 +94,22 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
       setApiTestResult({ success: false, error: String(error) });
     } finally {
       setTestingApi(false);
+    }
+  };
+
+  const handleGrokApiTest = async () => {
+    setTestingGrokApi(true);
+    setGrokApiTestResult(null);
+    try {
+      // Test Grok API connection with the userId
+      const grokResult = await testGrokAPIConnection(userId);
+      console.log("Grok API test result:", grokResult);
+      setGrokApiTestResult(grokResult);
+    } catch (error) {
+      console.error("Error testing Grok API:", error);
+      setGrokApiTestResult({ success: false, error: String(error) });
+    } finally {
+      setTestingGrokApi(false);
     }
   };
 
@@ -305,6 +337,85 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
           </Button>
         </Box>
         
+        <Box
+          style={{
+            backgroundColor: isDark ? '#25262b' : '#f8f9fa',
+            padding: '16px',
+            borderRadius: '8px',
+            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+            marginTop: '16px'
+          }}
+        >
+          <Group mb="xs">
+            <IconKey size={20} color="#8E44AD" />
+            <Text fw={600} size="sm" c={isDark ? undefined : 'gray.8'}>Grok 2 API Key (Optional)</Text>
+          </Group>
+          
+          <TextInput
+            placeholder="grok-..."
+            value={grokApiKey}
+            onChange={(e) => setGrokApiKey(e.target.value)}
+            styles={{
+              input: {
+                backgroundColor: isDark ? '#2C2E33' : '#ffffff',
+                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                color: isDark ? '#C1C2C5' : '#495057',
+                fontSize: '16px',
+                padding: '12px 16px',
+                transition: 'all 0.2s ease',
+                '&:focus': {
+                  borderColor: '#8E44AD',
+                  backgroundColor: isDark ? '#373A40' : '#f8f9fa',
+                }
+              }
+            }}
+          />
+          
+          <Text size="sm" c="dimmed" mt="xs">
+            Optional: Required only if you want to use the Grok 2 model.
+          </Text>
+          
+          <Button 
+            variant="light" 
+            color="grape" 
+            mt="md" 
+            size="sm"
+            onClick={async () => {
+              if (!grokApiKey.trim()) {
+                alert("Please enter a Grok API key first");
+                return;
+              }
+              
+              // Save key temporarily for the test using the storage service
+              await storageService.setItem('grok_api_key', grokApiKey, userId);
+              
+              setTestingGrokApi(true);
+              setGrokApiTestResult(null);
+              
+              try {
+                const result = await testGrokAPIConnection(userId);
+                console.log("Grok API test result:", result);
+                setGrokApiTestResult(result);
+                
+                if (result.success) {
+                  alert("Grok API key is valid!");
+                } else {
+                  alert(`Grok API key test failed: ${result.error}`);
+                }
+              } catch (error) {
+                console.error("Grok API test error:", error);
+                alert(`Error testing Grok API key: ${error instanceof Error ? error.message : String(error)}`);
+                setGrokApiTestResult({ success: false, error: String(error) });
+              } finally {
+                setTestingGrokApi(false);
+              }
+            }}
+            loading={testingGrokApi}
+          >
+            Test Grok API Key
+          </Button>
+        </Box>
+        
         <Divider my="sm" />
         
         <Box
@@ -355,6 +466,16 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
             Test API Connection
           </Button>
           
+          <Button 
+            variant="outline" 
+            color="gray" 
+            onClick={handleGrokApiTest}
+            loading={testingGrokApi}
+            leftSection={<IconCloudOff size={16} />}
+          >
+            Test Grok API Connection
+          </Button>
+          
           <Group>
             <Button 
               color="gray" 
@@ -392,6 +513,31 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
                 {apiTestResult.response && (
                   <Code block my="sm" style={{ maxHeight: '150px', overflow: 'auto' }}>
                     {JSON.stringify(apiTestResult.response, null, 2)}
+                  </Code>
+                )}
+              </>
+            )}
+          </Box>
+        )}
+        
+        {grokApiTestResult && (
+          <Box mt="md" p="md" style={{ 
+            backgroundColor: grokApiTestResult.success ? 'rgba(32, 201, 151, 0.1)' : 'rgba(250, 82, 82, 0.1)',
+            borderRadius: '8px',
+            border: `1px solid ${grokApiTestResult.success ? 'rgba(32, 201, 151, 0.3)' : 'rgba(250, 82, 82, 0.3)'}`,
+          }}>
+            <Text fw={600} mb="xs" size="sm" c={grokApiTestResult.success ? 'teal' : 'red'}>
+              Grok API Test Result: {grokApiTestResult.success ? 'Success' : 'Failed'}
+            </Text>
+            {grokApiTestResult.success ? (
+              <Text size="sm">Grok API connection is working correctly.</Text>
+            ) : (
+              <>
+                <Text size="sm" mb="xs">Error: {grokApiTestResult.error}</Text>
+                {grokApiTestResult.status && <Text size="sm">Status: {grokApiTestResult.status}</Text>}
+                {grokApiTestResult.response && (
+                  <Code block my="sm" style={{ maxHeight: '150px', overflow: 'auto' }}>
+                    {JSON.stringify(grokApiTestResult.response, null, 2)}
                   </Code>
                 )}
               </>

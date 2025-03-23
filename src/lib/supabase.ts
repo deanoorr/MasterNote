@@ -21,13 +21,15 @@ export const migrateLocalStorageToSupabase = async (userId: string) => {
     const openaiApiKey = localStorage.getItem('openai_api_key');
     const perplexityApiKey = localStorage.getItem('perplexity_api_key');
     const deepseekApiKey = localStorage.getItem('deepseek_api_key');
+    const grokApiKey = localStorage.getItem('grok_api_key');
     
-    if (openaiApiKey || perplexityApiKey || deepseekApiKey) {
+    if (openaiApiKey || perplexityApiKey || deepseekApiKey || grokApiKey) {
       await supabase.from('api_keys').upsert({
         user_id: userId,
         openai_key: openaiApiKey || null,
         perplexity_key: perplexityApiKey || null,
         deepseek_key: deepseekApiKey || null,
+        grok_key: grokApiKey || null,
         updated_at: new Date().toISOString()
       });
     }

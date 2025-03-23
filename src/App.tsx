@@ -157,9 +157,9 @@ function AppContent() {
     
     // Load the saved model preference from localStorage
     const savedModel = localStorage.getItem('selected_model');
-    // Allow gpt4o, perplexity-sonar, deepseek-r1, or gpt-o3-mini
+    // Allow gpt4o, perplexity-sonar, deepseek-r1, gpt-o3-mini, or grok-2-1212
     if (savedModel && (savedModel === 'gpt4o' || savedModel === 'perplexity-sonar' || 
-        savedModel === 'deepseek-r1' || savedModel === 'gpt-o3-mini')) {
+        savedModel === 'deepseek-r1' || savedModel === 'gpt-o3-mini' || savedModel === 'grok-2-1212')) {
       setSelectedModel(savedModel as AIModel);
     } else {
       // Default to gpt-o3-mini
@@ -300,8 +300,9 @@ function AppContent() {
                   <Select
                     placeholder="AI Model"
                     data={[
-                      { value: 'gpt-o3-mini', label: 'GPT-o3 Mini (Faster)' },
-                      { value: 'gpt4o', label: 'GPT-4o (All-purpose)' },
+                      { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
+                      { value: 'gpt4o', label: 'GPT-4o' },
+                      { value: 'grok-2-1212', label: 'Grok 2' },
                     ]}
                     value={selectedModel}
                     onChange={(value) => value && setSelectedModel(value as AIModel)}
