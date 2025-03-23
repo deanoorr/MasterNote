@@ -143,7 +143,7 @@ const callPerplexityAPI = async (message: string) => {
     const conversationHistory = await getConversationHistory(userId);
     
     // Create a more comprehensive system prompt
-    const systemPrompt = 'You are a helpful assistant with search capabilities. You can provide information from the internet and have the most up-to-date knowledge. When answering questions, try to be informative and cite sources when possible. You can also help with task management, but specialized task operations are handled separately by the system.';
+    const systemPrompt = 'You are a helpful assistant with search capabilities. You can provide information from the internet and have the most up-to-date knowledge. When answering questions, try to be informative and cite sources when possible. You can also help with task management, but specialized task operations are handled separately by the system. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
     
     // Create messages array with system prompt, history, and user message
     const perplexityMessages = [
@@ -204,7 +204,7 @@ const callDeepSeekAPI = async (message: string) => {
     const conversationHistory = await getConversationHistory(userId);
     
     // Create a more comprehensive system prompt
-    const systemPrompt = 'You are a helpful assistant with strong reasoning capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning.';
+    const systemPrompt = 'You are a helpful assistant with strong reasoning capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
     
     // Create messages array with system prompt, history, and user message
     const deepseekMessages = [
@@ -351,6 +351,9 @@ async function processTaskWithAI(message: string, taskStore: TaskStoreType): Pro
     
     // Define a system prompt that instructs GPT how to parse task commands
     const systemPrompt = `You are a task management assistant. Your job is to analyze the user's request and extract the relevant information for task management.
+
+CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
+
 Extract the following information:
 1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update, move/set)
 2. TASK_TITLE: If they're creating a task, what is the title? (Extract only the core task title, not date or priority)
@@ -359,12 +362,13 @@ Extract the following information:
 5. TASK_NUMBER: If referring to an existing task by number, what is it? (extract just the number)
 6. DESCRIPTION: Any additional details for the task?
 7. BULK_ACTION: Are they referring to "all tasks" or multiple tasks? If they say "delete all tasks" or similar, this MUST be true.
-8. FILTER: If bulk action, what's the filter? (today, overdue, high priority, etc.)
+8. FILTER: If bulk action, what's the filter? (today, tomorrow, this week, high, medium, low, no date, undated, all)
 9. TARGET_DATE: If they want to move tasks to a specific date (like "move all tasks to today"), what is the target date?
 
 IMPORTANT: 
 - For phrases like "delete all tasks" or "complete all tasks", you MUST set bulkAction to true.
 - For phrases like "move all tasks to today" or "set all tasks due date to tomorrow", set bulkAction to true, intent to "move" or "set", and targetDate to the mentioned date.
+- For phrases like "move all my tasks with no due date to tomorrow", set bulkAction to true, intent to "move", filter to "no date" or "undated", and targetDate to "tomorrow".
 
 Respond in JSON format:
 {
@@ -375,7 +379,7 @@ Respond in JSON format:
   "taskNumber": 5,
   "description": "additional details",
   "bulkAction": true|false,
-  "filter": "today|tomorrow|this week|high|medium|low|all",
+  "filter": "today|tomorrow|this week|high|medium|low|no date|undated|all",
   "targetDate": "today|tomorrow|next week"
 }
 
@@ -500,6 +504,8 @@ async function generateSubtasksWithAI(message: string, taskStore: TaskStoreType)
     const mainActivity = activityMatch ? activityMatch[1].trim() : message;
     
     const systemPrompt = `You are a task planning assistant. The user is asking for help breaking down a complex activity into subtasks.
+
+CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
 
 Extract the main activity from their message and generate a list of 4-6 specific subtasks that would help them complete it. 
 Each subtask should be specific, actionable, and clearly contribute to the overall goal.
@@ -1130,7 +1136,7 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   
   if (filter === "all") {
     filteredTasks = taskStore.tasks;
-  } else if (filter === "today" || filter === "tomorrow" || filter === "this week" || filter === "next week" || filter === "overdue") {
+  } else if (filter === "today" || filter === "tomorrow" || filter === "this week" || filter === "next week" || filter === "overdue" || filter === "no date" || filter === "undated") {
     filteredTasks = taskStore.getTasksByDate(filter);
   } else if (filter === "high" || filter === "medium" || filter === "low") {
     filteredTasks = taskStore.tasks.filter(task => task.priority === filter);
@@ -1376,6 +1382,8 @@ async function processMultiTaskCreation(message: string, taskStore: TaskStoreTyp
     
     // Define a system prompt that instructs GPT how to extract tasks from text
     const systemPrompt = `You are a task extraction assistant. Extract tasks from the user's message and format them as a list of tasks.
+
+CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
 
 Your job is to identify distinct tasks in the user's message. These might be in a list format, bullet points, or embedded in regular text like an email.
 
