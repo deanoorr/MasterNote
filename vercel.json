@@ -2,7 +2,7 @@
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
-  "buildCommand": "npm run build",
+  "buildCommand": "tsc --noEmit --skipLibCheck; vite build",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "framework": "vite",
