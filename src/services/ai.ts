@@ -4,6 +4,7 @@ import { AIModel, Task, Message } from '../types';
 import { SortOption } from '../store';
 import { format } from 'date-fns';
 import { useStore } from '../store';
+import { storageService } from './storage';
 
 // Define conversation history types
 interface ConversationMessage {
@@ -11,10 +12,10 @@ interface ConversationMessage {
   content: string;
 }
 
-// Function to get conversation history from local storage
+// Function to get conversation history from storage
 async function getConversationHistory(userId: string): Promise<ConversationMessage[]> {
   try {
-    const historyString = localStorage.getItem(`conversation_history_${userId}`);
+    const historyString = await storageService.getItem(`conversation_history_${userId}`, userId);
     if (!historyString) return [];
     
     const history = JSON.parse(historyString) as ConversationMessage[];
@@ -31,18 +32,18 @@ async function saveMessageToHistory(userId: string, role: 'user' | 'assistant' |
   try {
     let history = await getConversationHistory(userId);
     history.push({ role, content });
-    localStorage.setItem(`conversation_history_${userId}`, JSON.stringify(history));
+    await storageService.setItem(`conversation_history_${userId}`, JSON.stringify(history), userId);
   } catch (error) {
     console.error("Error saving message to history:", error);
   }
 }
 
-// Get API key from localStorage or env variable
-const getApiKey = () => {
+// Get API key from storage or env variable
+const getApiKey = async (userId?: string) => {
   console.log("Retrieving OpenAI API key...");
-  const localStorageKey = localStorage.getItem('openai_api_key');
-  console.log("LocalStorage key exists:", !!localStorageKey);
-  if (localStorageKey) return localStorageKey;
+  const storageKey = await storageService.getItem('openai_api_key', userId);
+  console.log("Storage key exists:", !!storageKey);
+  if (storageKey) return storageKey;
   
   const envKey = import.meta.env.VITE_OPENAI_API_KEY || '';
   console.log("Environment variable key exists:", !!envKey);
@@ -50,18 +51,18 @@ const getApiKey = () => {
 };
 
 // Get Perplexity API key
-const getPerplexityApiKey = () => {
-  const localStorageKey = localStorage.getItem('perplexity_api_key');
-  if (localStorageKey) return localStorageKey;
+const getPerplexityApiKey = async (userId?: string) => {
+  const storageKey = await storageService.getItem('perplexity_api_key', userId);
+  if (storageKey) return storageKey;
   
   const envKey = import.meta.env.VITE_PERPLEXITY_API_KEY || '';
   return envKey;
 };
 
 // Get DeepSeek API key
-const getDeepSeekApiKey = () => {
-  const localStorageKey = localStorage.getItem('deepseek_api_key');
-  if (localStorageKey) return localStorageKey;
+const getDeepSeekApiKey = async (userId?: string) => {
+  const storageKey = await storageService.getItem('deepseek_api_key', userId);
+  if (storageKey) return storageKey;
   
   const envKey = import.meta.env.VITE_DEEPSEEK_API_KEY || '';
   return envKey;
@@ -108,8 +109,8 @@ const getMonthNumber = (monthName: string): number | undefined => {
 };
 
 // Initialize OpenAI with the API key
-function getOpenAIClient(): OpenAI {
-  const apiKey = getApiKey();
+async function getOpenAIClient(): Promise<OpenAI> {
+  const apiKey = await getApiKey();
   console.log("OpenAI API key length:", apiKey ? apiKey.length : 0);
   console.log("API key starts with:", apiKey ? apiKey.substring(0, 4) : "N/A");
   
@@ -130,7 +131,7 @@ function getOpenAIClient(): OpenAI {
 
 // Call Perplexity API
 const callPerplexityAPI = async (message: string) => {
-  const apiKey = getPerplexityApiKey();
+  const apiKey = await getPerplexityApiKey();
   
   if (!apiKey) {
     return "Search Mode requires a Perplexity API key. Please go to Settings and add your Perplexity API key to use this feature.";
@@ -191,7 +192,7 @@ const callPerplexityAPI = async (message: string) => {
 
 // Call DeepSeek API
 const callDeepSeekAPI = async (message: string) => {
-  const apiKey = getDeepSeekApiKey();
+  const apiKey = await getDeepSeekApiKey();
   
   if (!apiKey) {
     return "Reasoning Mode requires a DeepSeek API key. Please go to Settings and add your DeepSeek API key to use this feature.";
@@ -251,32 +252,50 @@ const callDeepSeekAPI = async (message: string) => {
 };
 
 // Test OpenAI connection
-export async function testOpenAIConnection() {
+export const testOpenAIConnection = async () => {
   try {
-    const openai = getOpenAIClient();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: "Hello, are you working?" }
-      ],
-      max_tokens: 10
+    // Get the API key from storage
+    const apiKey = await getApiKey();
+    if (!apiKey || apiKey.length < 10) {
+      return { success: false, error: "API key is not set or too short" };
+    }
+
+    // Set up OpenAI client with the API key
+    const openai = new OpenAI({
+      apiKey: apiKey,
+      dangerouslyAllowBrowser: true
     });
-    console.log("OpenAI API test response:", response);
-    return {
-      success: true,
-      message: "Successfully connected to OpenAI API.",
-      model: "gpt-4o"
-    };
-  } catch (error) {
-    console.error("OpenAI API test error:", error);
-    return {
-      success: false,
-      message: `Failed to connect to OpenAI API: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      model: "gpt-4o"
+
+    // Send a simple test request to verify the API key works
+    const testPrompt = "Say 'API key is valid' as a short response.";
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that provides very short answers." },
+        { role: "user", content: testPrompt }
+      ],
+      max_tokens: 50,
+      temperature: 0.3
+    });
+
+    // Check if we got a good response
+    if (response.choices && response.choices.length > 0) {
+      return { 
+        success: true, 
+        model: "OpenAI GPT-3.5",
+        message: "API connection successful" 
+      };
+    } else {
+      return { success: false, error: "No completion was generated" };
+    }
+  } catch (error: any) {
+    console.error("Error testing OpenAI API:", error);
+    return { 
+      success: false, 
+      error: error.message || "Unknown error occurred" 
     };
   }
-}
+};
 
 // Define task store interface
 interface TaskStoreType {
@@ -296,7 +315,7 @@ async function processTaskWithAI(message: string, taskStore: TaskStoreType): Pro
   console.log("Processing task with OpenAI:", message);
   
   try {
-    const openai = getOpenAIClient();
+    const openai = await getOpenAIClient();
     
     // Check if this is a request to generate subtasks
     if (message.toLowerCase().includes("help me") || 
@@ -456,7 +475,7 @@ Only include fields that you can extract from the user's message. If a field is 
  */
 async function generateSubtasksWithAI(message: string, taskStore: TaskStoreType): Promise<string> {
   try {
-    const openai = getOpenAIClient();
+    const openai = await getOpenAIClient();
     
     // Extract the main activity from the message
     const activityMatch = message.match(/(?:help me|add tasks that would help|add subtasks|create subtasks|what steps|steps to)(?:\s+for)?\s+(.+?)(?:\s+by|\s+on|\s+due|\s+$)/i);
@@ -1151,7 +1170,7 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     console.log("Processing normalized message:", normalizedMessage);
     
     // Use AI-based classification to determine if this is a task-related query
-    const openai = getOpenAIClient();
+    const openai = await getOpenAIClient();
     
     // Get comprehensive classification using AI understanding
     const classificationResponse = await openai.chat.completions.create({
@@ -1302,7 +1321,7 @@ export async function processAITaskQuery(message: string, taskStore: TaskStoreTy
  */
 async function processMultiTaskCreation(message: string, taskStore: TaskStoreType): Promise<string> {
   try {
-    const openai = getOpenAIClient();
+    const openai = await getOpenAIClient();
     
     // Define a system prompt that instructs GPT how to extract tasks from text
     const systemPrompt = `You are a task extraction assistant. Extract tasks from the user's message and format them as a list of tasks.

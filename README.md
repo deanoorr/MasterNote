@@ -11,6 +11,72 @@ MasterNote is a web-based task management system with AI assistance, designed to
 - Task organization with priorities and due dates
 - Status tracking (Todo, In Progress, Done)
 
+## New Feature: Supabase Integration
+
+MasterNote now supports Supabase for cloud storage and authentication, allowing you to:
+- Access your data across multiple devices
+- Create user accounts with secure authentication
+- Store API keys and tasks in the cloud
+- Synchronize tasks automatically
+
+## Setup Instructions
+
+### 1. Create a Supabase Project
+
+1. Go to [Supabase](https://supabase.com/) and sign up for a free account
+2. Create a new project
+3. Take note of your:
+   - Supabase URL (`https://[project-id].supabase.co`)
+   - Supabase anon key (public API key)
+
+### 2. Set Up the Database
+
+1. In your Supabase project, go to the SQL Editor
+2. Copy the contents of `supabase/setup.sql` from this repository
+3. Paste and run the SQL in the Supabase SQL Editor
+4. This will create all necessary tables with proper security rules
+
+### 3. Configure Authentication
+
+1. In your Supabase dashboard, go to Authentication → Settings
+2. Make sure "Email auth" is enabled
+3. Configure any additional auth providers as needed
+
+### 4. Configure Environment Variables
+
+1. Copy `.env.example` to `.env.local`
+2. Add your Supabase URL and anon key:
+   ```
+   VITE_SUPABASE_URL=https://[your-project-id].supabase.co
+   VITE_SUPABASE_ANON_KEY=[your-anon-key]
+   ```
+3. Add your API keys for AI services (optional)
+
+### 5. Run the Application
+
+```bash
+npm install
+npm run dev
+```
+
+## Using the Application with Supabase
+
+1. When you first start the application, you'll see a login/signup screen
+2. Create an account or log in
+3. Your data will automatically sync between devices when you're logged in
+4. If you've used the application before with localStorage, your data will be migrated to Supabase on first login
+
+## Free Tier Limitations
+
+The Supabase free tier includes:
+- 500MB database storage
+- 1GB file storage
+- 50MB database egress
+- Unlimited API requests
+- 2 free projects
+
+These limits should be more than sufficient for personal use of MasterNote.
+
 ## Development
 
 ### Prerequisites

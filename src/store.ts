@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Message, Task } from './types';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical';
 
@@ -8,6 +9,8 @@ interface Store {
   messages: Message[];
   tasks: Task[];
   sortOrder: SortOption;
+  userId: string | null;
+  setUserId: (id: string | null) => void;
   addMessage: (message: Message) => void;
   addTask: (task: Task) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
@@ -17,7 +20,21 @@ interface Store {
   setSortOrder: (order: SortOption) => void;
   getSortedTasks: () => Task[];
   getTasksByDate: (dateFilter: string) => Task[];
+  syncWithSupabase: () => Promise<void>;
 }
+
+// Custom storage for handling both localStorage and Supabase
+const customStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    return localStorage.getItem(name);
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    localStorage.setItem(name, value);
+  },
+  removeItem: async (name: string): Promise<void> => {
+    localStorage.removeItem(name);
+  }
+};
 
 export const useStore = create<Store>()(
   persist(
@@ -25,10 +42,15 @@ export const useStore = create<Store>()(
       messages: [],
       tasks: [],
       sortOrder: 'due-date' as SortOption,
+      userId: null,
+      
+      setUserId: (id: string | null) => set({ userId: id }),
+      
       addMessage: (message) =>
         set((state) => ({
           messages: [...state.messages, message],
         })),
+        
       addTask: (task) =>
         set((state) => {
           console.log("Store: Adding task to state:", task);
@@ -39,32 +61,118 @@ export const useStore = create<Store>()(
             title: task.title.replace(/^\d+\.\s*/, '')
           };
           
+          // Store in Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId) {
+            supabase.from('tasks').upsert({
+              id: cleanedTask.id,
+              user_id: userId,
+              title: cleanedTask.title,
+              description: cleanedTask.description || '',
+              priority: cleanedTask.priority,
+              status: cleanedTask.status,
+              due_date: cleanedTask.dueDate ? new Date(cleanedTask.dueDate).toISOString() : null,
+              created_at: new Date(cleanedTask.createdAt).toISOString(),
+              updated_at: new Date(cleanedTask.updatedAt).toISOString(),
+              ai_generated: cleanedTask.aiGenerated || false,
+              notes: cleanedTask.notes || ''
+            })
+            .then(({ error }) => {
+              if (error) console.error("Error storing task in Supabase:", error);
+            });
+          }
+          
           return {
             tasks: [...state.tasks, cleanedTask],
           };
         }),
+        
       updateTask: (taskId, updates) =>
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
+        set((state) => {
+          const updatedTasks = state.tasks.map((task) =>
             task.id === taskId ? { ...task, ...updates } : task
-          ),
-        })),
+          );
+          
+          // Find the updated task
+          const updatedTask = updatedTasks.find(task => task.id === taskId);
+          
+          // Store in Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId && updatedTask) {
+            supabase.from('tasks').upsert({
+              id: updatedTask.id,
+              user_id: userId,
+              title: updatedTask.title,
+              description: updatedTask.description || '',
+              priority: updatedTask.priority,
+              status: updatedTask.status,
+              due_date: updatedTask.dueDate ? new Date(updatedTask.dueDate).toISOString() : null,
+              updated_at: new Date().toISOString(),
+              ai_generated: updatedTask.aiGenerated || false,
+              notes: updatedTask.notes || ''
+            })
+            .then(({ error }) => {
+              if (error) console.error("Error updating task in Supabase:", error);
+            });
+          }
+          
+          return {
+            tasks: updatedTasks,
+          };
+        }),
+        
       deleteTask: (taskId) =>
-        set((state) => ({
-          tasks: state.tasks.filter((task) => task.id !== taskId),
-        })),
+        set((state) => {
+          // Store in Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId) {
+            supabase.from('tasks')
+              .delete()
+              .eq('id', taskId)
+              .eq('user_id', userId)
+              .then(({ error }) => {
+                if (error) console.error("Error deleting task in Supabase:", error);
+              });
+          }
+          
+          return {
+            tasks: state.tasks.filter((task) => task.id !== taskId),
+          };
+        }),
+        
       deleteCompletedTasks: () =>
-        set((state) => ({
-          tasks: state.tasks.filter((task) => task.status !== 'done'),
-        })),
+        set((state) => {
+          // Delete completed tasks in Supabase if configured
+          const userId = get().userId;
+          const completedTaskIds = state.tasks
+            .filter(task => task.status === 'done')
+            .map(task => task.id);
+            
+          if (isSupabaseConfigured() && userId && completedTaskIds.length > 0) {
+            supabase.from('tasks')
+              .delete()
+              .eq('user_id', userId)
+              .in('id', completedTaskIds)
+              .then(({ error }) => {
+                if (error) console.error("Error deleting completed tasks in Supabase:", error);
+              });
+          }
+          
+          return {
+            tasks: state.tasks.filter((task) => task.status !== 'done'),
+          };
+        }),
+        
       clearMessages: () => 
         set(() => ({
           messages: [],
         })),
+        
       setSortOrder: (order: SortOption) => 
         set(() => ({
           sortOrder: order
         })),
+        
       getSortedTasks: () => {
         const { tasks, sortOrder } = get();
         const tasksCopy = [...tasks];
@@ -113,75 +221,53 @@ export const useStore = create<Store>()(
             return tasksCopy;
         }
       },
+      
       getTasksByDate: (dateFilter: string) => {
         const { tasks } = get();
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Set to start of day
-        
+        today.setHours(0, 0, 0, 0);
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        const weekStart = new Date(today);
-        const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        weekStart.setDate(today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1)); // Start on Monday
-        
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6); // End on Sunday
-        
-        // Date comparison helper (checks if the date is on the same day)
-        const isSameDay = (date1: Date, date2: Date) => {
-          // Only compare month and day for dynamic date handling
-          return date1.getMonth() === date2.getMonth() &&
-                 date1.getDate() === date2.getDate();
-        };
-        
-        // Filter based on the date filter parameter
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+
         switch (dateFilter.toLowerCase()) {
           case 'today':
-            return tasks.filter(task => 
-              task.dueDate && isSameDay(new Date(task.dueDate), today)
-            );
-            
-          case 'tomorrow':
-            return tasks.filter(task => 
-              task.dueDate && isSameDay(new Date(task.dueDate), tomorrow)
-            );
-            
-          case 'this week':
-          case 'week':
             return tasks.filter(task => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
-              
-              // Compare only month and day for each day in the week
-              for (let i = 0; i <= 6; i++) {
-                const weekDay = new Date(today);
-                weekDay.setDate(today.getDate() + i);
-                if (isSameDay(taskDate, weekDay)) return true;
-              }
-              return false;
+              taskDate.setHours(0, 0, 0, 0);
+              return taskDate.getTime() === today.getTime();
+            });
+            
+          case 'tomorrow':
+            return tasks.filter(task => {
+              if (!task.dueDate) return false;
+              const taskDate = new Date(task.dueDate);
+              taskDate.setHours(0, 0, 0, 0);
+              return taskDate.getTime() === tomorrow.getTime();
+            });
+            
+          case 'this week':
+            return tasks.filter(task => {
+              if (!task.dueDate) return false;
+              const taskDate = new Date(task.dueDate);
+              taskDate.setHours(0, 0, 0, 0);
+              return taskDate >= today && taskDate < nextWeek;
             });
             
           case 'overdue':
             return tasks.filter(task => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
-              // Overdue if month is earlier or same month but day is earlier
-              return (taskDate.getMonth() < today.getMonth() || 
-                     (taskDate.getMonth() === today.getMonth() && 
-                      taskDate.getDate() < today.getDate())) && 
-                      task.status !== 'done';
+              taskDate.setHours(0, 0, 0, 0);
+              return taskDate < today && task.status !== 'done';
             });
             
-          case 'upcoming':
-            return tasks.filter(task => {
-              if (!task.dueDate) return false;
-              const taskDate = new Date(task.dueDate);
-              // Upcoming if month is later or same month but day is later or today
-              return taskDate.getMonth() > today.getMonth() || 
-                    (taskDate.getMonth() === today.getMonth() && 
-                     taskDate.getDate() >= today.getDate());
-            });
+          case 'completed':
+            return tasks.filter(task => task.status === 'done');
             
           case 'no date':
           case 'undated':
@@ -191,10 +277,45 @@ export const useStore = create<Store>()(
             return tasks;
         }
       },
+      
+      syncWithSupabase: async () => {
+        const userId = get().userId;
+        if (!isSupabaseConfigured() || !userId) return;
+        
+        try {
+          // Fetch tasks from Supabase
+          const { data: tasksData, error: tasksError } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('user_id', userId);
+            
+          if (tasksError) throw tasksError;
+          
+          if (tasksData) {
+            const formattedTasks: Task[] = tasksData.map(task => ({
+              id: task.id,
+              title: task.title,
+              description: task.description || '',
+              priority: task.priority as 'low' | 'medium' | 'high',
+              status: task.status as 'todo' | 'in_progress' | 'done',
+              dueDate: task.due_date ? new Date(task.due_date) : undefined,
+              createdAt: new Date(task.created_at),
+              updatedAt: new Date(task.updated_at),
+              aiGenerated: task.ai_generated || false,
+              notes: task.notes || ''
+            }));
+            
+            // Update the store with fetched tasks
+            set({ tasks: formattedTasks });
+          }
+        } catch (error) {
+          console.error('Error syncing with Supabase:', error);
+        }
+      }
     }),
     {
       name: 'masternote-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => customStorage),
     }
   )
 ); 

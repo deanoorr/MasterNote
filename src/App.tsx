@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, Tooltip } from '@mantine/core';
+import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, Tooltip, Button } from '@mantine/core';
 import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconNotes, IconChecklist, IconSearch, IconEraser, IconBulb } from '@tabler/icons-react';
 import AIChat from './components/AIChat';
 import TaskList from './components/TaskList';
 import SettingsModal from './components/SettingsModal';
 import { AIModel } from './types';
 import { useStore } from './store';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AuthModal from './components/Auth/AuthModal';
+import UserProfile from './components/Auth/UserProfile';
+import { isSupabaseConfigured } from './lib/supabase';
 
 // Add CSS for animations
 const cssStyles = `
@@ -131,11 +135,14 @@ const theme = createTheme({
   },
 });
 
-function App() {
+// Main App Component
+function AppContent() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('gpt-o3-mini');
   const [settingsOpened, setSettingsOpened] = useState(false);
+  const [authModalOpened, setAuthModalOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages } = useStore();
+  const { messages, clearMessages, setUserId, syncWithSupabase } = useStore();
+  const { user, loading, setDemoUser, isDemoMode } = useAuth();
 
   // Save the selected model to localStorage whenever it changes
   useEffect(() => {
@@ -165,6 +172,31 @@ function App() {
       setSettingsOpened(true);
     }
   }, []);
+
+  // Show authentication modal if no user is logged in
+  useEffect(() => {
+    if (!loading && !user) {
+      // Show auth modal - never use demo mode automatically
+      setAuthModalOpened(true);
+    }
+  }, [loading, user]);
+
+  // Update user ID in store when auth changes
+  useEffect(() => {
+    if (user) {
+      setUserId(user.id);
+      syncWithSupabase(); // Sync tasks when user logs in
+    }
+  }, [user, setUserId, syncWithSupabase]);
+
+  // Show auth modal only if explicitly requested now
+  // We've removed the auto-popup of auth modal
+
+  const handleAuthSuccess = (userId: string) => {
+    setUserId(userId);
+    syncWithSupabase();
+    setAuthModalOpened(false);
+  };
 
   const handleClearChat = () => {
     if (messages.length > 0) {
@@ -207,15 +239,28 @@ function App() {
               </Group>
               <Group>
                 <Text size="sm" c="dimmed">AI Task Management</Text>
-                <ActionIcon 
-                  onClick={() => setSettingsOpened(true)} 
-                  variant="subtle" 
-                  radius="xl"
-                  color="gray"
-                  size="lg"
-                >
-                  <IconSettings size={20} />
-                </ActionIcon>
+                {user ? (
+                  <UserProfile openSettings={() => setSettingsOpened(true)} />
+                ) : (
+                  <Button 
+                    variant="subtle"
+                    onClick={() => setAuthModalOpened(true)}
+                    size="sm"
+                  >
+                    Login
+                  </Button>
+                )}
+                {!user && (
+                  <ActionIcon 
+                    onClick={() => setSettingsOpened(true)} 
+                    variant="subtle" 
+                    radius="xl"
+                    color="gray"
+                    size="lg"
+                  >
+                    <IconSettings size={20} />
+                  </ActionIcon>
+                )}
               </Group>
             </Group>
           </Box>
@@ -371,11 +416,26 @@ function App() {
         </Container>
       </AppShell>
       
+      {/* Modals */}
       <SettingsModal
         opened={settingsOpened}
         onClose={() => setSettingsOpened(false)}
       />
+      <AuthModal 
+        opened={authModalOpened} 
+        onClose={() => setAuthModalOpened(false)} 
+        onAuthSuccess={handleAuthSuccess}
+      />
     </MantineProvider>
+  );
+}
+
+// Wrapper component that provides auth context
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
