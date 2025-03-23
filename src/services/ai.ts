@@ -695,6 +695,15 @@ async function getCompletionResponse(message: string, mode: 'normal' | 'task', u
 export async function getAIResponse(message: string, mode: 'normal' | 'task', userId: string): Promise<string> {
   const taskStore = useStore.getState();
   
+  // Check if we should suggest a mode switch
+  const { shouldSwitch, suggestedMode } = shouldSuggestModeSwitch(message, mode);
+  
+  if (shouldSwitch) {
+    console.log(`User might want to be in ${suggestedMode} mode, currently in ${mode} mode`);
+    // Note: We'll just log this for now - the actual prompt could be handled in the UI
+    // You could return a special response here if desired
+  }
+  
   if (mode === 'task') {
     // First process the message to normalize and clean it
     const normalizedMessage = message.toLowerCase().trim();
@@ -1706,8 +1715,21 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
       
       // Further process the title to handle cases where "for" is both part of the task and a date marker
       // Example: "add a task for finish cost plan for thursday" - "for thursday" should be removed from title
-      if (dateString && rawTitle.toLowerCase().endsWith(` for ${dateString.toLowerCase()}`)) {
-        rawTitle = rawTitle.slice(0, -(` for ${dateString}`).length);
+      if (dateString) {
+        // Look for "for DATE" pattern in the title and remove it
+        const forDatePattern = new RegExp(`\\s+for\\s+${dateString}\\b`, 'i');
+        if (forDatePattern.test(rawTitle)) {
+          rawTitle = rawTitle.replace(forDatePattern, '');
+        }
+        
+        // Look for "on DATE" pattern in the title and remove it
+        const onDatePattern = new RegExp(`\\s+on\\s+${dateString}\\b`, 'i');
+        if (onDatePattern.test(rawTitle)) {
+          rawTitle = rawTitle.replace(onDatePattern, '');
+        }
+        
+        // Clean up any trailing "for" or "on" prepositions
+        rawTitle = rawTitle.replace(/\s+(for|on)$/i, '');
       }
       
       // Extract time reference from title if not already matched in date group
@@ -1748,15 +1770,26 @@ function analyzeTaskMessage(message: string): { title: string; description: stri
   };
 }
 
+// Helper function to clean task titles by removing prepositions followed by dates
+function cleanTaskTitle(title: string): string {
+  let cleanedTitle = title.trim();
+  
+  // Remove 'for the 28th', 'on the 28th', etc.
+  cleanedTitle = cleanedTitle.replace(/\s+(?:for|on)\s+(?:the\s+)?\d{1,2}(?:st|nd|rd|th)?(?:\s+of\s+[a-z]+)?$/i, '');
+  
+  // Remove 'for tomorrow', 'on Monday', etc.
+  cleanedTitle = cleanedTitle.replace(/\s+(?:for|on)\s+(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i, '');
+  
+  // Remove standalone 'for' or 'on' at the end of a title
+  cleanedTitle = cleanedTitle.replace(/\s+(?:for|on)$/i, '');
+  
+  console.log(`Cleaned task title: "${title}" → "${cleanedTitle}"`);
+  return cleanedTitle;
+}
+
 // Function to create a task from user input
 function createTask(message: string, taskStore: TaskStoreType): string {
   console.log("Creating task from message:", message);
-  
-  // We no longer need to check for multi-task creation here since it's handled in getAIResponse
-  // Remove this check to prevent duplicate task creation
-  // if (isMultiTaskCreationRequest(message)) {
-  //   return createMultipleTasks(message, taskStore);
-  // }
   
   // Special pattern to handle "for [day] add a task called [title]" format
   const forDayPattern = /^for\s+(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next\s+week|this\s+week)\s+add\s+(?:a\s+)?task\s+(?:called|named|titled)\s+(.+)$/i;
@@ -1770,8 +1803,9 @@ function createTask(message: string, taskStore: TaskStoreType): string {
     // Parse the due date
     const dueDate = parseDateReference(dateString.toLowerCase());
     
-    // Process the title to extract any description
-    const { title: processedTitle, description } = processTaskTitle(taskTitle);
+    // Process the title to extract any description and remove date prepositions
+    const cleanedTitle = cleanTaskTitle(taskTitle);
+    const { title: processedTitle, description } = processTaskTitle(cleanedTitle);
     
     // Create a unique ID for the task
     const id = Date.now().toString();
@@ -1839,13 +1873,16 @@ function createTask(message: string, taskStore: TaskStoreType): string {
       
       console.log(`Created due date: ${dueDate.toISOString()}`);
       
+      // Clean the task title and remove date prepositions
+      const cleanedTitle = cleanTaskTitle(taskTitle);
+      
       // Create a unique ID for the task
       const id = Date.now().toString();
       
       // Create the task object
       const newTask = {
         id,
-        title: taskTitle,
+        title: cleanedTitle,
         description: "",
         dueDate: dueDate,
         priority: "medium" as "low" | "medium" | "high",
@@ -1858,7 +1895,7 @@ function createTask(message: string, taskStore: TaskStoreType): string {
       // Add the task to the store
       taskStore.addTask(newTask);
       
-      return `✅ Added task: "${taskTitle}" due ${dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}.`;
+      return `✅ Added task: "${cleanedTitle}" due ${dueDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}.`;
     }
   }
   
@@ -1869,13 +1906,16 @@ function createTask(message: string, taskStore: TaskStoreType): string {
     return "I couldn't identify a clear task in your message. Please try using phrases like 'add a task to...', 'remind me to...', or 'I need to...'";
   }
   
+  // Clean the task title to remove any remaining date prepositions
+  const cleanedTitle = cleanTaskTitle(title);
+  
   // Create a unique ID for the task
   const id = Date.now().toString();
   
   // Create the task object
   const newTask = {
     id,
-    title,
+    title: cleanedTitle,
     description: description || "",
     dueDate: dueDate || new Date(), // Default to today if no date was extracted
     priority: (priority || "medium") as "low" | "medium" | "high",
@@ -1911,7 +1951,7 @@ function createTask(message: string, taskStore: TaskStoreType): string {
   }
   
   // Return a confirmation message
-  return `✅ Added task: "${title}"${description ? ` (${description})` : ""}${dueDateDisplay ? ` due ${dueDateDisplay}` : ""} with ${priority || "medium"} priority.`;
+  return `✅ Added task: "${cleanedTitle}"${description ? ` (${description})` : ""}${dueDateDisplay ? ` due ${dueDateDisplay}` : ""} with ${priority || "medium"} priority.`;
 }
 
 // Function to check if a message is requesting to create multiple tasks
@@ -3158,3 +3198,79 @@ const callClaudeAPI = async (message: string) => {
   // Code is commented out
 };
 */
+
+// Add a function to detect if a message appears to be a task creation intent
+export function detectTaskIntent(message: string): boolean {
+  // Normalize the message
+  const normalizedMessage = message.toLowerCase().trim();
+  
+  // Task creation patterns
+  const taskCreationPatterns = [
+    /^(?:add|create|make|new)\s+(?:a\s+)?(?:task|todo|to-do|reminder)/i,
+    /^(?:remind\s+me\s+to|remember\s+to)/i,
+    /^(?:i\s+need\s+to|i\s+should|i\s+have\s+to)/i,
+    /^(?:schedule|plan|set)\s+(?:a\s+)?(?:task|meeting|appointment|reminder)/i,
+    /^(?:don't\s+forget\s+to|need\s+to)/i,
+    /^(?:i\s+must|must|have\s+to|got\s+to)/i,
+  ];
+  
+  // Check if any task creation pattern matches
+  for (const pattern of taskCreationPatterns) {
+    if (pattern.test(normalizedMessage)) {
+      console.log("Detected task intent:", normalizedMessage);
+      return true;
+    }
+  }
+
+  // Check if message contains time-sensitive words (might be a task with a due date)
+  const timePatterns = [
+    /\b(?:tomorrow|today|next\s+week|next\s+month|next\s+weekend|this\s+weekend|tonight|in\s+\d+\s+days?)\b/i,
+    /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+    /\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/i,
+    /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+  ];
+
+  // Detect tasks like "add a task update MasterNote for the 28th" or "add a task to update MasterNote on the 28th"
+  const taskDatePrepositionPatterns = [
+    /(?:add|create|make)\s+(?:a\s+)?(?:task|todo|to-do|reminder)(?:\s+to)?\s+(.+?)\s+(?:for|on)\s+(?:the\s+)?(?:\d{1,2}(?:st|nd|rd|th)?|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+    /(?:add|create|make)\s+(?:a\s+)?(?:task|todo|to-do|reminder)(?:\s+to)?\s+(?:update|remind|finish|complete|do|work\s+on)/i
+  ];
+  
+  // Check for tasks with date prepositions
+  for (const pattern of taskDatePrepositionPatterns) {
+    if (pattern.test(normalizedMessage)) {
+      console.log("Detected task with date preposition:", normalizedMessage);
+      return true;
+    }
+  }
+
+  // If the message is short (likely a task) and contains time references, it's probably a task
+  if (normalizedMessage.split(' ').length < 15) {
+    for (const pattern of timePatterns) {
+      if (pattern.test(normalizedMessage)) {
+        console.log("Detected potential task with time reference:", normalizedMessage);
+        return true;
+      }
+    }
+    
+    // Check for short commands that are likely task creation
+    if (/^(?:update|finish|complete|do|work\s+on)\s+/i.test(normalizedMessage)) {
+      console.log("Detected short task command:", normalizedMessage);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// A helper function to check if a mode switch is recommended
+export function shouldSuggestModeSwitch(message: string, currentMode: 'normal' | 'task'): { shouldSwitch: boolean; suggestedMode: 'normal' | 'task' } {
+  if (currentMode === 'normal' && detectTaskIntent(message)) {
+    return { shouldSwitch: true, suggestedMode: 'task' };
+  }
+  
+  // We could also detect when to switch from task to normal mode
+  // e.g., when asking complex questions in task mode
+  
+  return { shouldSwitch: false, suggestedMode: currentMode };
+}
