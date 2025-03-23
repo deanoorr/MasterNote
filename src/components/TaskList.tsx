@@ -616,13 +616,19 @@ export default function TaskList() {
                             backgroundColor: isDark ? '#2C2E33' : '#ffffff',
                             border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
                             borderRadius: '8px',
-                            padding: '12px 16px',
+                            padding: '12px 16px 12px 36px',
                             fontSize: '16px',
                             transition: 'all 0.2s ease',
                             '&:focus': {
                               borderColor: '#20C997',
                               backgroundColor: isDark ? '#373A40' : '#f1f3f5'
                             }
+                          },
+                          section: {
+                            width: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           },
                           ...calendarStyles
                         }}
