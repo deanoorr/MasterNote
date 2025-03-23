@@ -21,10 +21,56 @@
       * {
         box-sizing: border-box;
       }
+      
+      #loading-indicator {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 24px;
+        color: white;
+        z-index: 1000;
+      }
+      
+      #error-container {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        right: 20px;
+        background-color: #ff4d4f;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 1000;
+        display: none;
+        max-height: 300px;
+        overflow: auto;
+      }
     </style>
   </head>
   <body>
+    <div id="loading-indicator">Loading application...</div>
+    <div id="error-container"></div>
     <div id="root"></div>
+    <script>
+      // Error handling
+      window.addEventListener('error', function(event) {
+        const errorContainer = document.getElementById('error-container');
+        errorContainer.style.display = 'block';
+        errorContainer.innerHTML += '<p><strong>Error:</strong> ' + event.message + 
+          ' at ' + event.filename + ':' + event.lineno + '</p>';
+      });
+      
+      // Remove loading indicator once DOM is loaded
+      window.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+          const loadingIndicator = document.getElementById('loading-indicator');
+          if (loadingIndicator && document.getElementById('root').childNodes.length > 0) {
+            loadingIndicator.style.display = 'none';
+          }
+        }, 1000);
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html> 
