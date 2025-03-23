@@ -183,19 +183,13 @@ export default function TaskList() {
     e.stopPropagation(); // Prevent propagation to parent elements
     const task = tasks.find((t) => t.id === taskId);
     if (task) {
-      // Mark task as done (don't toggle back to todo in the handler)
-      if (task.status !== 'done') {
+      console.log("Changing task status from", task.status, "to", task.status !== 'done' ? 'done' : 'todo');
+      
+      // Mark task as done or back to todo
       updateTask(taskId, { 
-          status: 'done',
-          updatedAt: new Date()
-        });
-      } else {
-        // If task is already done, we can toggle it back to todo
-        updateTask(taskId, { 
-          status: 'todo',
-        updatedAt: new Date()
+        status: task.status !== 'done' ? 'done' : 'todo',
+        updatedAt: new Date() // Ensure timestamp is updated
       });
-      }
     }
   };
 
@@ -288,12 +282,9 @@ export default function TaskList() {
     e.stopPropagation(); // Prevent propagation to parent elements
     console.log("Changing due date of task", taskId, "to", dueDate);
     
-    // Set due date year to 2025 if it exists
-    let newDueDate = dueDate;
-    if (newDueDate) {
-      newDueDate = new Date(newDueDate);
-      newDueDate.setFullYear(2025);
-    }
+    // Don't set a fixed year to 2025, use the actual date selected
+    let newDueDate = dueDate ? new Date(dueDate) : null;
+    console.log("New due date object:", newDueDate);
     
     updateTask(taskId, {
       dueDate: newDueDate || undefined,
@@ -670,7 +661,7 @@ export default function TaskList() {
                     <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                       <Checkbox
                         checked={task.status === 'done'}
-                        onChange={() => handleStatusChange(task.id, new MouseEvent('click') as any)}
+                        onChange={(e) => handleStatusChange(task.id, e as any)}
                         styles={{
                           input: {
                             cursor: 'pointer',

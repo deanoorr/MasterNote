@@ -142,7 +142,7 @@ function AppContent() {
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [authModalOpened, setAuthModalOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages, setUserId, syncWithSupabase } = useStore();
+  const { messages, clearMessages, setUserId, syncWithSupabase, tasks } = useStore();
   const { user, loading, setDemoUser, isDemoMode } = useAuth();
 
   // Save the selected model to localStorage whenever it changes
@@ -216,16 +216,29 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       setUserId(user.id);
-      syncWithSupabase(); // Sync tasks when user logs in
+      // Don't sync immediately on every login - allow local state to be the source of truth
+      // Only sync if the store is empty
+      if (tasks.length === 0) {
+        console.log("No tasks in local state, syncing with Supabase...");
+        syncWithSupabase();
+      } else {
+        console.log("Using local tasks, skipping initial Supabase sync");
+      }
     }
-  }, [user, setUserId, syncWithSupabase]);
+  }, [user, setUserId, syncWithSupabase, tasks.length]);
 
   // Show auth modal only if explicitly requested now
   // We've removed the auto-popup of auth modal
 
   const handleAuthSuccess = (userId: string) => {
     setUserId(userId);
-    syncWithSupabase();
+    // Only sync if the store is empty
+    if (tasks.length === 0) {
+      console.log("Auth success with no local tasks, syncing with Supabase...");
+      syncWithSupabase();
+    } else {
+      console.log("Auth success with existing local tasks, skipping Supabase sync");
+    }
     setAuthModalOpened(false);
   };
 
