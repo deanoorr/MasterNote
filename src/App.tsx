@@ -276,29 +276,6 @@ function App() {
                       }
                     }}
                   />
-                  
-                  <Select
-                    placeholder="Chat Mode"
-                    value={aiMode}
-                    onChange={(value) => value && useStore.setState({ aiMode: value as AIModeType })}
-                    data={[
-                      { value: 'normal', label: 'Normal Chat' },
-                      { value: 'task', label: 'Task Manager' },
-                    ]}
-                    style={{ width: 150 }}
-                    styles={{
-                      input: {
-                        backgroundColor: '#2C2E33',
-                        border: '1px solid #373A40',
-                        borderRadius: '6px',
-                        transition: 'all 0.2s ease',
-                        '&:focus': {
-                          borderColor: '#20C997',
-                          backgroundColor: '#373A40'
-                        }
-                      }
-                    }}
-                  />
                 </Group>
                 
                 <Group>

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image } from '@mantine/core';
-import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch } from '@tabler/icons-react';
+import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover } from '@mantine/core';
+import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch, IconArrowRight } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore, AIModeType } from '../store';
-import { getAIResponse } from '../services/ai';
+import { getAIResponse, detectTaskIntent, shouldSuggestModeSwitch } from '../services/ai';
 
 interface AIChatProps {
   model: AIModel;
@@ -15,8 +15,44 @@ export default function AIChat({ model }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingReasoning, setLoadingReasoning] = useState<string[]>([]);
+  const [showModeSwitchPrompt, setShowModeSwitchPrompt] = useState(false);
+  const [suggestedMode, setSuggestedMode] = useState<AIModeType | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { messages, addMessage, addTask, aiMode, setAIMode } = useStore();
+
+  // Replace the entire keyboard shortcut handling with this one simpler version
+  useEffect(() => {
+    function handleKeyPress(event: KeyboardEvent) {
+      // Use keyCode for better cross-browser compatibility
+      const key = event.key.toLowerCase();
+      
+      // Check for Command+M (metaKey on Mac)
+      if (event.metaKey && key === 'm') {
+        event.preventDefault();
+        console.log('Keyboard shortcut detected:', key, 
+          'meta:', event.metaKey, 
+          'alt:', event.altKey, 
+          'ctrl:', event.ctrlKey, 
+          'shift:', event.shiftKey
+        );
+        
+        // Toggle mode without using the current state directly
+        const newMode = aiMode === 'normal' ? 'task' : 'normal';
+        console.log('Switching mode from', aiMode, 'to', newMode);
+        setAIMode(newMode);
+      }
+    }
+    
+    // Add event listener directly to document body
+    document.body.addEventListener('keydown', handleKeyPress);
+    console.log('Added keyboard shortcut listener to document body');
+    
+    // Cleanup 
+    return () => {
+      document.body.removeEventListener('keydown', handleKeyPress);
+      console.log('Removed keyboard shortcut listener from document body');
+    };
+  }, [aiMode, setAIMode]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -42,6 +78,21 @@ export default function AIChat({ model }: AIChatProps) {
     };
   }, [isLoading, model, messages]);
 
+  // Check message intent as user types and suggest mode switch if needed
+  useEffect(() => {
+    if (input.trim() && !input.startsWith('/')) {
+      const { shouldSwitch, suggestedMode } = shouldSuggestModeSwitch(input, aiMode);
+      if (shouldSwitch && suggestedMode !== aiMode) {
+        setSuggestedMode(suggestedMode);
+        setShowModeSwitchPrompt(true);
+      } else {
+        setShowModeSwitchPrompt(false);
+      }
+    } else {
+      setShowModeSwitchPrompt(false);
+    }
+  }, [input, aiMode]);
+
   // Helper function to scroll to the bottom of the chat
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -52,6 +103,22 @@ export default function AIChat({ model }: AIChatProps) {
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isLoading || !input.trim()) return;
+
+    // Check for mode switching commands
+    if (input.trim().startsWith('/')) {
+      const command = input.trim().toLowerCase();
+      
+      if (command === '/task' || command === '/tasks') {
+        setAIMode('task');
+        setInput('');
+        return;
+      } else if (command === '/normal' || command === '/chat') {
+        setAIMode('normal');
+        setInput('');
+        return;
+      }
+      // Continue with regular submission if not a recognized command
+    }
 
     console.log("Submitting input:", input);
     setIsLoading(true);
@@ -132,6 +199,19 @@ export default function AIChat({ model }: AIChatProps) {
     }
   };
 
+  // Handle mode switch from prompt
+  const handleSwitchMode = () => {
+    if (suggestedMode) {
+      setAIMode(suggestedMode);
+      setShowModeSwitchPrompt(false);
+    }
+  };
+
+  // Function to dismiss the mode switch prompt
+  const dismissModeSwitchPrompt = () => {
+    setShowModeSwitchPrompt(false);
+  };
+
   // Get model name for display
   const getModelDisplayName = () => {
     switch(model) {
@@ -152,20 +232,52 @@ export default function AIChat({ model }: AIChatProps) {
     }
   };
 
+  // Get mode switching text based on current mode
+  const getModeSwitchingText = () => {
+    return aiMode === 'normal' 
+      ? 'Click the Switch Mode button or use Command+M to change to Task Mode'
+      : 'Click the Switch Mode button or use Command+M to change to Normal Mode';
+  };
+
+  // Add this directly in the component for the input element
+  const handleInputKeyDown = (e: React.KeyboardEvent) => {
+    console.log('Textarea keydown event detected:', e.key, e.altKey, e.metaKey, e.ctrlKey);
+    
+    // Command+M on Mac
+    if (e.metaKey && e.key.toLowerCase() === 'm') {
+      e.preventDefault(); // Prevent browser default behavior
+      console.log('Input Command+M shortcut triggered - Before mode change:', aiMode);
+      setAIMode(aiMode === 'normal' ? 'task' : 'normal');
+      console.log('Input Command+M shortcut triggered - After mode change:', aiMode === 'normal' ? 'task' : 'normal');
+    }
+    
+    // Keep the existing Enter key handling
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
-    <Paper style={{ 
-      height: '100%', 
-      backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
-      display: 'flex',
-      flexDirection: 'column',
-      borderRadius: '12px',
-      boxShadow: isDark ? '0 8px 30px rgba(0, 0, 0, 0.2)' : '0 8px 30px rgba(0, 0, 0, 0.05)',
-      overflow: 'hidden',
-      position: 'relative',
-      backgroundImage: isDark ? 
-        'linear-gradient(to bottom, rgba(17, 75, 95, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' : 
-        'linear-gradient(to bottom, rgba(32, 201, 151, 0.03) 0%, rgba(255, 255, 255, 0) 100%)'
-    }}>
+    <Paper 
+      style={{ 
+        height: '100%', 
+        backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: '12px',
+        boxShadow: isDark ? '0 8px 30px rgba(0, 0, 0, 0.2)' : '0 8px 30px rgba(0, 0, 0, 0.05)',
+        overflow: 'hidden',
+        position: 'relative',
+        backgroundImage: isDark ? 
+          'linear-gradient(to bottom, rgba(17, 75, 95, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' : 
+          'linear-gradient(to bottom, rgba(32, 201, 151, 0.03) 0%, rgba(255, 255, 255, 0) 100%)'
+      }}
+      onKeyDown={(e) => {
+        console.log('Paper keydown event detected:', e.key, e.altKey, e.metaKey, e.ctrlKey);
+      }}
+      tabIndex={0} // Make the paper focusable
+    >
       {/* Mode Switch Header */}
       <Box 
         p="md" 
@@ -191,8 +303,22 @@ export default function AIChat({ model }: AIChatProps) {
                     variant="light"
                     size="xs"
                     radius="sm"
+                    style={{ cursor: 'help' }}
+                    title={getModeSwitchingText()}
                   >
                     Task Mode
+                  </Badge>
+                )}
+                {aiMode === 'normal' && (
+                  <Badge 
+                    color="blue" 
+                    variant="light"
+                    size="xs"
+                    radius="sm"
+                    style={{ cursor: 'help' }}
+                    title={getModeSwitchingText()}
+                  >
+                    Normal Mode
                   </Badge>
                 )}
               </Group>
@@ -200,40 +326,26 @@ export default function AIChat({ model }: AIChatProps) {
             </div>
           </Group>
           
-          <SegmentedControl
-            size="xs"
-            data={[
-              { label: 'Normal Mode', value: 'normal' },
-              { label: 'Task Mode', value: 'task' }
-            ]}
-            value={aiMode}
-            onChange={(value) => {
-              const newMode = value as AIModeType;
-              setAIMode(newMode);
-            }}
-            styles={{
-              root: {
-                background: isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(241, 243, 245, 0.8)',
-                border: `1px solid ${isDark ? '#3f4245' : '#dee2e6'}`,
-                backdropFilter: 'blur(8px)',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              },
-              indicator: {
-                backgroundColor: getModelColor(),
-                boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
-              },
-              label: {
-                color: isDark ? '#C1C2C5' : '#495057',
-                fontSize: '12px',
-                fontWeight: 500,
-                padding: '6px 12px',
-                '&[data-active]': {
-                  color: isDark ? 'white' : 'white'
-                }
-              }
-            }}
-          />
+          <Group gap="sm">
+            <Tooltip 
+              label="Switch modes with one click (or use Command+M keyboard shortcut)" 
+              position="bottom"
+            >
+              <Button 
+                variant="filled" 
+                color={aiMode === 'normal' ? 'teal' : 'blue'}
+                size="xs"
+                onClick={() => setAIMode(aiMode === 'normal' ? 'task' : 'normal')}
+                style={{ 
+                  height: '28px', 
+                  padding: '0 12px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Switch to {aiMode === 'normal' ? 'Task' : 'Normal'} Mode
+              </Button>
+            </Tooltip>
+          </Group>
         </Group>
       </Box>
       
@@ -585,17 +697,53 @@ export default function AIChat({ model }: AIChatProps) {
           zIndex: 10
         }}
       >
+        {showModeSwitchPrompt && suggestedMode && (
+          <Box 
+            mb="xs" 
+            p="xs" 
+            style={{ 
+              backgroundColor: isDark ? 'rgba(32, 201, 151, 0.15)' : 'rgba(32, 201, 151, 0.1)',
+              borderRadius: '8px',
+              border: '1px solid rgba(32, 201, 151, 0.3)',
+              animation: 'fadeIn 0.3s ease-out'
+            }}
+          >
+            <Group justify="space-between" align="center">
+              <Group>
+                <IconBulb size={16} color="#20C997" />
+                <Text size="xs">This looks like a {suggestedMode === 'task' ? 'task' : 'conversation'}. Switch to {suggestedMode} mode?</Text>
+              </Group>
+              <Group gap="xs">
+                <Button 
+                  variant="subtle" 
+                  color="gray" 
+                  size="xs" 
+                  onClick={dismissModeSwitchPrompt}
+                >
+                  Dismiss
+                </Button>
+                <Button 
+                  variant="light" 
+                  color="teal" 
+                  size="xs" 
+                  onClick={handleSwitchMode} 
+                  rightSection={<IconArrowRight size={12} />}
+                >
+                  Switch
+                </Button>
+              </Group>
+            </Group>
+          </Box>
+        )}
+        
         <Group align="flex-end" gap="sm">
           <Textarea
-            placeholder={aiMode === 'task' ? "Create a task or ask about your tasks..." : "Type your message..."}
+            placeholder={aiMode === 'task' 
+              ? "Create a task, ask about tasks, or type /normal to switch modes..." 
+              : "Type your message, or type /task to switch to Task Mode..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
+            onKeyDown={handleInputKeyDown}
             autosize
             minRows={1}
             maxRows={4}
@@ -668,16 +816,9 @@ export default function AIChat({ model }: AIChatProps) {
             justify-content: center;
             background: linear-gradient(135deg, ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.15) 0%, rgba(250, 82, 82, 0.05)' : 'rgba(32, 201, 151, 0.15) 0%, rgba(32, 201, 151, 0.05)'} 100%);
             border-radius: 20px;
-            width: 100px;
-            height: 100px;
+            padding: 16px;
             margin-bottom: 24px;
-            box-shadow: 0 8px 20px ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.15)' : 'rgba(32, 201, 151, 0.15)'};
-            transition: all 0.3s ease;
-          }
-          
-          .ai-welcome-icon:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 28px ${model === 'deepseek-r1' ? 'rgba(250, 82, 82, 0.2)' : 'rgba(32, 201, 151, 0.2)'};
+            animation: fadeIn 0.5s ease-out;
           }
         `}
       </style>
