@@ -509,22 +509,27 @@ Format your response as a JSON object:
     
     // Create all the subtasks
     const today = new Date();
+    const correctYear = 2025; // Hardcoded to 2025 per requirement
     const createdTasks: string[] = [];
     
     if (subtasksData.subtasks && Array.isArray(subtasksData.subtasks)) {
       for (const subtask of subtasksData.subtasks) {
         // Parse the relative due date
         let dueDate = new Date();
+        dueDate.setFullYear(correctYear);
         
         if (subtask.dueDate === "today") {
           dueDate = new Date();
+          dueDate.setFullYear(correctYear);
         } else if (subtask.dueDate === "tomorrow") {
           dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + 1);
+          dueDate.setFullYear(correctYear);
         } else if (subtask.dueDate.startsWith("+")) {
           const daysToAdd = parseInt(subtask.dueDate.match(/\+(\d+)/)?.[1] || "0");
           dueDate = new Date();
           dueDate.setDate(dueDate.getDate() + daysToAdd);
+          dueDate.setFullYear(correctYear);
         }
         
         // Create a unique ID for the task
@@ -571,6 +576,7 @@ Format your response as a JSON object:
 function parseDateReference(dateStr: string): Date | null {
   console.log("Parsing date reference:", dateStr);
   const today = new Date();
+  const correctYear = 2025; // Hardcoded to 2025 per requirement
   
   if (!dateStr) return null;
   
@@ -579,13 +585,16 @@ function parseDateReference(dateStr: string): Date | null {
   
   // Handle "today"
   if (normalizedDateStr.includes('today')) {
-    return new Date();
+    const date = new Date();
+    date.setFullYear(correctYear);
+    return date;
   }
   
   // Handle "tomorrow"
   if (normalizedDateStr.includes('tomorrow')) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setFullYear(correctYear);
     return tomorrow;
   }
   
@@ -604,6 +613,7 @@ function parseDateReference(dateStr: string): Date | null {
       
       const futureDate = new Date();
       futureDate.setDate(today.getDate() + daysToAdd);
+      futureDate.setFullYear(correctYear);
       return futureDate;
     }
   }
@@ -612,6 +622,7 @@ function parseDateReference(dateStr: string): Date | null {
   if (normalizedDateStr.includes('next week')) {
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
+    nextWeek.setFullYear(correctYear);
     return nextWeek;
   }
   
@@ -621,6 +632,7 @@ function parseDateReference(dateStr: string): Date | null {
     const daysToAdd = parseInt(daysMatch[1]);
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + daysToAdd);
+    futureDate.setFullYear(correctYear);
     return futureDate;
   }
   
@@ -637,15 +649,11 @@ function parseDateReference(dateStr: string): Date | null {
       if (dayMatch && dayMatch[1]) {
         const day = parseInt(dayMatch[1]);
         
-        // Set the date with the current year
+        // Set the date with the correct year
         const date = new Date();
         date.setMonth(month);
         date.setDate(day);
-        
-        // If date is in the past, use next year
-        if (date < today) {
-          date.setFullYear(date.getFullYear() + 1);
-        }
+        date.setFullYear(correctYear);
         
         return date;
       }
@@ -659,7 +667,11 @@ function parseDateReference(dateStr: string): Date | null {
     const month = parseInt(isoMatch[2]) - 1;
     const day = parseInt(isoMatch[3]);
     
+    // If the year is the current year, use the correct year instead
     const date = new Date(year, month, day);
+    if (year === today.getFullYear()) {
+      date.setFullYear(correctYear);
+    }
     return date;
   }
   
@@ -670,11 +682,15 @@ function parseDateReference(dateStr: string): Date | null {
     const day = parseInt(usMatch[2]);
     const year = parseInt(usMatch[3]);
     
+    // If the year is the current year, use the correct year instead
     const date = new Date(year, month, day);
+    if (year === today.getFullYear()) {
+      date.setFullYear(correctYear);
+    }
     return date;
   }
   
-  // Handle MM/DD format (assume current year)
+  // Handle MM/DD format (assume correct year)
   const shortMatch = normalizedDateStr.match(/(\d{1,2})\/(\d{1,2})/);
   if (shortMatch) {
     const month = parseInt(shortMatch[1]) - 1;
@@ -683,11 +699,7 @@ function parseDateReference(dateStr: string): Date | null {
     const date = new Date();
     date.setMonth(month);
     date.setDate(day);
-    
-    // If date is in the past, use next year
-    if (date < today) {
-      date.setFullYear(date.getFullYear() + 1);
-    }
+    date.setFullYear(correctYear);
     
     return date;
   }
@@ -703,54 +715,46 @@ function handleAITaskCreation(taskData: any, taskStore: TaskStoreType): string {
   let title = taskData.taskTitle;
   let description = taskData.description || "";
   let priority = (taskData.priority || "medium").toLowerCase() as "low" | "medium" | "high";
+  const correctYear = 2025; // Hardcoded to 2025 per requirement
   
   // Parse the date
   let dueDate = new Date();
+  dueDate.setFullYear(correctYear);
   
   if (taskData.date) {
     const dateStr = taskData.date.toLowerCase();
     
     if (dateStr === "today") {
       dueDate = new Date();
+      dueDate.setFullYear(correctYear);
     } else if (dateStr === "tomorrow") {
       dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 1);
+      dueDate.setFullYear(correctYear);
     } else if (dateStr === "next week") {
       dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
+      dueDate.setFullYear(correctYear);
     } else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       // ISO format date (YYYY-MM-DD)
       dueDate = new Date(dateStr);
       
-      // Ensure date is not in the past
-      const today = new Date();
-      if (dueDate < today) {
-        // If it's in the past, set it to next year
-        dueDate.setFullYear(today.getFullYear() + 1);
+      // Use correct year 
+      if (dueDate.getFullYear() !== correctYear) {
+        dueDate.setFullYear(correctYear);
       }
     } else {
       // Try to parse natural language date
       const parsedDate = parseDateReference(dateStr);
       if (parsedDate) {
         dueDate = parsedDate;
-        
-        // Ensure the date is not in the past
-        const today = new Date();
-        if (dueDate < today && Math.abs(today.getTime() - dueDate.getTime()) > 24 * 60 * 60 * 1000) {
-          // If more than a day in the past, set it to next year
-          dueDate.setFullYear(today.getFullYear() + 1);
-        }
       }
     }
   }
   
-  // Additional check for month-specific dates - ensure they're in the future
-  const today = new Date();
-  if (dueDate.getFullYear() === today.getFullYear() && 
-      ((dueDate.getMonth() < today.getMonth()) || 
-       (dueDate.getMonth() === today.getMonth() && dueDate.getDate() < today.getDate()))) {
-    // If it's in the past within the current year, set it to next year
-    dueDate.setFullYear(today.getFullYear() + 1);
+  // Additional check to ensure correct year
+  if (dueDate.getFullYear() !== correctYear) {
+    dueDate.setFullYear(correctYear);
   }
   
   // Create a unique ID for the task
@@ -776,8 +780,7 @@ function handleAITaskCreation(taskData: any, taskStore: TaskStoreType): string {
   const dueDateString = dueDate.toLocaleDateString("en-US", { 
     weekday: "long", 
     month: "short", 
-    day: "numeric",
-    year: "numeric" // Added year to display for clarity
+    day: "numeric"
   });
   
   return `✅ Added task: "${title}"${description ? ` (${description})` : ""} due ${dueDateString}.`;
@@ -975,6 +978,7 @@ function handleTaskListByPriority(priority: "high" | "medium" | "low", taskStore
  */
 function changeTaskDueDateByNumber(taskNumber: number, newDateStr: string, taskStore: TaskStoreType): string {
   const task = findTaskByNumber(taskNumber, taskStore);
+  const correctYear = 2025; // Hardcoded to 2025 per requirement
   
   if (!task) {
     return `Task #${taskNumber} not found. Please check the task number and try again.`;
@@ -985,13 +989,17 @@ function changeTaskDueDateByNumber(taskNumber: number, newDateStr: string, taskS
     return `I couldn't understand the date "${newDateStr}". Please try a different format.`;
   }
   
+  // Ensure correct year
+  if (newDate.getFullYear() !== correctYear) {
+    newDate.setFullYear(correctYear);
+  }
+  
   taskStore.updateTask(task.id, { dueDate: newDate });
   
   const dueDateString = newDate.toLocaleDateString("en-US", { 
     weekday: "long", 
     month: "short", 
-    day: "numeric",
-    year: "numeric"
+    day: "numeric"
   });
   
   return `✅ Updated due date for task "${task.title}" to ${dueDateString}.`;
@@ -1001,6 +1009,8 @@ function changeTaskDueDateByNumber(taskNumber: number, newDateStr: string, taskS
  * Handle task modification based on AI-parsed data
  */
 function handleAITaskModification(taskData: any, taskStore: TaskStoreType): string {
+  const correctYear = 2025; // Hardcoded to 2025 per requirement
+
   // Currently only supports changing due date
   if (taskData.taskNumber !== undefined && taskData.date) {
     return changeTaskDueDateByNumber(taskData.taskNumber, taskData.date, taskStore);
@@ -1019,13 +1029,17 @@ function handleAITaskModification(taskData: any, taskStore: TaskStoreType): stri
       return `I couldn't understand the date "${taskData.date}". Please try a different format.`;
     }
     
+    // Ensure correct year
+    if (newDate.getFullYear() !== correctYear) {
+      newDate.setFullYear(correctYear);
+    }
+    
     taskStore.updateTask(task.id, { dueDate: newDate });
     
     const dueDateString = newDate.toLocaleDateString("en-US", { 
       weekday: "long", 
       month: "short", 
-      day: "numeric",
-      year: "numeric"
+      day: "numeric"
     });
     
     return `✅ Updated due date for task "${task.title}" to ${dueDateString}.`;
@@ -1141,7 +1155,7 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     
     // Get comprehensive classification using AI understanding
     const classificationResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo", // Use GPT-3.5 Turbo for classification to ensure consistent results across all models
       messages: [
         { 
           role: 'system', 
@@ -1188,7 +1202,7 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
       } else if (currentModel === 'deepseek-r1') {
         return await callDeepSeekAPI(message);
       } else {
-        // For GPT-4o model, use general conversation
+        // For GPT-4o or GPT-o3 Mini models, use general conversation
         const history = await getConversationHistory(userId);
         
         // Create messages array with system prompt and history
@@ -1201,7 +1215,7 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         // Call OpenAI API
         console.log("Calling OpenAI API with messages:", messages);
         const response = await openai.chat.completions.create({
-          model: "gpt-4o",
+          model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-4o",
           messages,
           temperature: 0.7,
           max_tokens: 1000

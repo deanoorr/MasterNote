@@ -1,4 +1,4 @@
-export type AIModel = 'gpt4o' | 'perplexity-sonar' | 'deepseek-r1';
+export type AIModel = 'gpt4o' | 'perplexity-sonar' | 'deepseek-r1' | 'gpt-o3-mini';
 
 export interface Task {
   id: string;

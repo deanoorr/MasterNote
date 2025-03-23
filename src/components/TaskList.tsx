@@ -22,6 +22,7 @@ const getPriorityColor = (priority: Task['priority']) => {
 const getRelativeDate = (days: number): Date => {
   const date = new Date();
   date.setDate(date.getDate() + days);
+  date.setFullYear(2025); // Set to 2025
   return date;
 };
 
@@ -31,6 +32,7 @@ const getNextWeekday = (weekday: number): Date => {
   const currentDay = date.getDay();
   const daysToAdd = (weekday - currentDay + 7) % 7 || 7; // If today, go to next week
   date.setDate(date.getDate() + daysToAdd);
+  date.setFullYear(2025); // Set to 2025
   return date;
 };
 
@@ -217,12 +219,19 @@ export default function TaskList() {
       // Clean the task title - remove any leading numbers/formats like "1. " or "3."
       const cleanTitle = newTaskTitle.trim().replace(/^\d+\.\s*/, '');
       
+      // Set due date year to 2025 if it exists
+      let dueDate = taskDueDate;
+      if (dueDate) {
+        dueDate = new Date(dueDate);
+        dueDate.setFullYear(2025);
+      }
+      
       const task: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         title: cleanTitle, // Use the cleaned title
         priority: taskPriority,
         status: 'todo',
-        dueDate: taskDueDate,
+        dueDate: dueDate,
         createdAt: new Date(),
         updatedAt: new Date(),
         aiGenerated: false
@@ -250,10 +259,17 @@ export default function TaskList() {
 
   const saveEditedTask = () => {
     if (editTaskId && editTaskTitle.trim()) {
+      // Set due date year to 2025 if it exists
+      let dueDate = editTaskDueDate;
+      if (dueDate) {
+        dueDate = new Date(dueDate);
+        dueDate.setFullYear(2025);
+      }
+      
       updateTask(editTaskId, { 
         title: editTaskTitle,
         priority: editTaskPriority,
-        dueDate: editTaskDueDate,
+        dueDate: dueDate,
         updatedAt: new Date()
       });
       closeEditModal();
@@ -271,8 +287,16 @@ export default function TaskList() {
   const handleDueDateChange = (taskId: string, dueDate: Date | null, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent propagation to parent elements
     console.log("Changing due date of task", taskId, "to", dueDate);
+    
+    // Set due date year to 2025 if it exists
+    let newDueDate = dueDate;
+    if (newDueDate) {
+      newDueDate = new Date(newDueDate);
+      newDueDate.setFullYear(2025);
+    }
+    
     updateTask(taskId, {
-      dueDate: dueDate || undefined,
+      dueDate: newDueDate || undefined,
       updatedAt: new Date()
     });
   };
@@ -287,11 +311,25 @@ export default function TaskList() {
     const dueDay = new Date(dueDate);
     dueDay.setHours(0, 0, 0, 0);
     
-    const diffTime = dueDay.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Compare month and day only for dynamic checking
+    // This ignores the year difference for dynamic display
+    if (dueDay.getMonth() < today.getMonth() || 
+        (dueDay.getMonth() === today.getMonth() && dueDay.getDate() < today.getDate())) {
+      return 'overdue';
+    }
     
-    if (diffDays < 0) return 'overdue';
-    if (diffDays <= 2) return 'due-soon';
+    // For due soon, check if it's today or tomorrow
+    if (dueDay.getMonth() === today.getMonth() && dueDay.getDate() === today.getDate()) {
+      return 'due-soon'; // Due today
+    }
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    if (dueDay.getMonth() === tomorrow.getMonth() && dueDay.getDate() === tomorrow.getDate()) {
+      return 'due-soon'; // Due tomorrow
+    }
+    
     return 'ok';
   };
 
@@ -304,7 +342,7 @@ export default function TaskList() {
   };
 
   // Format due date as "Today" or "Tomorrow" for those dates,
-  // otherwise use the regular date format
+  // otherwise use the regular date format without year
   const formatDueDate = (dueDate: Date): string => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -315,15 +353,18 @@ export default function TaskList() {
     const dueDay = new Date(dueDate);
     dueDay.setHours(0, 0, 0, 0);
     
-    if (dueDay.getTime() === today.getTime()) {
+    // Only compare month and day to determine if it's Today or Tomorrow
+    // This makes dates dynamic regardless of the year stored internally
+    if (dueDay.getDate() === today.getDate() && 
+        dueDay.getMonth() === today.getMonth()) {
       return 'Today';
-    } else if (dueDay.getTime() === tomorrow.getTime()) {
+    } else if (dueDay.getDate() === tomorrow.getDate() && 
+               dueDay.getMonth() === tomorrow.getMonth()) {
       return 'Tomorrow';
     } else {
       return dueDate.toLocaleDateString('en-US', { 
         month: 'short', 
-        day: 'numeric',
-        year: dueDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+        day: 'numeric'
       });
     }
   };
@@ -602,7 +643,7 @@ export default function TaskList() {
                   {!dueDateMenuOpened ? (
                     <Group style={{ alignItems: 'center' }}>
                       <DatePickerInput
-                        valueFormat="MMM D, YYYY"
+                        valueFormat="MMM D"
                         placeholder="Due date (optional)"
                         value={taskDueDate}
                         onChange={handleTaskDueDateChange}
@@ -1102,7 +1143,7 @@ export default function TaskList() {
                             <Menu.Label>Change Due Date</Menu.Label>
                             <Box p="xs">
                               <DatePickerInput
-                                valueFormat="MMM D, YYYY"
+                                valueFormat="MMM D"
                                 placeholder="Select date"
                                 value={task.dueDate ? new Date(task.dueDate) : null}
                                 onChange={(date: Date | null) => 
@@ -1138,7 +1179,7 @@ export default function TaskList() {
                           <Menu.Label>Set Due Date</Menu.Label>
                           <Box p="xs">
                             <DatePickerInput
-                              valueFormat="MMM D, YYYY"
+                              valueFormat="MMM D"
                               placeholder="Select date"
                               value={null}
                               onChange={(date: Date | null) => 
@@ -1322,7 +1363,7 @@ export default function TaskList() {
             <Box>
               <Text size="sm" fw={500} mb="xs">Due Date</Text>
             <DatePickerInput
-                valueFormat="MMMM D, YYYY"
+                valueFormat="MMM D"
                 placeholder="Select due date"
               value={editTaskDueDate}
               onChange={handleEditTaskDueDateChange}

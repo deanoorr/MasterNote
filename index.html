@@ -22,14 +22,133 @@
         box-sizing: border-box;
       }
       
-      #loading-indicator {
+      #loading-container {
         position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 24px;
-        color: white;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: #1A1B1E;
+        background-image: radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), 
+                          radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%);
         z-index: 1000;
+        transition: opacity 0.5s ease;
+      }
+      
+      .loading-logo {
+        display: flex;
+        align-items: center;
+        margin-bottom: 30px;
+      }
+      
+      .logo-icon {
+        background-color: #20C997;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        box-shadow: 0 8px 24px rgba(32, 201, 151, 0.3);
+        margin-right: 16px;
+      }
+      
+      .logo-icon::before {
+        content: "";
+        position: absolute;
+        width: 24px;
+        height: 30px;
+        background-color: white;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke-width='2' stroke='white' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'%3E%3C/path%3E%3Cpath d='M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z'%3E%3C/path%3E%3Cpath d='M9 7l6 0'%3E%3C/path%3E%3Cpath d='M9 11l6 0'%3E%3C/path%3E%3Cpath d='M9 15l4 0'%3E%3C/path%3E%3C/svg%3E") no-repeat center;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke-width='2' stroke='white' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'%3E%3C/path%3E%3Cpath d='M5 3m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z'%3E%3C/path%3E%3Cpath d='M9 7l6 0'%3E%3C/path%3E%3Cpath d='M9 11l6 0'%3E%3C/path%3E%3Cpath d='M9 15l4 0'%3E%3C/path%3E%3C/svg%3E") no-repeat center;
+      }
+      
+      .logo-icon::after {
+        content: "";
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 14px;
+        height: 14px;
+        background-color: white;
+        border-radius: 50%;
+        border: 2px solid #20C997;
+        opacity: 0;
+        animation: check-mark 1.2s infinite;
+      }
+      
+      @keyframes check-mark {
+        0% {
+          opacity: 0;
+          transform: scale(0.5);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0.5);
+        }
+      }
+      
+      .loading-logo h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0;
+        background: linear-gradient(90deg, #20C997, #36d6ad);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        text-fill-color: transparent;
+      }
+      
+      .loading-spinner {
+        position: relative;
+        width: 150px;
+        height: 8px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      
+      .loading-spinner::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 30%;
+        background-color: #20C997;
+        border-radius: 4px;
+        animation: loading 1.5s infinite ease-in-out;
+      }
+      
+      @keyframes loading {
+        0% {
+          left: -30%;
+        }
+        100% {
+          left: 100%;
+        }
+      }
+      
+      .loading-text {
+        font-size: 16px;
+        color: #909296;
+        text-align: center;
+        animation: fadeInOut 2s infinite;
+      }
+      
+      @keyframes fadeInOut {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 1; }
       }
       
       #error-container {
@@ -49,7 +168,14 @@
     </style>
   </head>
   <body>
-    <div id="loading-indicator">Loading application...</div>
+    <div id="loading-container">
+      <div class="loading-logo">
+        <div class="logo-icon"></div>
+        <h1>MasterNote</h1>
+      </div>
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Preparing your tasks...</div>
+    </div>
     <div id="error-container"></div>
     <div id="root"></div>
     <script>
@@ -61,14 +187,38 @@
           ' at ' + event.filename + ':' + event.lineno + '</p>';
       });
       
+      // Array of loading messages to rotate through
+      const loadingMessages = [
+        "Preparing your tasks...",
+        "Loading AI capabilities...",
+        "Setting up your workspace...",
+        "Almost ready..."
+      ];
+      
+      let messageIndex = 0;
+      // Rotate through loading messages
+      const messageRotation = setInterval(function() {
+        const loadingText = document.querySelector('.loading-text');
+        if (loadingText) {
+          messageIndex = (messageIndex + 1) % loadingMessages.length;
+          loadingText.textContent = loadingMessages[messageIndex];
+        }
+      }, 2000);
+      
       // Remove loading indicator once DOM is loaded
       window.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
-          const loadingIndicator = document.getElementById('loading-indicator');
-          if (loadingIndicator && document.getElementById('root').childNodes.length > 0) {
-            loadingIndicator.style.display = 'none';
+          const loadingContainer = document.getElementById('loading-container');
+          if (loadingContainer && document.getElementById('root').childNodes.length > 0) {
+            loadingContainer.style.opacity = '0';
+            
+            // Add listener to remove from DOM after fade out
+            loadingContainer.addEventListener('transitionend', function() {
+              loadingContainer.style.display = 'none';
+              clearInterval(messageRotation);
+            });
           }
-        }, 1000);
+        }, 1500);
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>

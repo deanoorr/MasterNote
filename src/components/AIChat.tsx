@@ -127,6 +127,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'gpt4o': return 'GPT-4o';
       case 'perplexity-sonar': return 'Perplexity Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
+      case 'gpt-o3-mini': return 'GPT-o3 Mini';
       default: return 'AI Assistant';
     }
   };
@@ -136,6 +137,7 @@ export default function AIChat({ model }: AIChatProps) {
     switch(model) {
       case 'perplexity-sonar': return '#5282FF';
       case 'deepseek-r1': return '#FA5252';
+      case 'gpt-o3-mini': return '#FFA94D';
       default: return '#20C997';
     }
   };
@@ -146,6 +148,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'gpt4o': return 'All-purpose AI assistant';
       case 'perplexity-sonar': return 'Search-focused AI assistant';
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
+      case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
       default: return 'Intelligent Assistant';
     }
   };
@@ -172,14 +175,22 @@ export default function AIChat({ model }: AIChatProps) {
       >
         <Group justify="space-between">
           <Group>
-            <Avatar size="sm" radius="xl" color={model === 'perplexity-sonar' ? 'blue' : model === 'deepseek-r1' ? 'red' : 'teal'} style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
+            <Avatar size="sm" radius="xl" color={
+              model === 'perplexity-sonar' ? 'blue' : 
+              model === 'deepseek-r1' ? 'red' : 
+              model === 'gpt-o3-mini' ? 'orange' : 'teal'
+            } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
               {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
             </Avatar>
             <div>
               <Group gap={8}>
                 <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>{getModelDisplayName()}</Text>
                 <Badge 
-                  color={model === 'perplexity-sonar' ? 'blue' : model === 'deepseek-r1' ? 'red' : 'teal'}
+                  color={
+                    model === 'perplexity-sonar' ? 'blue' : 
+                    model === 'deepseek-r1' ? 'red' : 
+                    model === 'gpt-o3-mini' ? 'orange' : 'teal'
+                  }
                   variant="light"
                   size="xs"
                   radius="sm"

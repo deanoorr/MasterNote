@@ -130,8 +130,8 @@ export const useStore = create<Store>()(
         
         // Date comparison helper (checks if the date is on the same day)
         const isSameDay = (date1: Date, date2: Date) => {
-          return date1.getFullYear() === date2.getFullYear() &&
-                 date1.getMonth() === date2.getMonth() &&
+          // Only compare month and day for dynamic date handling
+          return date1.getMonth() === date2.getMonth() &&
                  date1.getDate() === date2.getDate();
         };
         
@@ -152,21 +152,35 @@ export const useStore = create<Store>()(
             return tasks.filter(task => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
-              return taskDate >= weekStart && taskDate <= weekEnd;
+              
+              // Compare only month and day for each day in the week
+              for (let i = 0; i <= 6; i++) {
+                const weekDay = new Date(today);
+                weekDay.setDate(today.getDate() + i);
+                if (isSameDay(taskDate, weekDay)) return true;
+              }
+              return false;
             });
             
           case 'overdue':
             return tasks.filter(task => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
-              return taskDate < today && task.status !== 'done';
+              // Overdue if month is earlier or same month but day is earlier
+              return (taskDate.getMonth() < today.getMonth() || 
+                     (taskDate.getMonth() === today.getMonth() && 
+                      taskDate.getDate() < today.getDate())) && 
+                      task.status !== 'done';
             });
             
           case 'upcoming':
             return tasks.filter(task => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
-              return taskDate >= today;
+              // Upcoming if month is later or same month but day is later or today
+              return taskDate.getMonth() > today.getMonth() || 
+                    (taskDate.getMonth() === today.getMonth() && 
+                     taskDate.getDate() >= today.getDate());
             });
             
           case 'no date':

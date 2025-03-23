@@ -132,7 +132,7 @@ const theme = createTheme({
 });
 
 function App() {
-  const [selectedModel, setSelectedModel] = useState<AIModel>('gpt4o');
+  const [selectedModel, setSelectedModel] = useState<AIModel>('gpt-o3-mini');
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
   const { messages, clearMessages } = useStore();
@@ -150,13 +150,14 @@ function App() {
     
     // Load the saved model preference from localStorage
     const savedModel = localStorage.getItem('selected_model');
-    // Only allow gpt4o, perplexity-sonar, or deepseek-r1
-    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'perplexity-sonar' || savedModel === 'deepseek-r1')) {
+    // Allow gpt4o, perplexity-sonar, deepseek-r1, or gpt-o3-mini
+    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'perplexity-sonar' || 
+        savedModel === 'deepseek-r1' || savedModel === 'gpt-o3-mini')) {
       setSelectedModel(savedModel as AIModel);
     } else {
-      // Default to gpt4o for any other model including o3-mini
-      setSelectedModel('gpt4o');
-      localStorage.setItem('selected_model', 'gpt4o');
+      // Default to gpt-o3-mini
+      setSelectedModel('gpt-o3-mini');
+      localStorage.setItem('selected_model', 'gpt-o3-mini');
     }
     
     // If no API key is set, open settings modal automatically
@@ -254,6 +255,7 @@ function App() {
                   <Select
                     placeholder="AI Model"
                     data={[
+                      { value: 'gpt-o3-mini', label: 'GPT-o3 Mini (Faster)' },
                       { value: 'gpt4o', label: 'GPT-4o (All-purpose)' },
                     ]}
                     value={selectedModel}
@@ -287,7 +289,7 @@ function App() {
                         // Toggle Perplexity Sonar model
                         if (selectedModel === 'perplexity-sonar') {
                           // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('search_previous_model') || 'gpt4o';
+                          const previousModel = localStorage.getItem('search_previous_model') || 'gpt-o3-mini';
                           setSelectedModel(previousModel as AIModel);
                           localStorage.setItem('selected_model', previousModel);
                           console.log(`Switched back to ${previousModel} model`);
@@ -315,7 +317,7 @@ function App() {
                         // Toggle DeepSeek R1 model
                         if (selectedModel === 'deepseek-r1') {
                           // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt4o';
+                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt-o3-mini';
                           setSelectedModel(previousModel as AIModel);
                           localStorage.setItem('selected_model', previousModel);
                           console.log(`Switched back to ${previousModel} model`);
