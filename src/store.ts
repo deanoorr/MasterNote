@@ -3,13 +3,11 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Message, Task } from './types';
 
 export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical';
-export type AIModeType = 'normal' | 'task';
 
 interface Store {
   messages: Message[];
   tasks: Task[];
   sortOrder: SortOption;
-  aiMode: AIModeType;
   addMessage: (message: Message) => void;
   addTask: (task: Task) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
@@ -19,7 +17,6 @@ interface Store {
   setSortOrder: (order: SortOption) => void;
   getSortedTasks: () => Task[];
   getTasksByDate: (dateFilter: string) => Task[];
-  setAIMode: (mode: AIModeType) => void;
 }
 
 export const useStore = create<Store>()(
@@ -28,7 +25,6 @@ export const useStore = create<Store>()(
       messages: [],
       tasks: [],
       sortOrder: 'due-date' as SortOption,
-      aiMode: 'task' as AIModeType,
       addMessage: (message) =>
         set((state) => ({
           messages: [...state.messages, message],
@@ -117,10 +113,6 @@ export const useStore = create<Store>()(
             return tasksCopy;
         }
       },
-      setAIMode: (mode: AIModeType) => 
-        set(() => ({
-          aiMode: mode
-        })),
       getTasksByDate: (dateFilter: string) => {
         const { tasks } = get();
         const today = new Date();

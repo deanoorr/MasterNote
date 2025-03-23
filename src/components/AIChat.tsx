@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover } from '@mantine/core';
 import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch, IconArrowRight } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
-import { useStore, AIModeType } from '../store';
-import { getAIResponse, detectTaskIntent, shouldSuggestModeSwitch } from '../services/ai';
+import { useStore } from '../store';
+import { getAIResponse } from '../services/ai';
 
 interface AIChatProps {
   model: AIModel;
@@ -15,45 +15,12 @@ export default function AIChat({ model }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingReasoning, setLoadingReasoning] = useState<string[]>([]);
-  const [showModeSwitchPrompt, setShowModeSwitchPrompt] = useState(false);
-  const [suggestedMode, setSuggestedMode] = useState<AIModeType | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { messages, addMessage, addTask, aiMode, setAIMode } = useStore();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { messages, addMessage, addTask } = useStore();
 
-  // Replace the entire keyboard shortcut handling with this one simpler version
-  useEffect(() => {
-    function handleKeyPress(event: KeyboardEvent) {
-      // Use keyCode for better cross-browser compatibility
-      const key = event.key.toLowerCase();
-      
-      // Check for Command+M (metaKey on Mac)
-      if (event.metaKey && key === 'm') {
-        event.preventDefault();
-        console.log('Keyboard shortcut detected:', key, 
-          'meta:', event.metaKey, 
-          'alt:', event.altKey, 
-          'ctrl:', event.ctrlKey, 
-          'shift:', event.shiftKey
-        );
-        
-        // Toggle mode without using the current state directly
-        const newMode = aiMode === 'normal' ? 'task' : 'normal';
-        console.log('Switching mode from', aiMode, 'to', newMode);
-        setAIMode(newMode);
-      }
-    }
-    
-    // Add event listener directly to document body
-    document.body.addEventListener('keydown', handleKeyPress);
-    console.log('Added keyboard shortcut listener to document body');
-    
-    // Cleanup 
-    return () => {
-      document.body.removeEventListener('keydown', handleKeyPress);
-      console.log('Removed keyboard shortcut listener from document body');
-    };
-  }, [aiMode, setAIMode]);
-
+  // Remove keyboard shortcut for mode switching since we no longer have modes
+  
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -78,67 +45,54 @@ export default function AIChat({ model }: AIChatProps) {
     };
   }, [isLoading, model, messages]);
 
-  // Check message intent as user types and suggest mode switch if needed
-  useEffect(() => {
-    if (input.trim() && !input.startsWith('/')) {
-      const { shouldSwitch, suggestedMode } = shouldSuggestModeSwitch(input, aiMode);
-      if (shouldSwitch && suggestedMode !== aiMode) {
-        setSuggestedMode(suggestedMode);
-        setShowModeSwitchPrompt(true);
-      } else {
-        setShowModeSwitchPrompt(false);
-      }
-    } else {
-      setShowModeSwitchPrompt(false);
-    }
-  }, [input, aiMode]);
-
   // Helper function to scroll to the bottom of the chat
   const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    }
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({ top: 999999, behavior: 'smooth' });
+      }
+    }, 100);
   };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loadingReasoning]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isLoading || !input.trim()) return;
 
-    // Check for mode switching commands
-    if (input.trim().startsWith('/')) {
-      const command = input.trim().toLowerCase();
-      
-      if (command === '/task' || command === '/tasks') {
-        setAIMode('task');
-        setInput('');
-        return;
-      } else if (command === '/normal' || command === '/chat') {
-        setAIMode('normal');
-        setInput('');
-        return;
-      }
-      // Continue with regular submission if not a recognized command
-    }
-
     console.log("Submitting input:", input);
     setIsLoading(true);
     setLoadingReasoning([]);
 
+    // Store the input before clearing
+    const currentInput = input;
+
     // Add user message to store
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: input,
+      content: currentInput,
       role: 'user' as const,
       timestamp: new Date(),
     };
     addMessage(userMessage);
+    
+    // Clear input immediately
     setInput('');
+    
+    // Focus the input field
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 0);
 
     try {
       const userID = "user123"; // Replace with actual user ID if available
-      console.log(`Processing message in ${aiMode} mode with input: ${input}`);
-      // Get response as string from the updated function
-      const response = await getAIResponse(input, aiMode as 'normal' | 'task', userID);
+      console.log(`Processing message with input: ${currentInput}`);
+      // Get response from the updated function (now without mode parameter)
+      const response = await getAIResponse(currentInput, userID);
       console.log("AI response received:", response);
 
       // Add AI response to store
@@ -149,39 +103,6 @@ export default function AIChat({ model }: AIChatProps) {
         timestamp: new Date(),
       };
       addMessage(assistantMessage);
-
-      // Look for task creation patterns in the response
-      // Adding direct task handling here instead of relying solely on the AI service
-      if (aiMode === 'task') {
-        const taskRegex = /TASK:\s*([^|]+)(?:\|(.+))?/g;
-        let match;
-        
-        // Find and process all task matches in the AI response
-        while ((match = taskRegex.exec(response)) !== null) {
-          let fullTitle = match[1]?.trim() || '';
-          const description = match[2]?.trim() || '';
-          
-          // Clean the task title - remove any leading numbers/formats like "1. " or "3."
-          fullTitle = fullTitle.replace(/^\d+\.\s*/, '');
-          
-          if (fullTitle) {
-            const task: Task = {
-              id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              title: fullTitle,
-              description,
-              priority: 'medium',
-              status: 'todo',
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              aiGenerated: true,
-              dueDate: undefined
-            };
-            
-            console.log('Adding task from AIChat component:', task);
-            addTask(task);
-          }
-        }
-      }
     } catch (error) {
       console.error("Error processing message:", error);
       const errorMessage: Message = {
@@ -199,26 +120,12 @@ export default function AIChat({ model }: AIChatProps) {
     }
   };
 
-  // Handle mode switch from prompt
-  const handleSwitchMode = () => {
-    if (suggestedMode) {
-      setAIMode(suggestedMode);
-      setShowModeSwitchPrompt(false);
-    }
-  };
-
-  // Function to dismiss the mode switch prompt
-  const dismissModeSwitchPrompt = () => {
-    setShowModeSwitchPrompt(false);
-  };
-
   // Get model name for display
   const getModelDisplayName = () => {
     switch(model) {
       case 'gpt4o': return 'GPT-4o';
-      case 'o3-mini': return 'GPT-3.5 Turbo';
-      case 'perplexity-sonar': return 'Search Mode';
-      case 'deepseek-r1': return 'Reasoning Mode';
+      case 'perplexity-sonar': return 'Perplexity Sonar';
+      case 'deepseek-r1': return 'DeepSeek R1';
       default: return 'AI Assistant';
     }
   };
@@ -232,26 +139,17 @@ export default function AIChat({ model }: AIChatProps) {
     }
   };
 
-  // Get mode switching text based on current mode
-  const getModeSwitchingText = () => {
-    return aiMode === 'normal' 
-      ? 'Click the Switch Mode button or use Command+M to change to Task Mode'
-      : 'Click the Switch Mode button or use Command+M to change to Normal Mode';
+  // Get model description for UI
+  const getModelDescription = () => {
+    switch(model) {
+      case 'gpt4o': return 'All-purpose AI assistant';
+      case 'perplexity-sonar': return 'Search-focused AI assistant';
+      case 'deepseek-r1': return 'Reasoning-focused AI assistant';
+      default: return 'Intelligent Assistant';
+    }
   };
 
-  // Add this directly in the component for the input element
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
-    console.log('Textarea keydown event detected:', e.key, e.altKey, e.metaKey, e.ctrlKey);
-    
-    // Command+M on Mac
-    if (e.metaKey && e.key.toLowerCase() === 'm') {
-      e.preventDefault(); // Prevent browser default behavior
-      console.log('Input Command+M shortcut triggered - Before mode change:', aiMode);
-      setAIMode(aiMode === 'normal' ? 'task' : 'normal');
-      console.log('Input Command+M shortcut triggered - After mode change:', aiMode === 'normal' ? 'task' : 'normal');
-    }
-    
-    // Keep the existing Enter key handling
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -259,26 +157,7 @@ export default function AIChat({ model }: AIChatProps) {
   };
 
   return (
-    <Paper 
-      style={{ 
-        height: '100%', 
-        backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: '12px',
-        boxShadow: isDark ? '0 8px 30px rgba(0, 0, 0, 0.2)' : '0 8px 30px rgba(0, 0, 0, 0.05)',
-        overflow: 'hidden',
-        position: 'relative',
-        backgroundImage: isDark ? 
-          'linear-gradient(to bottom, rgba(17, 75, 95, 0.05) 0%, rgba(0, 0, 0, 0) 100%)' : 
-          'linear-gradient(to bottom, rgba(32, 201, 151, 0.03) 0%, rgba(255, 255, 255, 0) 100%)'
-      }}
-      onKeyDown={(e) => {
-        console.log('Paper keydown event detected:', e.key, e.altKey, e.metaKey, e.ctrlKey);
-      }}
-      tabIndex={0} // Make the paper focusable
-    >
-      {/* Mode Switch Header */}
+    <Box style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Box 
         p="md" 
         style={{ 
@@ -286,7 +165,8 @@ export default function AIChat({ model }: AIChatProps) {
           backgroundColor: isDark ? 'rgba(37, 38, 43, 0.8)' : 'rgba(248, 249, 250, 0.9)',
           backdropFilter: 'blur(8px)',
           position: 'relative',
-          zIndex: 10
+          zIndex: 10,
+          flexShrink: 0 // Prevent header from shrinking
         }}
       >
         <Group justify="space-between">
@@ -297,66 +177,43 @@ export default function AIChat({ model }: AIChatProps) {
             <div>
               <Group gap={8}>
                 <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>{getModelDisplayName()}</Text>
-                {aiMode === 'task' && (
-                  <Badge 
-                    color="teal" 
-                    variant="light"
-                    size="xs"
-                    radius="sm"
-                    style={{ cursor: 'help' }}
-                    title={getModeSwitchingText()}
-                  >
-                    Task Mode
-                  </Badge>
-                )}
-                {aiMode === 'normal' && (
-                  <Badge 
-                    color="blue" 
-                    variant="light"
-                    size="xs"
-                    radius="sm"
-                    style={{ cursor: 'help' }}
-                    title={getModeSwitchingText()}
-                  >
-                    Normal Mode
-                  </Badge>
-                )}
+                <Badge 
+                  color={model === 'perplexity-sonar' ? 'blue' : model === 'deepseek-r1' ? 'red' : 'teal'}
+                  variant="light"
+                  size="xs"
+                  radius="sm"
+                >
+                  {getModelDescription()}
+                </Badge>
               </Group>
               <Text size="xs" c="dimmed">Powered by {model === 'perplexity-sonar' ? 'Perplexity' : model === 'deepseek-r1' ? 'DeepSeek' : model.includes('claude') ? 'Anthropic' : 'OpenAI'}</Text>
             </div>
-          </Group>
-          
-          <Group gap="sm">
-            <Tooltip 
-              label="Switch modes with one click (or use Command+M keyboard shortcut)" 
-              position="bottom"
-            >
-              <Button 
-                variant="filled" 
-                color={aiMode === 'normal' ? 'teal' : 'blue'}
-                size="xs"
-                onClick={() => setAIMode(aiMode === 'normal' ? 'task' : 'normal')}
-                style={{ 
-                  height: '28px', 
-                  padding: '0 12px',
-                  fontWeight: 'bold',
-                }}
-              >
-                Switch to {aiMode === 'normal' ? 'Task' : 'Normal'} Mode
-              </Button>
-            </Tooltip>
           </Group>
         </Group>
       </Box>
       
       <ScrollArea
-        style={{ flex: 1, padding: '4px 0' }}
+        style={{ 
+          flex: 1, 
+          padding: '4px 0', 
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          minHeight: 0
+        }}
         scrollbarSize={6}
         scrollHideDelay={500}
-        type="hover"
+        type="always"
         viewportRef={scrollRef}
+        offsetScrollbars
       >
-        <Box p="md">
+        <Box p="md" style={{ 
+          minHeight: messages.length === 0 ? 'auto' : 'unset',
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1
+        }}>
           {messages.length === 0 ? (
             <Box 
               style={{ 
@@ -364,197 +221,131 @@ export default function AIChat({ model }: AIChatProps) {
                 flexDirection: 'column', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                height: '70vh',
-                padding: '0 20px'
+                padding: '10px 20px',
+                maxHeight: 'calc(100vh - 240px)' // More compact height
               }}
             >
               <Box 
                 style={{
-                  width: '560px',
-                  maxWidth: '100%',
+                  width: '100%',
+                  maxWidth: '560px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center'
                 }}
               >
-                <Text size="xl" fw={700} ta="center" mb="md" c={isDark ? "gray.3" : "gray.8"}>
+                <Text size="xl" fw={700} ta="center" mb="xs" c={isDark ? "gray.3" : "gray.8"}>
                   MasterNote AI
                 </Text>
                 
-                <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mb="xl" maw={450} style={{ lineHeight: 1.6 }}>
-                  {aiMode === 'task' 
-                    ? "I can help you create and manage tasks from natural language. Just describe what you need to do, and I'll handle the rest."
-                    : "Type a message to start a conversation. I can answer questions, provide information, and help with a variety of tasks."}
+                <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mb="sm" maw={450} style={{ lineHeight: 1.5 }}>
+                  Type a message to start a conversation.
                 </Text>
                 
-                <Box mb="xl" w="100%">
-                  <Group justify="space-between" mb="lg">
+                <Box mb="sm" w="100%">
+                  <Group justify="space-between" mb="xs">
                     <Text size="sm" fw={600} c={isDark ? "gray.4" : "gray.7"}>Examples</Text>
                   </Group>
                   
-                  <Stack gap="sm">
-                    {aiMode === 'task' ? (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("Create a task for buying groceries tomorrow")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          Create a task for buying groceries tomorrow
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("I need to finish my project report by Friday")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          I need to finish my project report by Friday
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("What tasks do I have today?")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          What tasks do I have today?
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("What's the best way to learn programming?")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          What's the best way to learn programming?
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("Explain quantum computing in simple terms")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          Explain quantum computing in simple terms
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          color="gray" 
-                          onClick={() => setInput("Give me a healthy meal plan for the week")}
-                          fullWidth
-                          h={54}
-                          styles={{
-                            root: {
-                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                              color: isDark ? 'white' : 'black',
-                              '&:hover': {
-                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                              }
-                            },
-                            inner: {
-                              justifyContent: 'flex-start'
-                            }
-                          }}
-                        >
-                          Give me a healthy meal plan for the week
-                        </Button>
-                      </>
-                    )}
+                  <Stack gap="xs">
+                    <Button 
+                      variant="outline" 
+                      color="gray" 
+                      onClick={() => setInput("What's the best way to learn programming?")}
+                      fullWidth
+                      h={36}
+                      styles={{
+                        root: {
+                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                          color: isDark ? 'white' : 'black',
+                          '&:hover': {
+                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                          },
+                          marginBottom: '4px'
+                        },
+                        inner: {
+                          justifyContent: 'flex-start',
+                          fontSize: '13px'
+                        }
+                      }}
+                    >
+                      What's the best way to learn programming?
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      color="gray" 
+                      onClick={() => setInput("Create a task for buying groceries tomorrow")}
+                      fullWidth
+                      h={36}
+                      styles={{
+                        root: {
+                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                          color: isDark ? 'white' : 'black',
+                          '&:hover': {
+                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                          },
+                          marginBottom: '4px'
+                        },
+                        inner: {
+                          justifyContent: 'flex-start',
+                          fontSize: '13px'
+                        }
+                      }}
+                    >
+                      Create a task for buying groceries tomorrow
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      color="gray" 
+                      onClick={() => setInput("What tasks do I have this week?")}
+                      fullWidth
+                      h={36}
+                      styles={{
+                        root: {
+                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                          color: isDark ? 'white' : 'black',
+                          '&:hover': {
+                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                          }
+                        },
+                        inner: {
+                          justifyContent: 'flex-start',
+                          fontSize: '13px'
+                        }
+                      }}
+                    >
+                      What tasks do I have this week?
+                    </Button>
                   </Stack>
                 </Box>
                 
-                <Group justify="space-between" style={{ width: '100%' }}>
+                <Group justify="space-between" style={{ width: '100%' }} mb="xs">
                   <Text size="sm" fw={600} c={isDark ? "gray.4" : "gray.7"}>Capabilities</Text>
                 </Group>
                 <Box 
-                  mt="md" 
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
                     gap: '10px',
                     width: '100%'
                   }}
                 >
                   <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                    <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
-                    <Text size="sm" c="dimmed">Remembers what's said earlier in conversations</Text>
+                    <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
+                    <Text size="xs" c="dimmed">Remembers previous context</Text>
                   </Box>
                   <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                    <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
-                    <Text size="sm" c="dimmed">Allows follow-up corrections and conversations</Text>
+                    <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
+                    <Text size="xs" c="dimmed">Creates and manages tasks</Text>
                   </Box>
-                  {aiMode === 'task' && (
-                    <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                      <IconBulb size={16} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 4 }} />
-                      <Text size="sm" c="dimmed">Creates and manages tasks from natural language</Text>
-                    </Box>
-                  )}
+                  <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
+                    <Text size="xs" c="dimmed">Answers general questions</Text>
+                  </Box>
+                  <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
+                    <Text size="xs" c="dimmed">{model === 'perplexity-sonar' ? 'Enhanced search' : model === 'deepseek-r1' ? 'Detailed reasoning' : 'Balanced capabilities'}</Text>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -598,7 +389,7 @@ export default function AIChat({ model }: AIChatProps) {
                       ? (model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5') 
                       : (isDark ? 'blue.4' : 'blue.6')}>
                       {msg.role === 'assistant' 
-                        ? (model === 'perplexity-sonar' ? 'Search' : getModelDisplayName()) 
+                        ? getModelDisplayName()
                         : 'You'}
                     </Text>
                   </Group>
@@ -658,7 +449,7 @@ export default function AIChat({ model }: AIChatProps) {
                       {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
                     </Avatar>
                     <Text fw={600} size="sm" c={model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5'}>
-                      {model === 'perplexity-sonar' ? 'Search' : model === 'deepseek-r1' ? 'Reasoning' : getModelDisplayName()}
+                      {getModelDisplayName()}
                     </Text>
                   </Group>
                   
@@ -674,7 +465,7 @@ export default function AIChat({ model }: AIChatProps) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Loader color={model === 'perplexity-sonar' ? "blue" : model === 'deepseek-r1' ? 'red' : 'teal'} size="sm" />
                       <Text size="xs" c="dimmed" style={{ animation: 'pulse 2s infinite' }}>
-                        {model === 'perplexity-sonar' ? 'Searching...' : model === 'deepseek-r1' ? 'Reasoning...' : 'Thinking...'}
+                        {model === 'perplexity-sonar' ? 'Searching...' : model === 'deepseek-r1' ? 'Analyzing...' : 'Thinking...'}
                       </Text>
                     </div>
                   </Box>
@@ -694,55 +485,17 @@ export default function AIChat({ model }: AIChatProps) {
           backgroundColor: isDark ? 'rgba(33, 35, 38, 0.9)' : 'rgba(248, 249, 250, 0.9)',
           backdropFilter: 'blur(8px)',
           position: 'relative',
-          zIndex: 10
+          zIndex: 10,
+          flexShrink: 0 // Prevent input from shrinking
         }}
       >
-        {showModeSwitchPrompt && suggestedMode && (
-          <Box 
-            mb="xs" 
-            p="xs" 
-            style={{ 
-              backgroundColor: isDark ? 'rgba(32, 201, 151, 0.15)' : 'rgba(32, 201, 151, 0.1)',
-              borderRadius: '8px',
-              border: '1px solid rgba(32, 201, 151, 0.3)',
-              animation: 'fadeIn 0.3s ease-out'
-            }}
-          >
-            <Group justify="space-between" align="center">
-              <Group>
-                <IconBulb size={16} color="#20C997" />
-                <Text size="xs">This looks like a {suggestedMode === 'task' ? 'task' : 'conversation'}. Switch to {suggestedMode} mode?</Text>
-              </Group>
-              <Group gap="xs">
-                <Button 
-                  variant="subtle" 
-                  color="gray" 
-                  size="xs" 
-                  onClick={dismissModeSwitchPrompt}
-                >
-                  Dismiss
-                </Button>
-                <Button 
-                  variant="light" 
-                  color="teal" 
-                  size="xs" 
-                  onClick={handleSwitchMode} 
-                  rightSection={<IconArrowRight size={12} />}
-                >
-                  Switch
-                </Button>
-              </Group>
-            </Group>
-          </Box>
-        )}
-        
         <Group align="flex-end" gap="sm">
           <Textarea
-            placeholder={aiMode === 'task' 
-              ? "Create a task, ask about tasks, or type /normal to switch modes..." 
-              : "Type your message, or type /task to switch to Task Mode..."}
+            key={`textarea-input-${isLoading ? 'loading' : 'ready'}`}
+            ref={inputRef}
+            placeholder="Ask me anything or tell me about your tasks..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => setInput(e.currentTarget.value)}
             onKeyDown={handleInputKeyDown}
             autosize
             minRows={1}
@@ -822,6 +575,6 @@ export default function AIChat({ model }: AIChatProps) {
           }
         `}
       </style>
-    </Paper>
+    </Box>
   );
 }

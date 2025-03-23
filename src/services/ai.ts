@@ -1,23 +1,23 @@
 import OpenAI from 'openai';
 import axios from 'axios';
-import { AIModel, Task } from '../types';
-import { SortOption, AIModeType } from '../store';
+import { AIModel, Task, Message } from '../types';
+import { SortOption } from '../store';
 import { format } from 'date-fns';
 import { useStore } from '../store';
 
 // Define conversation history types
-interface Message {
+interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
 // Function to get conversation history from local storage
-async function getConversationHistory(userId: string): Promise<Message[]> {
+async function getConversationHistory(userId: string): Promise<ConversationMessage[]> {
   try {
     const historyString = localStorage.getItem(`conversation_history_${userId}`);
     if (!historyString) return [];
     
-    const history = JSON.parse(historyString) as Message[];
+    const history = JSON.parse(historyString) as ConversationMessage[];
     // Return last 10 messages to keep context window manageable
     return history.slice(-10);
   } catch (error) {
@@ -133,19 +133,31 @@ const callPerplexityAPI = async (message: string) => {
   const apiKey = getPerplexityApiKey();
   
   if (!apiKey) {
-    throw new Error('Perplexity API key not found. Please set it in the settings.');
+    return "Search Mode requires a Perplexity API key. Please go to Settings and add your Perplexity API key to use this feature.";
   }
   
   try {
+    // Get conversation history for context
+    const userId = "user123"; // Use a consistent user ID or pass this from the caller
+    const conversationHistory = await getConversationHistory(userId);
+    
+    // Create a more comprehensive system prompt
+    const systemPrompt = 'You are a helpful assistant with search capabilities. You can provide information from the internet and have the most up-to-date knowledge. When answering questions, try to be informative and cite sources when possible. You can also help with task management, but specialized task operations are handled separately by the system.';
+    
+    // Create messages array with system prompt, history, and user message
+    const perplexityMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+    
     const response = await axios.post(
       'https://api.perplexity.ai/chat/completions',
       {
         model: 'sonar-small-online',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 1000
+        messages: perplexityMessages,
+        max_tokens: 1000,
+        temperature: 0.7
       },
       {
         headers: {
@@ -156,17 +168,23 @@ const callPerplexityAPI = async (message: string) => {
     );
     
     if (response.data && response.data.choices && response.data.choices.length > 0) {
-      return response.data.choices[0].message.content;
+      const responseContent = response.data.choices[0].message.content;
+      
+      // Save the conversation for context in future interactions
+      await saveMessageToHistory(userId, 'user', message);
+      await saveMessageToHistory(userId, 'assistant', responseContent);
+      
+      return responseContent;
     } else {
-      throw new Error('No response content received from Perplexity API');
+      return 'No response content received from Perplexity API. Please try again.';
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error("Perplexity API error:", error.response?.data || error.message);
-      throw new Error(`Perplexity API error: ${error.response?.data?.error?.message || error.message}`);
+      return `Search error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
     } else {
       console.error("Unexpected error:", error);
-      throw error;
+      return "An unexpected error occurred with the Search service. Please try again later.";
     }
   }
 };
@@ -176,19 +194,31 @@ const callDeepSeekAPI = async (message: string) => {
   const apiKey = getDeepSeekApiKey();
   
   if (!apiKey) {
-    throw new Error('DeepSeek API key not found. Please set it in the settings.');
+    return "Reasoning Mode requires a DeepSeek API key. Please go to Settings and add your DeepSeek API key to use this feature.";
   }
   
   try {
+    // Get conversation history for context
+    const userId = "user123"; // Use a consistent user ID or pass this from the caller
+    const conversationHistory = await getConversationHistory(userId);
+    
+    // Create a more comprehensive system prompt
+    const systemPrompt = 'You are a helpful assistant with strong reasoning capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning.';
+    
+    // Create messages array with system prompt, history, and user message
+    const deepseekMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+    
     const response = await axios.post(
       'https://api.deepseek.com/v1/chat/completions',
       {
         model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant.' },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 1000
+        messages: deepseekMessages,
+        max_tokens: 1000,
+        temperature: 0.7
       },
       {
         headers: {
@@ -199,17 +229,23 @@ const callDeepSeekAPI = async (message: string) => {
     );
     
     if (response.data && response.data.choices && response.data.choices.length > 0) {
-      return response.data.choices[0].message.content;
+      const responseContent = response.data.choices[0].message.content;
+      
+      // Save the conversation for context in future interactions
+      await saveMessageToHistory(userId, 'user', message);
+      await saveMessageToHistory(userId, 'assistant', responseContent);
+      
+      return responseContent;
     } else {
-      throw new Error('No response content received from DeepSeek API');
+      return 'No response content received from DeepSeek API. Please try again.';
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error("DeepSeek API error:", error.response?.data || error.message);
-      throw new Error(`DeepSeek API error: ${error.response?.data?.error?.message || error.message}`);
+      return `Reasoning error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
     } else {
       console.error("Unexpected error:", error);
-      throw error;
+      return "An unexpected error occurred with the Reasoning service. Please try again later.";
     }
   }
 };
@@ -1083,6 +1119,112 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
 }
 
 /**
+ * Main function to handle AI responses for the chat interface
+ * This function intelligently determines if the query is task-related or a general question
+ * and responds accordingly without requiring explicit mode switching
+ */
+export async function getAIResponse(message: string, userId: string): Promise<string> {
+  console.log(`Processing AI response with message: ${message}`);
+  try {
+    const taskStore = useStore.getState();
+    console.log("taskStore available:", !!taskStore);
+    
+    // Get current model from localStorage
+    const currentModel = localStorage.getItem('selected_model') as AIModel || 'gpt4o';
+    
+    // Get the normalized message for logging
+    const normalizedMessage = message.toLowerCase().trim();
+    console.log("Processing normalized message:", normalizedMessage);
+    
+    // Use AI-based classification to determine if this is a task-related query
+    const openai = getOpenAIClient();
+    
+    // Get comprehensive classification using AI understanding
+    const classificationResponse = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: 'system', 
+          content: `You are a classifier that determines if a message is related to task management or a general knowledge question.
+
+Task management queries are about:
+- Creating, updating, managing, or deleting user's personal tasks or to-dos
+- Checking, listing, viewing, or organizing a user's personal tasks
+- Setting deadlines, priorities, or modifying task attributes
+- Completing user's tasks or marking them as done
+- Any query that asks you to interact with the user's task management system
+
+General knowledge queries include:
+- Factual questions about the world, history, science, geography
+- Questions about concepts, ideas, places, or things
+- Requests for help that don't involve managing the user's tasks
+- Queries seeking information or explanations on any topic
+- Any question about facts, events, people, or knowledge not related to the user's personal tasks
+
+Based on true AI understanding of language, determine the user's intent.
+Respond with ONLY ONE WORD: "TASK" or "GENERAL"` 
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.1,
+      max_tokens: 10
+    });
+    
+    const classification = classificationResponse.choices[0].message.content?.trim().toUpperCase();
+    console.log("AI classification result:", classification);
+    
+    // Process based on classification
+    if (classification === 'TASK') {
+      // If classified as task-related, use task processing
+      console.log("AI classified as task-related, using task processing");
+      return await processAITaskQuery(message, taskStore);
+    } else {
+      // If general knowledge question, use model-specific response
+      console.log("AI classified as general knowledge, using general response");
+      
+      // Handle based on selected model
+      if (currentModel === 'perplexity-sonar') {
+        return await callPerplexityAPI(message);
+      } else if (currentModel === 'deepseek-r1') {
+        return await callDeepSeekAPI(message);
+      } else {
+        // For GPT-4o model, use general conversation
+        const history = await getConversationHistory(userId);
+        
+        // Create messages array with system prompt and history
+        const messages = [
+          { role: 'system' as const, content: "You are a helpful and friendly assistant. Be concise and to the point." },
+          ...history,
+          { role: 'user' as const, content: message }
+        ];
+        
+        // Call OpenAI API
+        console.log("Calling OpenAI API with messages:", messages);
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages,
+          temperature: 0.7,
+          max_tokens: 1000
+        });
+        
+        // Get response content
+        const responseContent = response.choices[0].message.content || "I'm not sure how to respond to that.";
+        console.log("Received response from OpenAI:", responseContent.substring(0, 100) + "...");
+        
+        // Save the conversation
+        await saveMessageToHistory(userId, 'user', message);
+        await saveMessageToHistory(userId, 'assistant', responseContent);
+        
+        return responseContent;
+      }
+    }
+  } catch (error) {
+    console.error("Error in getAIResponse:", error);
+    return "I encountered an error. Please try again later.";
+  }
+}
+
+/**
  * Process natural language task instructions using OpenAI's GPT model exclusively.
  * This function only uses AI capabilities and does not fall back to regex patterns.
  */
@@ -1138,102 +1280,6 @@ export async function processAITaskQuery(message: string, taskStore: TaskStoreTy
     console.error("Error during AI task processing:", error);
     return "I encountered an issue while processing your request. Please check your API key settings and try again.";
   }
-}
-
-/**
- * Main function to handle AI responses for the chat interface
- * This function will route to the task processing if in task mode
- * or provide a conversation response in normal mode
- */
-export async function getAIResponse(message: string, mode: 'normal' | 'task', userId: string): Promise<string> {
-  console.log(`Processing AI response in ${mode} mode with message: ${message}`);
-  try {
-    const taskStore = useStore.getState();
-    console.log("taskStore available:", !!taskStore);
-    
-    if (mode === 'task') {
-      // In task mode, use the task processing functionality
-      console.log("Using task processing mode");
-      return await processAITaskQuery(message, taskStore);
-    } else {
-      // In normal mode, use OpenAI for conversation
-      console.log("Using normal conversation mode");
-      try {
-        const openai = getOpenAIClient();
-        
-        // Get conversation history
-        const history = await getConversationHistory(userId);
-        
-        // Create messages array with system prompt and history
-        const messages = [
-          { role: 'system' as const, content: "You are a helpful and friendly assistant. Be concise and to the point." },
-          ...history,
-          { role: 'user' as const, content: message }
-        ];
-        
-        // Call OpenAI API
-        console.log("Calling OpenAI API with messages:", messages);
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o",
-          messages,
-          temperature: 0.7,
-          max_tokens: 1000
-        });
-        
-        // Get response content
-        const responseContent = response.choices[0].message.content || "I'm not sure how to respond to that.";
-        console.log("Received response from OpenAI:", responseContent.substring(0, 100) + "...");
-        
-        // Save the conversation
-        await saveMessageToHistory(userId, 'user', message);
-        await saveMessageToHistory(userId, 'assistant', responseContent);
-        
-        return responseContent;
-      } catch (error) {
-        console.error("Error in normal mode chat:", error);
-        return "I encountered an error while processing your request. Please check your API key settings and try again.";
-      }
-    }
-  } catch (error) {
-    console.error("Error in getAIResponse:", error);
-    return "I encountered an error. Please try again later.";
-  }
-}
-
-/**
- * Detect if a message seems to be a task-related intent
- * This helps us suggest mode switching to the user
- */
-export function detectTaskIntent(message: string): boolean {
-  const taskKeywords = [
-    'add', 'create', 'make', 'new', 'task', 'todo', 'to-do', 'to do',
-    'list', 'show', 'display', 'what', 'tasks', 'todos', 'to-dos',
-    'complete', 'finished', 'done', 'mark', 'check',
-    'delete', 'remove', 'clear'
-  ];
-  
-  const normalizedMessage = message.toLowerCase();
-  
-  // Check for task-related keywords
-  return taskKeywords.some(keyword => normalizedMessage.includes(keyword));
-}
-
-/**
- * Determine if we should suggest a mode switch based on message content
- */
-export function shouldSuggestModeSwitch(message: string, currentMode: AIModeType): {
-  shouldSwitch: boolean;
-  suggestedMode: AIModeType;
-} {
-  const hasTaskIntent = detectTaskIntent(message);
-  
-  if (hasTaskIntent && currentMode === 'normal') {
-    return { shouldSwitch: true, suggestedMode: 'task' };
-  } else if (!hasTaskIntent && currentMode === 'task') {
-    return { shouldSwitch: true, suggestedMode: 'normal' };
-  }
-  
-  return { shouldSwitch: false, suggestedMode: currentMode };
 }
 
 /**

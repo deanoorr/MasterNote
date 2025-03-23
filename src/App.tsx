@@ -5,7 +5,7 @@ import AIChat from './components/AIChat';
 import TaskList from './components/TaskList';
 import SettingsModal from './components/SettingsModal';
 import { AIModel } from './types';
-import { useStore, AIModeType } from './store';
+import { useStore } from './store';
 
 // Add CSS for animations
 const cssStyles = `
@@ -135,18 +135,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('gpt4o');
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages, aiMode } = useStore();
-
-  // Set the effective model based on AI mode
-  const effectiveModel: AIModel = aiMode === 'task' ? 'o3-mini' : selectedModel;
-
-  // Effect to handle model changes when aiMode changes
-  useEffect(() => {
-    // If changing to task mode, log the automatic model switch
-    if (aiMode === 'task' && selectedModel !== 'o3-mini') {
-      console.log('Task Mode active: Automatically using o3-mini model');
-    }
-  }, [aiMode, selectedModel]);
+  const { messages, clearMessages } = useStore();
 
   // Save the selected model to localStorage whenever it changes
   useEffect(() => {
@@ -161,9 +150,13 @@ function App() {
     
     // Load the saved model preference from localStorage
     const savedModel = localStorage.getItem('selected_model');
-    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'o3-mini' || 
-        savedModel === 'perplexity-sonar' || savedModel === 'deepseek-r1')) {
+    // Only allow gpt4o, perplexity-sonar, or deepseek-r1
+    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'perplexity-sonar' || savedModel === 'deepseek-r1')) {
       setSelectedModel(savedModel as AIModel);
+    } else {
+      // Default to gpt4o for any other model including o3-mini
+      setSelectedModel('gpt4o');
+      localStorage.setItem('selected_model', 'gpt4o');
     }
     
     // If no API key is set, open settings modal automatically
@@ -186,10 +179,11 @@ function App() {
         style={{ 
           height: '100vh', 
           backgroundColor: '#1A1B1E',
-          backgroundImage: 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%)'
+          backgroundImage: 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%)',
+          overflow: 'hidden' // Prevent outer scrolling
         }}
       >
-        <Container fluid style={{ height: '100%', padding: '16px' }}>
+        <Container fluid style={{ height: '100%', padding: '16px', display: 'flex', flexDirection: 'column' }}>
           <Box 
             mb="lg" 
             style={{
@@ -198,7 +192,8 @@ function App() {
               backgroundColor: 'rgba(37, 38, 43, 0.6)',
               backdropFilter: 'blur(12px)',
               border: '1px solid #373A40',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              flexShrink: 0
             }}
           >
             <Group justify="space-between" align="center">
@@ -228,7 +223,9 @@ function App() {
             display: 'flex', 
             height: 'calc(100% - 80px)', 
             gap: '1.5rem',
-            position: 'relative'
+            position: 'relative',
+            flex: 1,
+            minHeight: 0 // Important for Firefox
           }}>
             {/* Left Panel - AI Chat */}
             <div style={{ 
@@ -236,6 +233,7 @@ function App() {
               display: 'flex', 
               flexDirection: 'column', 
               minWidth: 0,
+              minHeight: 0, // Important for proper scrolling
               borderRadius: '12px',
               overflow: 'hidden',
               boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
@@ -256,17 +254,18 @@ function App() {
                   <Select
                     placeholder="AI Model"
                     data={[
-                      { value: 'gpt4o', label: 'GPT-4o Mini' },
-                      { value: 'o3-mini', label: 'GPT-3.5-Turbo' },
+                      { value: 'gpt4o', label: 'GPT-4o (All-purpose)' },
+                      { value: 'perplexity-sonar', label: 'Perplexity (Search focus)' },
+                      { value: 'deepseek-r1', label: 'DeepSeek (Reasoning focus)' },
                     ]}
                     value={selectedModel}
                     onChange={(value) => value && setSelectedModel(value as AIModel)}
-                    style={{ width: 180 }}
+                    style={{ width: 230 }}
                     styles={{
                       input: {
-                        backgroundColor: aiMode === 'reasoning' as AIModeType ? 'rgba(250, 82, 82, 0.1)' : '#2C2E33',
-                        borderColor: aiMode === 'reasoning' as AIModeType ? 'rgba(250, 82, 82, 0.5)' : '#373A40',
-                        fontWeight: aiMode === 'reasoning' as AIModeType ? 'bold' : undefined,
+                        backgroundColor: 'rgba(37, 38, 43, 0.9)',
+                        borderColor: 'rgba(37, 38, 43, 0.9)',
+                        fontWeight: 'bold',
                         borderRadius: '6px',
                         transition: 'all 0.2s ease',
                         '&:focus': {
@@ -279,35 +278,20 @@ function App() {
                 </Group>
                 
                 <Group>
-                  <Tooltip label="Use reasoning mode (DeepSeek R1)">
+                  <Tooltip label="Clear conversation">
                     <ActionIcon
                       variant="subtle"
                       size="md"
                       radius="md"
-                      color={selectedModel === 'deepseek-r1' ? "red" : "gray"}
-                      className={selectedModel === 'deepseek-r1' ? 'reasoning-active' : ''}
-                      onClick={() => {
-                        // Toggle DeepSeek R1 model
-                        if (selectedModel === 'deepseek-r1') {
-                          // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt4o';
-                          setSelectedModel(previousModel as AIModel);
-                          localStorage.setItem('selected_model', previousModel);
-                          console.log(`Switched back to ${previousModel} model`);
-                        } else {
-                          // Save current model before switching to reasoning mode
-                          localStorage.setItem('reasoning_previous_model', selectedModel);
-                          setSelectedModel('deepseek-r1');
-                          localStorage.setItem('selected_model', 'deepseek-r1');
-                          console.log("Switched to DeepSeek R1 Reasoning mode");
-                        }
-                      }}
+                      color="gray"
+                      onClick={handleClearChat}
+                      disabled={messages.length === 0}
                     >
-                      <IconBulb size={18} />
+                      <IconEraser size={18} />
                     </ActionIcon>
                   </Tooltip>
-                  
-                  <Tooltip label="Use search mode (Perplexity Sonar)">
+                   
+                  <Tooltip label="Use search-focused AI (Perplexity Sonar) - still handles tasks">
                     <ActionIcon
                       variant="subtle"
                       size="md"
@@ -334,28 +318,44 @@ function App() {
                       <IconSearch size={18} />
                     </ActionIcon>
                   </Tooltip>
-                  
-                  <Tooltip label="Clear conversation">
+                   
+                  <Tooltip label="Use reasoning-focused AI (DeepSeek R1) - still handles tasks">
                     <ActionIcon
                       variant="subtle"
                       size="md"
                       radius="md"
-                      color="gray"
-                      onClick={handleClearChat}
-                      disabled={messages.length === 0}
+                      color={selectedModel === 'deepseek-r1' ? "red" : "gray"}
+                      className={selectedModel === 'deepseek-r1' ? 'reasoning-active' : ''}
+                      onClick={() => {
+                        // Toggle DeepSeek R1 model
+                        if (selectedModel === 'deepseek-r1') {
+                          // Store the previous model in localStorage
+                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt4o';
+                          setSelectedModel(previousModel as AIModel);
+                          localStorage.setItem('selected_model', previousModel);
+                          console.log(`Switched back to ${previousModel} model`);
+                        } else {
+                          // Save current model before switching to reasoning mode
+                          localStorage.setItem('reasoning_previous_model', selectedModel);
+                          setSelectedModel('deepseek-r1');
+                          localStorage.setItem('selected_model', 'deepseek-r1');
+                          console.log("Switched to DeepSeek R1 Reasoning mode");
+                        }
+                      }}
                     >
-                      <IconEraser size={18} />
+                      <IconBulb size={18} />
                     </ActionIcon>
                   </Tooltip>
                 </Group>
               </Group>
               
-              <AIChat model={effectiveModel} />
+              <AIChat model={selectedModel} />
             </div>
             
             {/* Right Panel - Task List */}
             <div style={{ 
               flex: 1, 
+              minHeight: 0, // Important for proper scrolling
               borderRadius: '12px',
               overflow: 'hidden',
               border: '1px solid #373A40',
