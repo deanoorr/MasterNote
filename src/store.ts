@@ -14,6 +14,7 @@ interface Store {
   addMessage: (message: Message) => void;
   addTask: (task: Task) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
+  bulkUpdateTasks: (filter: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
   deleteCompletedTasks: () => void;
   clearMessages: () => void;
@@ -311,7 +312,57 @@ export const useStore = create<Store>()(
         } catch (error) {
           console.error('Error syncing with Supabase:', error);
         }
-      }
+      },
+      
+      bulkUpdateTasks: (filter: string, updates: Partial<Task>) =>
+        set((state) => {
+          let tasksToUpdate: Task[] = [];
+          
+          // Find tasks matching the filter
+          if (filter === 'all') {
+            tasksToUpdate = state.tasks;
+          } else if (['today', 'tomorrow', 'this week', 'overdue', 'completed', 'no date', 'undated'].includes(filter)) {
+            tasksToUpdate = get().getTasksByDate(filter);
+          } else if (['high', 'medium', 'low'].includes(filter)) {
+            tasksToUpdate = state.tasks.filter(task => task.priority === filter);
+          }
+          
+          console.log(`Bulk updating ${tasksToUpdate.length} tasks matching filter "${filter}"`);
+          
+          // Apply updates to all matching tasks
+          const updatedTasks = state.tasks.map((task) => {
+            if (tasksToUpdate.some(t => t.id === task.id)) {
+              const updatedTask = { ...task, ...updates, updatedAt: new Date() };
+              
+              // Store in Supabase if configured
+              const userId = get().userId;
+              if (isSupabaseConfigured() && userId) {
+                supabase.from('tasks').upsert({
+                  id: updatedTask.id,
+                  user_id: userId,
+                  title: updatedTask.title,
+                  description: updatedTask.description || '',
+                  priority: updatedTask.priority,
+                  status: updatedTask.status,
+                  due_date: updatedTask.dueDate ? new Date(updatedTask.dueDate).toISOString() : null,
+                  updated_at: new Date().toISOString(),
+                  ai_generated: updatedTask.aiGenerated || false,
+                  notes: updatedTask.notes || ''
+                })
+                .then(({ error }) => {
+                  if (error) console.error("Error updating task in Supabase:", error);
+                });
+              }
+              
+              return updatedTask;
+            }
+            return task;
+          });
+          
+          return {
+            tasks: updatedTasks,
+          };
+        }),
     }),
     {
       name: 'masternote-storage',

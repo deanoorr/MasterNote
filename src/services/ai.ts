@@ -305,6 +305,7 @@ interface TaskStoreType {
   deleteTask: (id: string) => void;
   getTasksByDate: (filter: string) => Task[];
   getSortedTasks?: () => Task[];
+  bulkUpdateTasks: (filter: string, updates: Partial<Task>) => void;
 }
 
 /**
@@ -351,7 +352,7 @@ async function processTaskWithAI(message: string, taskStore: TaskStoreType): Pro
     // Define a system prompt that instructs GPT how to parse task commands
     const systemPrompt = `You are a task management assistant. Your job is to analyze the user's request and extract the relevant information for task management.
 Extract the following information:
-1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update)
+1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update, move/set)
 2. TASK_TITLE: If they're creating a task, what is the title? (Extract only the core task title, not date or priority)
 3. DATE: Is there a specific date or time mentioned? (exact date, today, tomorrow, next week, etc.)
 4. PRIORITY: Any priority mentioned? (high, medium, low)
@@ -359,19 +360,23 @@ Extract the following information:
 6. DESCRIPTION: Any additional details for the task?
 7. BULK_ACTION: Are they referring to "all tasks" or multiple tasks? If they say "delete all tasks" or similar, this MUST be true.
 8. FILTER: If bulk action, what's the filter? (today, overdue, high priority, etc.)
+9. TARGET_DATE: If they want to move tasks to a specific date (like "move all tasks to today"), what is the target date?
 
-IMPORTANT: For phrases like "delete all tasks" or "complete all tasks", you MUST set bulkAction to true.
+IMPORTANT: 
+- For phrases like "delete all tasks" or "complete all tasks", you MUST set bulkAction to true.
+- For phrases like "move all tasks to today" or "set all tasks due date to tomorrow", set bulkAction to true, intent to "move" or "set", and targetDate to the mentioned date.
 
 Respond in JSON format:
 {
-  "intent": "add|delete|complete|list|modify",
+  "intent": "add|delete|complete|list|modify|move|set",
   "taskTitle": "the task title",
   "date": "2023-04-26" or "today" or "tomorrow" or "next week",
   "priority": "high|medium|low",
   "taskNumber": 5,
   "description": "additional details",
   "bulkAction": true|false,
-  "filter": "today|tomorrow|this week|high|medium|low|all"
+  "filter": "today|tomorrow|this week|high|medium|low|all",
+  "targetDate": "today|tomorrow|next week"
 }
 
 Only include fields that you can extract from the user's message. If a field is not applicable or not mentioned, omit it entirely from the JSON.`;
@@ -404,7 +409,9 @@ Only include fields that you can extract from the user's message. If a field is 
         (message.toLowerCase().includes("delete") || 
          message.toLowerCase().includes("remove") || 
          message.toLowerCase().includes("complete") || 
-         message.toLowerCase().includes("finish")))) {
+         message.toLowerCase().includes("finish") ||
+         message.toLowerCase().includes("move") ||
+         message.toLowerCase().includes("set")))) {
       
       // If it's not already set, make sure it's a bulk action
       if (!taskData.bulkAction) {
@@ -416,6 +423,17 @@ Only include fields that you can extract from the user's message. If a field is 
             taskData.intent = "delete";
           } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish")) {
             taskData.intent = "complete";
+          } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("set")) {
+            taskData.intent = "move";
+            
+            // Set target date if not already set
+            if (!taskData.targetDate) {
+              if (message.toLowerCase().includes("today")) {
+                taskData.targetDate = "today";
+              } else if (message.toLowerCase().includes("tomorrow")) {
+                taskData.targetDate = "tomorrow";
+              }
+            }
           }
         }
         
@@ -1093,7 +1111,8 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   // Ensure we have an intent
   const intent = taskData.intent?.toLowerCase() || 
                (taskData.message?.toLowerCase().includes("delete") ? "delete" : 
-                taskData.message?.toLowerCase().includes("complete") ? "complete" : "unknown");
+                taskData.message?.toLowerCase().includes("complete") ? "complete" :
+                taskData.message?.toLowerCase().includes("move") ? "move" : "unknown");
   
   // Determine filter
   let filter = taskData.filter?.toLowerCase() || "all";
@@ -1146,6 +1165,38 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
     });
     
     return `✅ Marked ${count} task${count !== 1 ? 's' : ''} as complete ${filter !== "all" ? 'for ' + filter : ''}.`;
+  }
+  else if (intent === "move" || intent === "set" || intent === "update") {
+    // Determine target date
+    let targetDateStr = taskData.targetDate?.toLowerCase();
+    let targetDate: Date | null = null;
+    
+    // If target date is "today", set to today's date
+    if (targetDateStr === "today" || !targetDateStr) {
+      targetDate = new Date();
+    } else if (targetDateStr === "tomorrow") {
+      targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + 1);
+    } else if (targetDateStr) {
+      // Try to parse the date
+      targetDate = parseDateReference(targetDateStr);
+    }
+    
+    if (!targetDate) {
+      return "I couldn't determine the target date for the tasks.";
+    }
+    
+    // Use the bulk update method to update all filtered tasks
+    const count = filteredTasks.length;
+    taskStore.bulkUpdateTasks(filter, { dueDate: targetDate });
+    
+    const formattedDate = targetDate.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    return `✅ Updated ${count} task${count !== 1 ? 's' : ''} to be due on ${formattedDate}.`;
   }
   
   return "I couldn't determine what bulk action you want to perform on your tasks.";
