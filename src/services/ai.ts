@@ -479,6 +479,8 @@ Return a JSON response with:
 
     try {
       const taskData = JSON.parse(content);
+      // Always include the original message to improve parsing of multi-task operations
+      taskData.message = taskData.message || message;
       console.log("Parsed task data:", taskData);
 
       switch (taskData.intent?.toLowerCase()) {
@@ -929,6 +931,45 @@ function completeTaskByName(taskTitle: string, taskStore: TaskStoreType): string
  * Handle task deletion based on AI-parsed data
  */
 function handleAITaskDeletion(taskData: any, taskStore: TaskStoreType): string {
+  console.log("Handling task deletion with data:", taskData);
+  
+  // Try to extract task numbers from the original message if available
+  if (taskData.message) {
+    const taskNumbers = extractTaskNumbers(taskData.message);
+    console.log("Extracted task numbers from message:", taskNumbers);
+    
+    if (taskNumbers.length > 0) {
+      // Handle bulk deletion
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      const foundTasks: Task[] = [];
+      const notFoundNumbers: number[] = [];
+      
+      // Find all tasks by their numbers
+      taskNumbers.forEach(number => {
+        if (number > 0 && number <= activeTasks.length) {
+          foundTasks.push(activeTasks[number - 1]);
+        } else {
+          notFoundNumbers.push(number);
+        }
+      });
+      
+      // Delete all found tasks
+      if (foundTasks.length > 0) {
+        foundTasks.forEach(task => {
+          taskStore.deleteTask(task.id);
+        });
+        
+        if (notFoundNumbers.length > 0) {
+          return `Deleted ${foundTasks.length} task(s). Could not find task numbers: ${notFoundNumbers.join(', ')}.`;
+        }
+        return `Successfully deleted ${foundTasks.length} task(s).`;
+      } else {
+        return `Could not find any tasks with numbers: ${taskNumbers.join(', ')}.`;
+      }
+    }
+  }
+  
+  // Fallback to original single task deletion logic
   // If we have a task number, delete by number
   if (taskData.taskNumber !== undefined) {
     return deleteTaskByNumber(taskData.taskNumber, taskStore);
@@ -946,6 +987,45 @@ function handleAITaskDeletion(taskData: any, taskStore: TaskStoreType): string {
  * Handle task completion based on AI-parsed data
  */
 function handleAITaskCompletion(taskData: any, taskStore: TaskStoreType): string {
+  console.log("Handling task completion with data:", taskData);
+  
+  // Try to extract task numbers from the original message if available
+  if (taskData.message) {
+    const taskNumbers = extractTaskNumbers(taskData.message);
+    console.log("Extracted task numbers from message:", taskNumbers);
+    
+    if (taskNumbers.length > 0) {
+      // Handle bulk completion
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      const foundTasks: Task[] = [];
+      const notFoundNumbers: number[] = [];
+      
+      // Find all tasks by their numbers
+      taskNumbers.forEach(number => {
+        if (number > 0 && number <= activeTasks.length) {
+          foundTasks.push(activeTasks[number - 1]);
+        } else {
+          notFoundNumbers.push(number);
+        }
+      });
+      
+      // Complete all found tasks
+      if (foundTasks.length > 0) {
+        foundTasks.forEach(task => {
+          taskStore.updateTask(task.id, { status: "done", updatedAt: new Date() });
+        });
+        
+        if (notFoundNumbers.length > 0) {
+          return `Completed ${foundTasks.length} task(s). Could not find task numbers: ${notFoundNumbers.join(', ')}.`;
+        }
+        return `Successfully completed ${foundTasks.length} task(s).`;
+      } else {
+        return `Could not find any tasks with numbers: ${taskNumbers.join(', ')}.`;
+      }
+    }
+  }
+  
+  // Fallback to original single task completion logic
   // If we have a task number, complete by number
   if (taskData.taskNumber !== undefined) {
     return completeTaskByNumber(taskData.taskNumber, taskStore);
@@ -1094,12 +1174,136 @@ function priorityTaskByNumber(taskNumber: number, priority: "high" | "medium" | 
 function handleAITaskModification(taskData: any, taskStore: TaskStoreType): string {
   console.log("Handling task modification:", taskData);
   
-  // Handle moving tasks to specific dates
+  // Try to directly parse task numbers from the original user message
+  // This is a new approach that doesn't rely on the AI correctly identifying task numbers
+  const originalMessage = taskData.message || "";
+  const directTaskNumbers = extractTaskNumbers(originalMessage);
+  
+  console.log("Direct task number extraction:", directTaskNumbers);
+  
+  // If we found multiple task numbers directly from the message
+  if (directTaskNumbers.length > 1) {
+    console.log("Detected multi-task operation based on direct extraction:", directTaskNumbers);
+    
+    // Get active tasks (not completed)
+    let activeTasks;
+    if (taskStore.getSortedTasks) {
+      activeTasks = taskStore.getSortedTasks().filter(task => task.status !== "done");
+    } else {
+      activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+    }
+    
+    // Get valid tasks based on provided numbers
+    const selectedTasks = directTaskNumbers
+      .map(num => (num >= 1 && num <= activeTasks.length) ? activeTasks[num - 1] : null)
+      .filter((task): task is Task => task !== null);
+    
+    if (selectedTasks.length === 0) {
+      return `Task #${directTaskNumbers.join(',')} not found. Please check the task number and try again.`;
+    }
+    
+    // Determine the operation type and target values
+    const isMovingTasks = originalMessage.toLowerCase().includes("move");
+    const isChangingPriority = originalMessage.toLowerCase().includes("priority");
+    
+    // Handle changing priority
+    if (isChangingPriority) {
+      const priority = (originalMessage.toLowerCase().includes("high") ? "high" : 
+                     originalMessage.toLowerCase().includes("medium") ? "medium" : 
+                     originalMessage.toLowerCase().includes("low") ? "low" : 
+                     taskData.priority) as "high" | "medium" | "low";
+      
+      if (!priority) {
+        return "I couldn't determine which priority to set for the tasks.";
+      }
+      
+      const updatedTasks = selectedTasks.map(task => {
+        const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+        taskStore.updateTask(task.id, { priority });
+        return formatTaskWithPosition(task, position, false);
+      });
+      
+      return `✅ Changed the following tasks to ${priority} priority:\n\n${updatedTasks.join("\n")}`;
+    }
+    
+    // Other multi-task handling continues as before...
+  }
+  
+  // Original implementation continues for single task operations...
+  // Check for multi-task operations first (using the full message)
+  if (taskData.message) {
+    const message = taskData.message;
+    const taskNumbers = extractTaskNumbers(message);
+    
+    if (taskNumbers.length > 1) {
+      console.log("Detected multi-task operation with task numbers:", taskNumbers);
+      
+      // Get active tasks (not completed)
+      let activeTasks;
+      if (taskStore.getSortedTasks) {
+        activeTasks = taskStore.getSortedTasks().filter(task => task.status !== "done");
+      } else {
+        activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      }
+      
+      // Get valid tasks based on provided numbers
+      const selectedTasks = taskNumbers
+        .map(num => (num >= 1 && num <= activeTasks.length) ? activeTasks[num - 1] : null)
+        .filter((task): task is Task => task !== null);
+      
+      if (selectedTasks.length === 0) {
+        return `Task #${taskNumbers.join(',')} not found. Please check the task number and try again.`;
+      }
+      
+      // Determine the operation type and target values
+      const isMovingTasks = message.toLowerCase().includes("move");
+      const isChangingPriority = message.toLowerCase().includes("priority");
+      
+      // Handle moving tasks to a specific date
+      if (isMovingTasks && taskData.targetDate) {
+        const targetDate = parseDateReference(taskData.targetDate);
+        if (!targetDate) {
+          return `I couldn't understand the date "${taskData.targetDate}". Please try a different format.`;
+        }
+        
+        const updatedTasks = selectedTasks.map(task => {
+          const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+          taskStore.updateTask(task.id, { dueDate: targetDate });
+          return formatTaskWithPosition(task, position, false);
+        });
+        
+        const dueDateString = targetDate.toLocaleDateString("en-US", { 
+          weekday: "long", 
+          month: "short", 
+          day: "numeric"
+        });
+        
+        return `✅ Moved the following tasks to ${dueDateString}:\n\n${updatedTasks.join("\n")}`;
+      }
+      
+      // Handle changing priority
+      if (isChangingPriority && taskData.priority) {
+        const priority = taskData.priority.toLowerCase() as "high" | "medium" | "low";
+        
+        const updatedTasks = selectedTasks.map(task => {
+          const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+          taskStore.updateTask(task.id, { priority });
+          return formatTaskWithPosition(task, position, false);
+        });
+        
+        return `✅ Changed the following tasks to ${priority} priority:\n\n${updatedTasks.join("\n")}`;
+      }
+      
+      return "I couldn't determine what action you want to perform on the selected tasks.";
+    }
+  }
+  
+  // Handle moving a single task to a specific date
   if (taskData.taskNumber !== undefined && taskData.targetDate) {
     return moveTaskByNumber(taskData.taskNumber, taskData.targetDate, taskStore);
   }
   
-  // Handle updating task priority by number
+  // Handle updating a single task's priority by number
   if (taskData.taskNumber !== undefined && (taskData.priority || (taskData.property === "priority" && taskData.value))) {
     const priorityValue = taskData.priority || taskData.value;
     return priorityTaskByNumber(
@@ -1109,7 +1313,7 @@ function handleAITaskModification(taskData: any, taskStore: TaskStoreType): stri
     );
   }
   
-  // Handle updating task priority by name
+  // Handle updating a single task's priority by name
   if (taskData.taskTitle && (taskData.priority || (taskData.property === "priority" && taskData.value))) {
     const priorityValue = taskData.priority || taskData.value;
     const task = findTaskByName(taskData.taskTitle, taskStore);
@@ -1137,6 +1341,48 @@ function extractTaskNumbers(message: string): number[] {
   const numbers: number[] = [];
   console.log("Extracting task numbers from:", message);
   
+  // Basic direct number pattern - handles formats like "1 and 3" without requiring "task" keyword
+  const directPattern = /\b(\d+)\s+and\s+(\d+)\b/i;
+  const directMatch = message.match(directPattern);
+  if (directMatch) {
+    console.log("Matched direct 'X and Y' pattern:", directMatch);
+    const num1 = parseInt(directMatch[1], 10);
+    const num2 = parseInt(directMatch[2], 10);
+    if (!isNaN(num1)) numbers.push(num1);
+    if (!isNaN(num2)) numbers.push(num2);
+    return numbers;
+  }
+  
+  // Delete pattern: "delete tasks 1,2,4 and 5" or "delete task 1 and 2"
+  const deletePattern = /delete\s+tasks?\s+([\d,\s]+(?:and\s+\d+)?)/i;
+  const deleteMatch = message.match(deletePattern);
+  if (deleteMatch && deleteMatch[1]) {
+    console.log("Matched 'delete tasks' pattern:", deleteMatch);
+    const allNumbers = deleteMatch[1].match(/\d+/g);
+    if (allNumbers) {
+      allNumbers.forEach(numStr => {
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) numbers.push(num);
+      });
+    }
+    return numbers;
+  }
+  
+  // Complete pattern: "complete tasks 1 and 2" or "mark tasks 1,2,3 as complete"
+  const completePattern = /(?:complete|mark)\s+tasks?\s+([\d,\s]+(?:and\s+\d+)?)/i;
+  const completeMatch = message.match(completePattern);
+  if (completeMatch && completeMatch[1]) {
+    console.log("Matched 'complete tasks' pattern:", completeMatch);
+    const allNumbers = completeMatch[1].match(/\d+/g);
+    if (allNumbers) {
+      allNumbers.forEach(numStr => {
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) numbers.push(num);
+      });
+    }
+    return numbers;
+  }
+  
   // Pattern 1: "task 1 and 2" or "tasks 1 and 2" or "move task 1 and 2"
   const andPattern = /(?:move\s+)?tasks?\s+(\d+)\s+and\s+(\d+)/i;
   const andMatch = message.match(andPattern);
@@ -1162,35 +1408,20 @@ function extractTaskNumbers(message: string): number[] {
         if (!isNaN(num)) numbers.push(num);
       });
     }
+    return numbers;
   }
   
-  // If no numbers found yet, try a more direct approach for "move task X and Y" pattern
-  if (numbers.length === 0) {
-    const directPattern = /move\s+task\s+(\d+)\s+and\s+(\d+)/i;
-    const directMatch = message.match(directPattern);
-    if (directMatch) {
-      console.log("Matched direct 'move task X and Y' pattern:", directMatch);
-      const num1 = parseInt(directMatch[1], 10);
-      const num2 = parseInt(directMatch[2], 10);
-      if (!isNaN(num1)) numbers.push(num1);
-      if (!isNaN(num2)) numbers.push(num2);
-    }
+  // Simple single number pattern
+  const singleNumberPattern = /task\s+(\d+)/i;
+  const singleMatch = message.match(singleNumberPattern);
+  if (singleMatch) {
+    console.log("Matched single task number pattern:", singleMatch);
+    const num = parseInt(singleMatch[1], 10);
+    if (!isNaN(num)) numbers.push(num);
+    return numbers;
   }
   
-  // Add additional pattern for "move tasks X and Y to Z" where Z is a date
-  if (numbers.length === 0) {
-    const moveToDatePattern = /move\s+tasks?\s+(\d+)\s+and\s+(\d+)\s+to\s+(today|tomorrow|next week|this week)/i;
-    const moveToDateMatch = message.match(moveToDatePattern);
-    if (moveToDateMatch) {
-      console.log("Matched 'move to date' pattern:", moveToDateMatch);
-      const num1 = parseInt(moveToDateMatch[1], 10);
-      const num2 = parseInt(moveToDateMatch[2], 10);
-      if (!isNaN(num1)) numbers.push(num1);
-      if (!isNaN(num2)) numbers.push(num2);
-    }
-  }
-  
-  console.log("Extracted task numbers:", numbers);
+  console.log("No task numbers found in message");
   return numbers;
 }
 
