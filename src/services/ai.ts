@@ -645,20 +645,26 @@ function parseDateReference(dateStr: string): Date | null {
   if (!dateStr) return null;
   
   // Convert to lowercase for easier matching
-  const normalizedDateStr = dateStr.toLowerCase();
+  const normalizedDateStr = dateStr.toLowerCase().trim();
   
-  // Handle "today"
-  if (normalizedDateStr.includes('today')) {
+  // Handle "today" - using exact match or contains with word boundary
+  if (normalizedDateStr === 'today' || normalizedDateStr.match(/\btoday\b/)) {
+    console.log("Matched 'today', creating date object");
     const date = new Date();
+    date.setHours(0, 0, 0, 0); // Reset time part
     date.setFullYear(correctYear);
+    console.log("Returning today's date with year set to 2025:", date.toISOString());
     return date;
   }
   
   // Handle "tomorrow"
-  if (normalizedDateStr.includes('tomorrow')) {
+  if (normalizedDateStr === 'tomorrow' || normalizedDateStr.match(/\btomorrow\b/)) {
+    console.log("Matched 'tomorrow', creating date object");
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0); // Reset time part
     tomorrow.setFullYear(correctYear);
+    console.log("Returning tomorrow's date with year set to 2025:", tomorrow.toISOString());
     return tomorrow;
   }
   
@@ -1112,11 +1118,13 @@ function handleAITaskModification(taskData: any, taskStore: TaskStoreType): stri
  */
 function extractTaskNumbers(message: string): number[] {
   const numbers: number[] = [];
+  console.log("Extracting task numbers from:", message);
   
-  // Pattern 1: "task 1 and 2" or "tasks 1 and 2"
-  const andPattern = /tasks?\s+(\d+)\s+and\s+(\d+)/i;
+  // Pattern 1: "task 1 and 2" or "tasks 1 and 2" or "move task 1 and 2"
+  const andPattern = /(?:move\s+)?tasks?\s+(\d+)\s+and\s+(\d+)/i;
   const andMatch = message.match(andPattern);
   if (andMatch) {
+    console.log("Matched 'and' pattern:", andMatch);
     const num1 = parseInt(andMatch[1], 10);
     const num2 = parseInt(andMatch[2], 10);
     if (!isNaN(num1)) numbers.push(num1);
@@ -1125,9 +1133,10 @@ function extractTaskNumbers(message: string): number[] {
   }
   
   // Pattern 2: "tasks 1, 2, and 3" or similar comma-separated lists
-  const commaPattern = /tasks?\s+((?:\d+(?:\s*,\s*|\s+and\s+))+\d+)/i;
+  const commaPattern = /(?:move\s+)?tasks?\s+((?:\d+(?:\s*,\s*|\s+and\s+))+\d+)/i;
   const commaMatch = message.match(commaPattern);
   if (commaMatch && commaMatch[1]) {
+    console.log("Matched comma pattern:", commaMatch);
     // Extract all numbers from the matched section
     const numberMatches = commaMatch[1].match(/\d+/g);
     if (numberMatches) {
@@ -1138,6 +1147,33 @@ function extractTaskNumbers(message: string): number[] {
     }
   }
   
+  // If no numbers found yet, try a more direct approach for "move task X and Y" pattern
+  if (numbers.length === 0) {
+    const directPattern = /move\s+task\s+(\d+)\s+and\s+(\d+)/i;
+    const directMatch = message.match(directPattern);
+    if (directMatch) {
+      console.log("Matched direct 'move task X and Y' pattern:", directMatch);
+      const num1 = parseInt(directMatch[1], 10);
+      const num2 = parseInt(directMatch[2], 10);
+      if (!isNaN(num1)) numbers.push(num1);
+      if (!isNaN(num2)) numbers.push(num2);
+    }
+  }
+  
+  // Add additional pattern for "move tasks X and Y to Z" where Z is a date
+  if (numbers.length === 0) {
+    const moveToDatePattern = /move\s+tasks?\s+(\d+)\s+and\s+(\d+)\s+to\s+(today|tomorrow|next week|this week)/i;
+    const moveToDateMatch = message.match(moveToDatePattern);
+    if (moveToDateMatch) {
+      console.log("Matched 'move to date' pattern:", moveToDateMatch);
+      const num1 = parseInt(moveToDateMatch[1], 10);
+      const num2 = parseInt(moveToDateMatch[2], 10);
+      if (!isNaN(num1)) numbers.push(num1);
+      if (!isNaN(num2)) numbers.push(num2);
+    }
+  }
+  
+  console.log("Extracted task numbers:", numbers);
   return numbers;
 }
 
@@ -1289,7 +1325,11 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   
   // Handle moving all tasks to a specific date
   if ((intent === "move" || intent === "update") && targetDate) {
+    console.log(`Attempting to move all tasks to target date: "${targetDate}"`);
+    
     const newDate = parseDateReference(targetDate);
+    console.log("Parsed date result:", newDate);
+    
     if (!newDate) {
       return `I couldn't understand the date "${targetDate}". Please try a different format.`;
     }
@@ -1299,9 +1339,11 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
       newDate.setFullYear(2025);
     }
     
+    console.log(`Moving ${filteredTasks.length} tasks to date:`, newDate.toISOString());
     const updatedTasks: string[] = [];
     
     filteredTasks.forEach((task, index) => {
+      console.log(`Moving task ID ${task.id} to new date`);
       taskStore.updateTask(task.id, { dueDate: newDate });
       updatedTasks.push(formatTaskWithPosition(task, index + 1, false));
     });
@@ -1484,11 +1526,86 @@ export async function processAITaskQuery(message: string, taskStore: TaskStoreTy
     // First check for direct command patterns for bulk operations
     const normalizedMessage = message.toLowerCase().trim();
     
+    // Add special handler for "move task X and Y to date" pattern
+    const moveTasksToDatePattern = /move\s+tasks?\s+(\d+)\s+and\s+(\d+)\s+to\s+(today|tomorrow|next\s+week|this\s+week)/i;
+    const moveTasksToDateMatch = normalizedMessage.match(moveTasksToDatePattern);
+    if (moveTasksToDateMatch) {
+      console.log("Direct match: move specific tasks to a date");
+      const num1 = parseInt(moveTasksToDateMatch[1], 10);
+      const num2 = parseInt(moveTasksToDateMatch[2], 10);
+      const targetDate = moveTasksToDateMatch[3];
+      
+      // Create taskData manually with message for task extraction
+      const taskData = {
+        intent: "move",
+        message: `move task ${num1} and ${num2}`,
+        targetDate: targetDate
+      };
+      
+      return handleBulkAction(taskData, taskStore);
+    }
+    
     // Direct pattern matching for multi-task selection (added for fallback)
     const multiTaskPattern = /(?:(?:move|mark|complete|set|change)\s+)?tasks?\s+\d+(?:\s*,\s*|\s+and\s+)\d+/i;
     if (multiTaskPattern.test(normalizedMessage)) {
       console.log("Direct multi-task pattern match detected, letting AI handle it");
       return await processTaskWithAI(message, taskStore);
+    }
+    
+    // Add pattern for "move tasks for today to tomorrow"
+    const moveTasksForDayPattern = /^move\s+all\s+tasks\s+(?:for|from)\s+(today|tomorrow|this\s+week|next\s+week)\s+to\s+(today|tomorrow|next\s+week|this\s+week)\.?$/i;
+    const moveTasksForDayMatch = normalizedMessage.match(moveTasksForDayPattern);
+    if (moveTasksForDayMatch) {
+      console.log("Direct match: move all tasks from specific day to another day");
+      const sourceDate = moveTasksForDayMatch[1];
+      const targetDate = moveTasksForDayMatch[2];
+      
+      // Create taskData manually
+      const taskData = {
+        intent: "move",
+        bulkAction: true,
+        filter: sourceDate,
+        targetDate: targetDate
+      };
+      
+      return handleBulkAction(taskData, taskStore);
+    }
+    
+    // Add a direct pattern match for "move all tasks to today" command
+    const moveAllTasksPattern = /^move\s+all\s+tasks\s+to\s+(today|tomorrow|next\s+week|this\s+week)\.?$/i;
+    const moveAllTasksMatch = normalizedMessage.match(moveAllTasksPattern);
+    if (moveAllTasksMatch) {
+      console.log("Direct match: move all tasks to specific date");
+      const targetDate = moveAllTasksMatch[1];
+      
+      // Create taskData manually
+      const taskData = {
+        intent: "move",
+        bulkAction: true,
+        filter: "all",
+        targetDate: targetDate
+      };
+      
+      return handleBulkAction(taskData, taskStore);
+    }
+    
+    // Add a direct pattern match for priority change
+    const priorityChangePattern = /^move\s+all\s+tasks\s+to\s+(high|medium|low)\s+priority\.?$/i;
+    const priorityMatch = normalizedMessage.match(priorityChangePattern);
+    if (priorityMatch) {
+      console.log("Direct match: change all tasks to specific priority");
+      const priorityValue = priorityMatch[1].toLowerCase();
+      
+      // Create taskData manually
+      const taskData = {
+        intent: "update",
+        bulkAction: true,
+        filter: "all",
+        property: "priority",
+        value: priorityValue
+      };
+      
+      return handleBulkAction(taskData, taskStore);
     }
     
     // Handle direct bulk operations with regex as a fallback

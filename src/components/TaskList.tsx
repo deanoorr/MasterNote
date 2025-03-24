@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea, Flex, Checkbox } from '@mantine/core';
 import { DatePickerInput, DatesProvider } from '@mantine/dates';
-import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes, IconEdit } from '@tabler/icons-react';
+import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes, IconEdit, IconDotsVertical } from '@tabler/icons-react';
 import { useStore, SortOption } from '../store';
 import { Task } from '../types';
 
@@ -39,7 +39,7 @@ const getNextWeekday = (weekday: number): Date => {
 export default function TaskList() {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === 'dark';
-  const { tasks, updateTask, addTask, deleteTask, deleteCompletedTasks, setSortOrder, getSortedTasks, sortOrder } = useStore();
+  const { tasks, updateTask, addTask, deleteTask, deleteCompletedTasks, setSortOrder, getSortedTasks, sortOrder, bulkUpdateTasks } = useStore();
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [addingTask, setAddingTask] = useState(false);
   const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
@@ -55,6 +55,13 @@ export default function TaskList() {
   const [notesModalOpened, setNotesModalOpened] = useState(false);
   const [currentNotes, setCurrentNotes] = useState('');
   const [noteTaskId, setNoteTaskId] = useState<string | null>(null);
+  
+  // New state for multiple selection
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [bulkActionMenuOpened, setBulkActionMenuOpened] = useState(false);
+  const [bulkDueDateModalOpened, setBulkDueDateModalOpened] = useState(false);
+  const [bulkDueDate, setBulkDueDate] = useState<Date | null>(null);
 
   // Calendar styles for the date picker
   const calendarStyles = {
@@ -180,6 +187,10 @@ export default function TaskList() {
   }, [tasks]);
 
   const handleStatusChange = (taskId: string, e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      return; // Don't change status in selection mode
+    }
     e.stopPropagation(); // Prevent propagation to parent elements
     const task = tasks.find((t) => t.id === taskId);
     if (task) {
@@ -194,6 +205,10 @@ export default function TaskList() {
   };
 
   const handlePriorityChange = (taskId: string, priority: 'low' | 'medium' | 'high', e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      return; // Don't change priority in selection mode
+    }
     e.stopPropagation(); // Prevent propagation to parent elements
     console.log("Changing priority of task", taskId, "to", priority);
     updateTask(taskId, {
@@ -203,6 +218,10 @@ export default function TaskList() {
   };
 
   const handleDeleteTask = (taskId: string, e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      return; // Don't delete in selection mode
+    }
     e.stopPropagation();
     console.log("TaskList - Deleting task with ID:", taskId);
     deleteTask(taskId);
@@ -605,6 +624,73 @@ export default function TaskList() {
 
     return (
       <>
+        {selectionMode && (
+          <Box mb="md">
+            <Group justify="apart">
+              <Text size="sm" fw={600}>
+                {selectedTasks.length} {selectedTasks.length === 1 ? 'task' : 'tasks'} selected
+              </Text>
+              <Group>
+                {selectedTasks.length > 0 && (
+                  <>
+                    <Menu position="bottom-end" shadow="md">
+                      <Menu.Target>
+                        <Button size="xs" variant="light">
+                          Actions
+                        </Button>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Label>Change Status</Menu.Label>
+                        <Menu.Item onClick={() => handleBulkStatusChange('todo')}>
+                          Mark as To Do
+                        </Menu.Item>
+                        <Menu.Item onClick={() => handleBulkStatusChange('in_progress')}>
+                          Mark as In Progress
+                        </Menu.Item>
+                        <Menu.Item onClick={() => handleBulkStatusChange('done')}>
+                          Mark as Done
+                        </Menu.Item>
+                        
+                        <Menu.Divider />
+                        <Menu.Label>Change Priority</Menu.Label>
+                        <Menu.Item onClick={() => handleBulkPriorityChange('high')}>
+                          Set High Priority
+                        </Menu.Item>
+                        <Menu.Item onClick={() => handleBulkPriorityChange('medium')}>
+                          Set Medium Priority
+                        </Menu.Item>
+                        <Menu.Item onClick={() => handleBulkPriorityChange('low')}>
+                          Set Low Priority
+                        </Menu.Item>
+                        
+                        <Menu.Divider />
+                        <Menu.Label>Change Due Date</Menu.Label>
+                        <Menu.Item onClick={() => setBulkDueDateModalOpened(true)}>
+                          Set Due Date
+                        </Menu.Item>
+                        <Menu.Item onClick={() => clearBulkDueDate()}>
+                          Remove Due Date
+                        </Menu.Item>
+                        
+                        <Menu.Divider />
+                        <Menu.Item 
+                          color="red" 
+                          onClick={handleBulkDelete}
+                        >
+                          Delete Selected Tasks
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  </>
+                )}
+                <Button size="xs" variant="subtle" onClick={exitSelectionMode}>
+                  Cancel
+                </Button>
+              </Group>
+            </Group>
+          </Box>
+        )}
+        
         {groupedTasks.map(([dateKey, tasks]) => (
           <Box key={dateKey} mb="md">
             {/* Date header */}
@@ -635,17 +721,24 @@ export default function TaskList() {
                     position: 'relative',
                     marginBottom: '4px',
                     backgroundColor: isDark 
-                      ? (task.status === 'done' ? 'rgba(26, 27, 30, 0.4)' : '#1A1B1E') 
-                      : (task.status === 'done' ? 'rgba(248, 249, 250, 0.4)' : '#ffffff'),
+                      ? (selectedTasks.includes(task.id) 
+                        ? 'rgba(32, 201, 151, 0.15)' 
+                        : (task.status === 'done' ? 'rgba(26, 27, 30, 0.4)' : '#1A1B1E'))
+                      : (selectedTasks.includes(task.id) 
+                        ? 'rgba(32, 201, 151, 0.1)' 
+                        : (task.status === 'done' ? 'rgba(248, 249, 250, 0.4)' : '#ffffff')),
                     opacity: task.status === 'done' ? 0.7 : 1,
-                    boxShadow: isDark 
-                      ? '0 1px 3px rgba(0, 0, 0, 0.15)' 
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                    boxShadow: selectedTasks.includes(task.id)
+                      ? `0 0 0 2px ${isDark ? '#20C997' : '#20C997'}`
+                      : (isDark 
+                        ? '0 1px 3px rgba(0, 0, 0, 0.15)' 
+                        : '0 1px 3px rgba(0, 0, 0, 0.05)'),
                     overflow: 'hidden',
                     transition: 'all 0.15s ease-in-out',
                     animation: `fadeIn 0.3s ease forwards`,
                     animationDelay: `${index * 0.05}s`,
                     borderRadius: '6px',
+                    cursor: 'pointer',
                     '&:hover': {
                       boxShadow: isDark 
                         ? '0 3px 6px rgba(0, 0, 0, 0.2)' 
@@ -653,12 +746,20 @@ export default function TaskList() {
                       transform: 'translateY(-1px)'
                     }
                   }}
+                  onClick={(e) => toggleTaskSelection(task.id, e)}
                 >
                   <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
                     <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                       <Checkbox
-                        checked={task.status === 'done'}
-                        onChange={(e) => handleStatusChange(task.id, e as any)}
+                        checked={selectionMode ? selectedTasks.includes(task.id) : task.status === 'done'}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (selectionMode) {
+                            toggleTaskSelection(task.id, e as any);
+                          } else {
+                            handleStatusChange(task.id, e as any);
+                          }
+                        }}
                         styles={{
                           input: {
                             cursor: 'pointer',
@@ -666,8 +767,8 @@ export default function TaskList() {
                             border: `1px solid ${isDark ? '#373A40' : '#ced4da'}`,
                             borderRadius: '4px',
                             '&:checked': {
-                              backgroundColor: '#20C997',
-                              borderColor: '#20C997'
+                              backgroundColor: selectionMode ? '#20C997' : '#20C997',
+                              borderColor: selectionMode ? '#20C997' : '#20C997'
                             },
                             transition: 'all 0.2s ease',
                           },
@@ -743,60 +844,247 @@ export default function TaskList() {
                       </Box>
                     </Box>
                     
-                    <Group gap="xs">
-                      <ActionIcon 
-                        size="sm" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditTask(task.id, e);
-                        }}
-                        style={{ 
-                          color: isDark ? '#909296' : '#495057',
-                          backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                          border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                          borderRadius: '4px',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            backgroundColor: isDark ? '#2C2E33' : '#e9ecef',
-                            color: isDark ? '#C1C2C5' : '#495057'
-                          }
-                        }}
-                        title="Edit task"
-                      >
-                        <IconEdit size={14} stroke={1.5} />
-                      </ActionIcon>
-                      <ActionIcon 
-                        size="sm" 
-                        style={{ 
-                          color: isDark ? '#FA5252' : '#e03131',
-                          backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                          border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                          borderRadius: '4px',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            backgroundColor: isDark ? '#902129' : '#FFEBEB',
-                            color: '#FA5252'
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm('Are you sure you want to delete this task?')) {
-                            handleDeleteTask(task.id, e);
-                          }
-                        }}
-                        title="Delete task"
-                      >
-                        <IconTrash size={14} stroke={1.5} />
-                      </ActionIcon>
-                    </Group>
+                    {!selectionMode && (
+                      <Menu position="bottom-end" shadow="md">
+                        <Menu.Target>
+                          <ActionIcon size="sm" variant="subtle" onClick={(e) => e.stopPropagation()}>
+                            <IconDotsVertical size={16} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          <Menu.Label>Status</Menu.Label>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusChange(task.id, e);
+                            }}
+                          >
+                            {task.status === 'done' ? 'Mark as Todo' : 'Mark as Done'}
+                          </Menu.Item>
+                          
+                          <Menu.Divider />
+                          <Menu.Label>Priority</Menu.Label>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePriorityChange(task.id, 'high', e);
+                            }}
+                          >
+                            High Priority
+                          </Menu.Item>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePriorityChange(task.id, 'medium', e);
+                            }}
+                          >
+                            Medium Priority
+                          </Menu.Item>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePriorityChange(task.id, 'low', e);
+                            }}
+                          >
+                            Low Priority
+                          </Menu.Item>
+                          
+                          <Menu.Divider />
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditTask(task.id, e);
+                            }}
+                          >
+                            Edit Task
+                          </Menu.Item>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleNotesOpen(task.id, task.notes, e);
+                            }}
+                          >
+                            {task.notes ? 'Edit Notes' : 'Add Notes'}
+                          </Menu.Item>
+                          <Menu.Item 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTaskWithDueDateMenu(task.id);
+                              setDueDateMenuOpened(true);
+                            }}
+                          >
+                            {task.dueDate ? 'Change Due Date' : 'Add Due Date'}
+                          </Menu.Item>
+                          
+                          <Menu.Divider />
+                          <Menu.Item 
+                            color="red"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTask(task.id, e);
+                            }}
+                          >
+                            Delete Task
+                          </Menu.Item>
+                        </Menu.Dropdown>
+                      </Menu>
+                    )}
                   </Group>
                 </Paper>
               ))}
             </Stack>
           </Box>
         ))}
+
+        {/* Bulk Due Date Modal */}
+        <Modal
+          opened={bulkDueDateModalOpened}
+          onClose={() => setBulkDueDateModalOpened(false)}
+          title="Set Due Date for Selected Tasks"
+          size="sm"
+          centered
+        >
+          <Box p="md">
+            <DatesProvider settings={{ timezone: 'UTC' }}>
+              <DatePickerInput
+                valueFormat="MMM DD, YYYY"
+                label="Due Date"
+                placeholder="Select a date"
+                value={bulkDueDate}
+                onChange={handleBulkDueDateChange}
+                styles={{
+                  root: { marginBottom: 15 },
+                  input: {
+                    backgroundColor: isDark ? '#25262b' : 'white',
+                    borderColor: isDark ? '#373A40' : '#ced4da',
+                    color: isDark ? 'white' : 'black',
+                  }
+                }}
+                clearable
+              />
+            </DatesProvider>
+
+            <Group justify="right" mt="md">
+              <Button 
+                variant="subtle" 
+                onClick={() => setBulkDueDateModalOpened(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="light"
+                color="red"
+                onClick={clearBulkDueDate}
+              >
+                Remove Due Dates
+              </Button>
+              <Button 
+                onClick={applyBulkDueDate}
+                disabled={!bulkDueDate}
+              >
+                Apply Date
+              </Button>
+            </Group>
+          </Box>
+        </Modal>
       </>
     );
+  };
+
+  // New functions for multiple selection
+  const toggleTaskSelection = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!selectionMode) {
+      setSelectionMode(true);
+      setSelectedTasks([taskId]);
+      return;
+    }
+    
+    setSelectedTasks(prev => {
+      if (prev.includes(taskId)) {
+        const newSelection = prev.filter(id => id !== taskId);
+        if (newSelection.length === 0) {
+          setSelectionMode(false);
+        }
+        return newSelection;
+      } else {
+        return [...prev, taskId];
+      }
+    });
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedTasks([]);
+    setBulkActionMenuOpened(false);
+  };
+
+  const handleBulkStatusChange = (status: 'todo' | 'in_progress' | 'done') => {
+    if (selectedTasks.length === 0) return;
+    
+    selectedTasks.forEach(taskId => {
+      updateTask(taskId, { status });
+    });
+    
+    exitSelectionMode();
+  };
+
+  const handleBulkPriorityChange = (priority: 'low' | 'medium' | 'high') => {
+    if (selectedTasks.length === 0) return;
+    
+    selectedTasks.forEach(taskId => {
+      updateTask(taskId, { priority });
+    });
+    
+    exitSelectionMode();
+  };
+
+  const handleBulkDueDateChange = (dueDate: Date | null) => {
+    // Just update the state without closing the modal or applying changes
+    setBulkDueDate(dueDate);
+  };
+
+  const applyBulkDueDate = () => {
+    // Close the modal
+    setBulkDueDateModalOpened(false);
+    
+    // If no tasks selected or no date set, just return
+    if (selectedTasks.length === 0) return;
+    
+    // Apply the due date to all selected tasks
+    selectedTasks.forEach(taskId => {
+      updateTask(taskId, { dueDate: bulkDueDate || undefined });
+    });
+    
+    // Exit selection mode after applying changes
+    exitSelectionMode();
+  };
+
+  const clearBulkDueDate = () => {
+    // If no tasks selected, just return
+    if (selectedTasks.length === 0) return;
+    
+    // Remove due date from all selected tasks
+    selectedTasks.forEach(taskId => {
+      updateTask(taskId, { dueDate: undefined });
+    });
+    
+    // Close the modal and exit selection mode
+    setBulkDueDateModalOpened(false);
+    exitSelectionMode();
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTasks.length === 0) return;
+    
+    if (window.confirm(`Are you sure you want to delete ${selectedTasks.length} task(s)?`)) {
+      selectedTasks.forEach(taskId => {
+        deleteTask(taskId);
+      });
+      
+      exitSelectionMode();
+    }
   };
 
   return (
@@ -851,31 +1139,46 @@ export default function TaskList() {
               )}
               {!viewingCompletedTasks && (
                 <>
-              <Select
-                placeholder="Sort"
-                data={sortOptions}
-                value={sortOrder}
-                onChange={handleSortChange}
-                rightSection={<IconSortAscending size={14} style={{ color: isDark ? '#909296' : '#6c757d' }} />}
-                size="xs"
-                style={{ width: 150 }}
-                styles={{
-                  input: {
-                    height: '28px',
-                    minHeight: '28px',
-                    borderRadius: '4px'
-                  }
-                }}
-              />
-              <Button 
-                variant="filled" 
-                color="teal" 
-                size="xs" 
-                onClick={() => setAddingTask(true)}
-                leftSection={<IconPlus size={14} />}
-              >
-                Add
-              </Button>
+                <Button
+                  variant={selectionMode ? "filled" : "subtle"}
+                  color={selectionMode ? "teal" : "gray"}
+                  size="xs"
+                  onClick={() => {
+                    if (selectionMode) {
+                      exitSelectionMode();
+                    } else {
+                      setSelectionMode(true);
+                    }
+                  }}
+                  leftSection={<IconListCheck size={14} />}
+                >
+                  {selectionMode ? 'Cancel Selection' : 'Select Tasks'}
+                </Button>
+                <Select
+                  placeholder="Sort"
+                  data={sortOptions}
+                  value={sortOrder}
+                  onChange={handleSortChange}
+                  rightSection={<IconSortAscending size={14} style={{ color: isDark ? '#909296' : '#6c757d' }} />}
+                  size="xs"
+                  style={{ width: 150 }}
+                  styles={{
+                    input: {
+                      height: '28px',
+                      minHeight: '28px',
+                      borderRadius: '4px'
+                    }
+                  }}
+                />
+                <Button 
+                  variant="filled" 
+                  color="teal" 
+                  size="xs" 
+                  onClick={() => setAddingTask(true)}
+                  leftSection={<IconPlus size={14} />}
+                >
+                  Add
+                </Button>
                 </>
               )}
             </Group>
