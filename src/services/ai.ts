@@ -315,105 +315,83 @@ type Priority = 'high' | 'medium' | 'low';
  * This gives us true AI understanding of task requests without needing manual pattern matching
  */
 async function processTaskWithAI(message: string, taskStore: TaskStoreType): Promise<string> {
-  console.log("Processing task with OpenAI:", message);
-  
+  console.log("Processing task with AI:", message);
   try {
     const openai = await getOpenAIClient();
     
-    // Check if this is a request to generate subtasks
-    if (message.toLowerCase().includes("help me") || 
-        message.toLowerCase().includes("add tasks that would help") ||
-        message.toLowerCase().includes("add subtasks") ||
-        message.toLowerCase().includes("create subtasks") ||
-        message.toLowerCase().includes("what steps")) {
-      return await generateSubtasksWithAI(message, taskStore);
-    }
-    
-    // Check if this is a multi-task creation request (like an email or list conversion)
-    if (message.toLowerCase().includes("turn") && 
-        (message.toLowerCase().includes("into tasks") || 
-         message.toLowerCase().includes("into to-dos") || 
-         message.toLowerCase().includes("into todo")) ||
-        message.toLowerCase().includes("create tasks from") ||
-        (message.toLowerCase().includes("following") && 
-         message.toLowerCase().includes("tasks")) ||
-        // Detect numbered list patterns (1. Task, 2. Task, etc.)
-        message.match(/\d+\s*\.\s*\w+/) !== null ||
-        // Detect bullet point lists
-        message.match(/[\*\-•]\s+\w+/) !== null ||
-        // If message contains "finish" and multiple lines
-        (message.toLowerCase().includes("finish") && message.split('\n').length > 2) ||
-        // If "please" is followed by multiple action verbs that could be tasks
-        (message.toLowerCase().includes("please") && 
-         (countMatches(message.toLowerCase(), /\b(do|make|create|finish|complete|review|send|call|email|schedule|organize|prepare|write|update)\b/) > 1))) {
-      
-      console.log("Detected multi-task message pattern");
-      return await processMultiTaskCreation(message, taskStore);
-    }
-    
-    // Define a system prompt that instructs GPT how to parse task commands
-    const systemPrompt = `You are a task management assistant. Your job is to analyze the user's request and extract the relevant information for task management.
+    // Create a comprehensive system prompt that guides the model to extract task intent
+    const systemPrompt = `You are a task assistant that understands natural language instructions for task management.
 
 CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
 
-Extract the following information:
-1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update/move/set/change)
-2. TASK_TITLE: If they're creating a task, what is the title? (Extract only the core task title, not date or priority)
-3. DATE: Is there a specific date or time mentioned? (exact date, today, tomorrow, next week, etc.)
-4. PRIORITY: Any priority mentioned? (high, medium, low)
-5. TASK_NUMBER: If referring to an existing task by number, what is it? (extract just the number, e.g. from "delete task 1" or "move task #2" extract 1 or 2)
-6. DESCRIPTION: Any additional details for the task?
-7. BULK_ACTION: Are they referring to "all tasks" or multiple tasks? If they say "delete all tasks" or similar, this MUST be true.
-8. FILTER: If bulk action, what's the filter? (today, tomorrow, this week, high, medium, low, no date, undated, all)
-9. TARGET_DATE: If they want to move tasks to a specific date (like "move all tasks to today"), what is the target date?
-10. PROPERTY: For update commands, what property is being changed? (priority, status, due date)
-11. VALUE: For update commands, what is the new value? (high/medium/low for priority, done/todo for status, etc.)
+Analyze the user's message and extract the task management intent. Pay special attention to:
 
-IMPORTANT: 
-- Always look for numerical task references like "task 1", "task #2", etc. and extract that number into TASK_NUMBER.
-- For phrases like "delete all tasks" or "complete all tasks", you MUST set bulkAction to true.
-- For phrases like "move all tasks to today" or "set all tasks due date to tomorrow", set:
-  * bulkAction to true
-  * intent to "move"
-  * targetDate to the mentioned date (today/tomorrow/etc)
-- For phrases like "move all my tasks with no due date to tomorrow", set:
-  * bulkAction to true
-  * intent to "move"
-  * filter to "no date" or "undated"
-  * targetDate to "tomorrow"
-- For phrases like "move all tasks for tomorrow to high priority", set:
-  * bulkAction to true
-  * intent to "update"
-  * filter to "tomorrow"
-  * property to "priority"
-  * value to "high"
+1. Task creation intents ("create a task", "add a new task", "remind me to")
+2. Task modification intents ("change priority", "move task to tomorrow")
+3. Task deletion intents ("delete task", "remove task")
+4. Task completion intents ("mark as done", "complete task")
+5. Task query intents ("show tasks", "what tasks")
+6. Multi-task selection patterns ("task 1 and 2", "tasks 3, 4, and 5")
 
-Respond in JSON format:
+For multi-task selections patterns, identify:
+- The specific task numbers mentioned
+- The action to perform (move, mark complete, change priority)
+- Any properties to update (priority, due date)
+- The new value for those properties
+
+Return a structured JSON with the extracted intent:
 {
-  "intent": "add|delete|complete|list|modify|move|set|update|change",
-  "taskTitle": "the task title",
-  "date": "2023-04-26" or "today" or "tomorrow" or "next week",
-  "priority": "high|medium|low",
-  "taskNumber": 5,
-  "description": "additional details",
+  "taskAction": "create|update|delete|complete|list|bulk",
   "bulkAction": true|false,
-  "filter": "today|tomorrow|this week|high|medium|low|no date|undated|all",
-  "targetDate": "today|tomorrow|next week",
-  "property": "priority|status|due date",
-  "value": "high|medium|low|done|todo|today|tomorrow"
+  "multiTaskSelection": true|false,
+  "selectedTaskNumbers": [1, 2, 3], // Only include if multiTaskSelection is true
+  "message": "original message",
+  "title": "task title",
+  "date": "due date",
+  "targetDate": "date to move to",
+  "priority": "high|medium|low",
+  "status": "todo|in_progress|done",
+  "filter": "all|today|tomorrow|this week",
+  "property": "priority|status|dueDate",
+  "intent": "create|update|delete|complete|move|list|query",
+  "value": "new value for the property"
 }
 
-Only include fields that you can extract from the user's message. If a field is not applicable or not mentioned, omit it entirely from the JSON.`;
+Only include relevant fields based on the intent.
+
+Example multi-task selection:
+For "move tasks 1 and 3 to tomorrow", return:
+{
+  "taskAction": "update",
+  "bulkAction": false,
+  "multiTaskSelection": true,
+  "selectedTaskNumbers": [1, 3],
+  "message": "move tasks 1 and 3 to tomorrow",
+  "targetDate": "tomorrow",
+  "property": "dueDate",
+  "intent": "move",
+  "value": "tomorrow"
+}
+
+For "mark tasks 2 and 4 as complete", return:
+{
+  "taskAction": "complete",
+  "bulkAction": false,
+  "multiTaskSelection": true,
+  "selectedTaskNumbers": [2, 4],
+  "message": "mark tasks 2 and 4 as complete",
+  "intent": "complete"
+}`;
     
     // Send the request to the OpenAI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Using GPT-4o for best natural language understanding
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      response_format: { type: "json_object" }, // Ensure we get a valid JSON response
-      temperature: 0.3 // Lower temperature for more predictable extraction
+      response_format: { type: "json_object" },
+      temperature: 0.3
     });
     
     // Extract and parse the JSON from the response
@@ -422,140 +400,121 @@ Only include fields that you can extract from the user's message. If a field is 
       throw new Error("Empty response from OpenAI");
     }
     
-    // Parse the JSON
-    const taskData = JSON.parse(content);
-    console.log("AI parsed task data:", taskData);
-    
-    // Check for numerical task references in input
-    if (!taskData.taskNumber && message.match(/task\s+#?(\d+)|#(\d+)/i)) {
-      const matches = message.match(/task\s+#?(\d+)|#(\d+)/i);
-      if (matches && (matches[1] || matches[2])) {
-        taskData.taskNumber = parseInt(matches[1] || matches[2]);
-        console.log("Extracted task number from message:", taskData.taskNumber);
-      }
-    }
-    
-    // Check for commands with task numbers but missing intent
-    if (taskData.taskNumber !== undefined && !taskData.intent) {
-      // Try to determine intent from message
-      if (message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove")) {
-        taskData.intent = "delete";
-      } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish") || message.toLowerCase().includes("done")) {
-        taskData.intent = "complete";
-      } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("change") || message.toLowerCase().includes("set")) {
-        if (message.toLowerCase().includes("priority")) {
-          taskData.intent = "update";
-          taskData.property = "priority";
+    try {
+      // Parse the task data from the JSON response
+      const taskData = JSON.parse(content);
+      console.log("Extracted task data:", taskData);
+      
+      // Check for multi-task selection pattern first
+      if (taskData.multiTaskSelection === true) {
+        console.log("Handling multi-task selection");
+        
+        // Ensure we have task numbers
+        if (!taskData.selectedTaskNumbers || !Array.isArray(taskData.selectedTaskNumbers) || taskData.selectedTaskNumbers.length === 0) {
+          // Try to extract task numbers directly from the message as a fallback
+          taskData.selectedTaskNumbers = extractTaskNumbers(message);
           
-          // Try to determine priority value
-          if (message.toLowerCase().includes("high")) {
-            taskData.value = "high";
-          } else if (message.toLowerCase().includes("medium")) {
-            taskData.value = "medium";
-          } else if (message.toLowerCase().includes("low")) {
-            taskData.value = "low";
+          if (taskData.selectedTaskNumbers.length === 0) {
+            return "I couldn't identify which tasks you're referring to. Please specify the task numbers clearly.";
           }
-        } else if (message.toLowerCase().includes("tomorrow")) {
-          taskData.intent = "move";
-          taskData.targetDate = "tomorrow";
-        } else if (message.toLowerCase().includes("today")) {
-          taskData.intent = "move";
-          taskData.targetDate = "today";
+        }
+        
+        // Add the full message for reference
+        taskData.message = message;
+        
+        // Use the bulk action handler which now handles multi-task selection
+        return handleBulkAction(taskData, taskStore);
+      }
+      
+      // Handle bulk actions for all tasks
+      if (taskData.bulkAction === true) {
+        console.log("Handling bulk action");
+        return handleBulkAction(taskData, taskStore);
+      }
+      
+      // Check for numerical task references in input
+      if (!taskData.taskNumber && message.match(/task\s+#?(\d+)|#(\d+)/i)) {
+        const matches = message.match(/task\s+#?(\d+)|#(\d+)/i);
+        if (matches && (matches[1] || matches[2])) {
+          taskData.taskNumber = parseInt(matches[1] || matches[2]);
+          console.log("Extracted task number from message:", taskData.taskNumber);
         }
       }
-    }
-    
-    // Check for bulk actions first
-    // For a message like "delete all tasks", ensure it's treated as a bulk action
-    if (taskData.bulkAction === true || 
-       (message.toLowerCase().includes("all") && 
-        (message.toLowerCase().includes("delete") || 
-         message.toLowerCase().includes("remove") || 
-         message.toLowerCase().includes("complete") || 
-         message.toLowerCase().includes("finish") ||
-         message.toLowerCase().includes("move") ||
-         message.toLowerCase().includes("set")))) {
       
-      // If it's not already set, make sure it's a bulk action
-      if (!taskData.bulkAction) {
-        taskData.bulkAction = true;
-        
-        // Set intent if not already set
-        if (!taskData.intent) {
-          if (message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove")) {
-            taskData.intent = "delete";
-          } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish")) {
-            taskData.intent = "complete";
-          } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("set")) {
-            taskData.intent = "move";
+      // Check for commands with task numbers but missing intent
+      if (taskData.taskNumber !== undefined && !taskData.intent) {
+        // Try to determine intent from message
+        if (message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove")) {
+          taskData.intent = "delete";
+        } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish") || message.toLowerCase().includes("done")) {
+          taskData.intent = "complete";
+        } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("change") || message.toLowerCase().includes("set")) {
+          if (message.toLowerCase().includes("priority")) {
+            taskData.intent = "update";
+            taskData.property = "priority";
             
-            // Set target date if not already set
-            if (!taskData.targetDate) {
-              if (message.toLowerCase().includes("today")) {
-                taskData.targetDate = "today";
-              } else if (message.toLowerCase().includes("tomorrow")) {
-                taskData.targetDate = "tomorrow";
-              } else if (message.toLowerCase().includes("next week")) {
-                taskData.targetDate = "next week";
-              }
+            // Try to determine priority value
+            if (message.toLowerCase().includes("high")) {
+              taskData.value = "high";
+            } else if (message.toLowerCase().includes("medium")) {
+              taskData.value = "medium";
+            } else if (message.toLowerCase().includes("low")) {
+              taskData.value = "low";
             }
+          } else if (message.toLowerCase().includes("tomorrow")) {
+            taskData.intent = "move";
+            taskData.targetDate = "tomorrow";
+          } else if (message.toLowerCase().includes("today")) {
+            taskData.intent = "move";
+            taskData.targetDate = "today";
           }
         }
+      }
+      
+      // Now process the request based on the extracted intent
+      const intent = taskData.intent?.toLowerCase();
+      switch (intent) {
+        case "add":
+        case "create": {
+          return handleAITaskCreation(taskData, taskStore);
+        }
         
-        // Set filter if not already set
-        if (!taskData.filter && message.toLowerCase().includes("today")) {
-          taskData.filter = "today";
-        } else if (!taskData.filter && message.toLowerCase().includes("tomorrow")) {
-          taskData.filter = "tomorrow";
-        } else if (!taskData.filter) {
-          taskData.filter = "all";
+        case "delete":
+        case "remove": {
+          return handleAITaskDeletion(taskData, taskStore);
+        }
+        
+        case "complete":
+        case "finish":
+        case "mark": {
+          return handleAITaskCompletion(taskData, taskStore);
+        }
+        
+        case "list":
+        case "show":
+        case "display": {
+          if (taskData.priority) {
+            return handleTaskListByPriority(taskData.priority as "high" | "medium" | "low", taskStore);
+          }
+          const dateFilter = taskData.date?.toLowerCase() || "all";
+          return handleTaskListRequest(dateFilter, taskStore);
+        }
+        
+        case "modify":
+        case "update":
+        case "change":
+        case "move":
+        case "set": {
+          return handleAITaskModification(taskData, taskStore);
+        }
+        
+        default: {
+          return "I couldn't determine what you want to do with your task. Please try again with a clearer instruction.";
         }
       }
-      
-      console.log("Processing as bulk action:", taskData);
-      return handleBulkAction(taskData, taskStore);
-    }
-    
-    // Now process the request based on the extracted intent
-    const intent = taskData.intent?.toLowerCase();
-    switch (intent) {
-      case "add":
-      case "create": {
-        return handleAITaskCreation(taskData, taskStore);
-      }
-      
-      case "delete":
-      case "remove": {
-        return handleAITaskDeletion(taskData, taskStore);
-      }
-      
-      case "complete":
-      case "finish":
-      case "mark": {
-        return handleAITaskCompletion(taskData, taskStore);
-      }
-      
-      case "list":
-      case "show":
-      case "display": {
-        if (taskData.priority) {
-          return handleTaskListByPriority(taskData.priority as "high" | "medium" | "low", taskStore);
-        }
-        const dateFilter = taskData.date?.toLowerCase() || "all";
-        return handleTaskListRequest(dateFilter, taskStore);
-      }
-      
-      case "modify":
-      case "update":
-      case "change":
-      case "move":
-      case "set": {
-        return handleAITaskModification(taskData, taskStore);
-      }
-      
-      default: {
-        return "I couldn't determine what you want to do with your task. Please try again with a clearer instruction.";
-      }
+    } catch (error) {
+      console.error("Error processing task with AI:", error);
+      return "Sorry, I encountered an error while processing your request. Please try again.";
     }
   } catch (error) {
     console.error("Error processing task with AI:", error);
@@ -1193,11 +1152,51 @@ function handleAITaskModification(taskData: any, taskStore: TaskStoreType): stri
 }
 
 /**
+ * Extract task numbers from a string containing patterns like "1 and 2" or "5, 6, and 7"
+ * Returns an array of numbers representing the selected task positions
+ */
+function extractTaskNumbers(message: string): number[] {
+  const numbers: number[] = [];
+  
+  // Pattern 1: "task 1 and 2" or "tasks 1 and 2"
+  const andPattern = /tasks?\s+(\d+)\s+and\s+(\d+)/i;
+  const andMatch = message.match(andPattern);
+  if (andMatch) {
+    const num1 = parseInt(andMatch[1], 10);
+    const num2 = parseInt(andMatch[2], 10);
+    if (!isNaN(num1)) numbers.push(num1);
+    if (!isNaN(num2)) numbers.push(num2);
+    return numbers;
+  }
+  
+  // Pattern 2: "tasks 1, 2, and 3" or similar comma-separated lists
+  const commaPattern = /tasks?\s+((?:\d+(?:\s*,\s*|\s+and\s+))+\d+)/i;
+  const commaMatch = message.match(commaPattern);
+  if (commaMatch && commaMatch[1]) {
+    // Extract all numbers from the matched section
+    const numberMatches = commaMatch[1].match(/\d+/g);
+    if (numberMatches) {
+      numberMatches.forEach(numStr => {
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) numbers.push(num);
+      });
+    }
+  }
+  
+  return numbers;
+}
+
+/**
  * Handle bulk action with numerical ordering
  * Only affects uncompleted tasks
  */
 function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   console.log("Handling bulk action with data:", taskData);
+  
+  // Extract task numbers if this is a multi-task selection command
+  const message = taskData.message || "";
+  const selectedTaskNumbers = extractTaskNumbers(message);
+  console.log("Selected task numbers:", selectedTaskNumbers);
   
   // Enhanced intent detection
   const intent = taskData.intent?.toLowerCase() || 
@@ -1219,7 +1218,96 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
                     taskData.message?.toLowerCase().includes("medium") ? "medium" :
                     taskData.message?.toLowerCase().includes("low") ? "low" : null);
   
-  // Determine filter
+  // Handle operations on specific selected tasks if task numbers are provided
+  if (selectedTaskNumbers.length > 0) {
+    console.log("Processing multi-task selection:", selectedTaskNumbers);
+    
+    // Get active tasks (not completed)
+    const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+    
+    // Get valid tasks based on provided numbers
+    const selectedTasks = selectedTaskNumbers
+      .map(num => (num >= 1 && num <= activeTasks.length) ? activeTasks[num - 1] : null)
+      .filter((task): task is Task => task !== null);
+    
+    if (selectedTasks.length === 0) {
+      return "I couldn't find the specified tasks. Please check the task numbers and try again.";
+    }
+    
+    // Handle different operations on selected tasks
+    if (intent === "delete" || intent === "remove") {
+      const tasksToDelete = selectedTasks.map((task, index) => {
+        const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+        return formatTaskWithPosition(task, position, false);
+      });
+      
+      selectedTasks.forEach(task => taskStore.deleteTask(task.id));
+      
+      return `✅ Deleted the following tasks:\n\n${tasksToDelete.join("\n")}`;
+    }
+    
+    if (intent === "complete" || intent === "finish" || intent === "mark") {
+      const completedTasks = selectedTasks.map(task => {
+        const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+        taskStore.updateTask(task.id, { status: "done" });
+        return formatTaskWithPosition(task, position, false);
+      });
+      
+      return `✅ Marked the following tasks as complete:\n\n${completedTasks.join("\n")}`;
+    }
+    
+    // Handle property updates (like priority)
+    if (intent === "update" && propertyUpdate && updateValue) {
+      const updatedTasks = selectedTasks.map(task => {
+        const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+        
+        if (propertyUpdate === "priority") {
+          taskStore.updateTask(task.id, { 
+            priority: updateValue as "high" | "medium" | "low" 
+          });
+        } else if (propertyUpdate === "status") {
+          taskStore.updateTask(task.id, { 
+            status: updateValue as "todo" | "in_progress" | "done"
+          });
+        } else if (propertyUpdate === "dueDate") {
+          const date = parseDateReference(updateValue);
+          if (date) {
+            taskStore.updateTask(task.id, { dueDate: date });
+          }
+        }
+        
+        return formatTaskWithPosition(task, position, false);
+      });
+      
+      return `✅ Updated the following tasks to ${updateValue} ${propertyUpdate}:\n\n${updatedTasks.join("\n")}`;
+    }
+    
+    // Move tasks to a specific date
+    if ((intent === "move" || intent === "update") && taskData.targetDate) {
+      const targetDate = parseDateReference(taskData.targetDate);
+      if (!targetDate) {
+        return `I couldn't understand the date "${taskData.targetDate}". Please try a different format.`;
+      }
+      
+      const updatedTasks = selectedTasks.map(task => {
+        const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+        taskStore.updateTask(task.id, { dueDate: targetDate });
+        return formatTaskWithPosition(task, position, false);
+      });
+      
+      const dueDateString = targetDate.toLocaleDateString("en-US", { 
+        weekday: "long", 
+        month: "short", 
+        day: "numeric"
+      });
+      
+      return `✅ Moved the following tasks to ${dueDateString}:\n\n${updatedTasks.join("\n")}`;
+    }
+    
+    return "I couldn't determine what action you want to perform on the selected tasks.";
+  }
+  
+  // Determine filter for bulk operations on all tasks
   let filter = taskData.filter?.toLowerCase() || "all";
   let dateFilter = taskData.date?.toLowerCase();
   
@@ -1438,6 +1526,13 @@ export async function processAITaskQuery(message: string, taskStore: TaskStoreTy
   try {
     // First check for direct command patterns for bulk operations
     const normalizedMessage = message.toLowerCase().trim();
+    
+    // Direct pattern matching for multi-task selection (added for fallback)
+    const multiTaskPattern = /(?:(?:move|mark|complete|set|change)\s+)?tasks?\s+\d+(?:\s*,\s*|\s+and\s+)\d+/i;
+    if (multiTaskPattern.test(normalizedMessage)) {
+      console.log("Direct multi-task pattern match detected, letting AI handle it");
+      return await processTaskWithAI(message, taskStore);
+    }
     
     // Handle direct bulk operations with regex as a fallback
     // Check for "delete all tasks" pattern
