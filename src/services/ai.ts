@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import { AIModel, Task, Message } from '../types';
 import { SortOption } from '../store';
-import { format } from 'date-fns';
+import { format, isSameDay, parseISO } from 'date-fns';
 import { useStore } from '../store';
 import { storageService } from './storage';
 
@@ -308,6 +308,8 @@ interface TaskStoreType {
   bulkUpdateTasks: (filter: string, updates: Partial<Task>) => void;
 }
 
+type Priority = 'high' | 'medium' | 'low';
+
 /**
  * Process natural language task instructions using OpenAI's GPT model
  * This gives us true AI understanding of task requests without needing manual pattern matching
@@ -355,24 +357,40 @@ async function processTaskWithAI(message: string, taskStore: TaskStoreType): Pro
 CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
 
 Extract the following information:
-1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update, move/set)
+1. INTENT: What does the user want to do? (add/create, delete/remove, complete/finish, list/show, modify/update/move/set/change)
 2. TASK_TITLE: If they're creating a task, what is the title? (Extract only the core task title, not date or priority)
 3. DATE: Is there a specific date or time mentioned? (exact date, today, tomorrow, next week, etc.)
 4. PRIORITY: Any priority mentioned? (high, medium, low)
-5. TASK_NUMBER: If referring to an existing task by number, what is it? (extract just the number)
+5. TASK_NUMBER: If referring to an existing task by number, what is it? (extract just the number, e.g. from "delete task 1" or "move task #2" extract 1 or 2)
 6. DESCRIPTION: Any additional details for the task?
 7. BULK_ACTION: Are they referring to "all tasks" or multiple tasks? If they say "delete all tasks" or similar, this MUST be true.
 8. FILTER: If bulk action, what's the filter? (today, tomorrow, this week, high, medium, low, no date, undated, all)
 9. TARGET_DATE: If they want to move tasks to a specific date (like "move all tasks to today"), what is the target date?
+10. PROPERTY: For update commands, what property is being changed? (priority, status, due date)
+11. VALUE: For update commands, what is the new value? (high/medium/low for priority, done/todo for status, etc.)
 
 IMPORTANT: 
+- Always look for numerical task references like "task 1", "task #2", etc. and extract that number into TASK_NUMBER.
 - For phrases like "delete all tasks" or "complete all tasks", you MUST set bulkAction to true.
-- For phrases like "move all tasks to today" or "set all tasks due date to tomorrow", set bulkAction to true, intent to "move" or "set", and targetDate to the mentioned date.
-- For phrases like "move all my tasks with no due date to tomorrow", set bulkAction to true, intent to "move", filter to "no date" or "undated", and targetDate to "tomorrow".
+- For phrases like "move all tasks to today" or "set all tasks due date to tomorrow", set:
+  * bulkAction to true
+  * intent to "move"
+  * targetDate to the mentioned date (today/tomorrow/etc)
+- For phrases like "move all my tasks with no due date to tomorrow", set:
+  * bulkAction to true
+  * intent to "move"
+  * filter to "no date" or "undated"
+  * targetDate to "tomorrow"
+- For phrases like "move all tasks for tomorrow to high priority", set:
+  * bulkAction to true
+  * intent to "update"
+  * filter to "tomorrow"
+  * property to "priority"
+  * value to "high"
 
 Respond in JSON format:
 {
-  "intent": "add|delete|complete|list|modify|move|set",
+  "intent": "add|delete|complete|list|modify|move|set|update|change",
   "taskTitle": "the task title",
   "date": "2023-04-26" or "today" or "tomorrow" or "next week",
   "priority": "high|medium|low",
@@ -380,7 +398,9 @@ Respond in JSON format:
   "description": "additional details",
   "bulkAction": true|false,
   "filter": "today|tomorrow|this week|high|medium|low|no date|undated|all",
-  "targetDate": "today|tomorrow|next week"
+  "targetDate": "today|tomorrow|next week",
+  "property": "priority|status|due date",
+  "value": "high|medium|low|done|todo|today|tomorrow"
 }
 
 Only include fields that you can extract from the user's message. If a field is not applicable or not mentioned, omit it entirely from the JSON.`;
@@ -405,6 +425,45 @@ Only include fields that you can extract from the user's message. If a field is 
     // Parse the JSON
     const taskData = JSON.parse(content);
     console.log("AI parsed task data:", taskData);
+    
+    // Check for numerical task references in input
+    if (!taskData.taskNumber && message.match(/task\s+#?(\d+)|#(\d+)/i)) {
+      const matches = message.match(/task\s+#?(\d+)|#(\d+)/i);
+      if (matches && (matches[1] || matches[2])) {
+        taskData.taskNumber = parseInt(matches[1] || matches[2]);
+        console.log("Extracted task number from message:", taskData.taskNumber);
+      }
+    }
+    
+    // Check for commands with task numbers but missing intent
+    if (taskData.taskNumber !== undefined && !taskData.intent) {
+      // Try to determine intent from message
+      if (message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove")) {
+        taskData.intent = "delete";
+      } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish") || message.toLowerCase().includes("done")) {
+        taskData.intent = "complete";
+      } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("change") || message.toLowerCase().includes("set")) {
+        if (message.toLowerCase().includes("priority")) {
+          taskData.intent = "update";
+          taskData.property = "priority";
+          
+          // Try to determine priority value
+          if (message.toLowerCase().includes("high")) {
+            taskData.value = "high";
+          } else if (message.toLowerCase().includes("medium")) {
+            taskData.value = "medium";
+          } else if (message.toLowerCase().includes("low")) {
+            taskData.value = "low";
+          }
+        } else if (message.toLowerCase().includes("tomorrow")) {
+          taskData.intent = "move";
+          taskData.targetDate = "tomorrow";
+        } else if (message.toLowerCase().includes("today")) {
+          taskData.intent = "move";
+          taskData.targetDate = "today";
+        }
+      }
+    }
     
     // Check for bulk actions first
     // For a message like "delete all tasks", ensure it's treated as a bulk action
@@ -436,6 +495,8 @@ Only include fields that you can extract from the user's message. If a field is 
                 taskData.targetDate = "today";
               } else if (message.toLowerCase().includes("tomorrow")) {
                 taskData.targetDate = "tomorrow";
+              } else if (message.toLowerCase().includes("next week")) {
+                taskData.targetDate = "next week";
               }
             }
           }
@@ -444,6 +505,8 @@ Only include fields that you can extract from the user's message. If a field is 
         // Set filter if not already set
         if (!taskData.filter && message.toLowerCase().includes("today")) {
           taskData.filter = "today";
+        } else if (!taskData.filter && message.toLowerCase().includes("tomorrow")) {
+          taskData.filter = "tomorrow";
         } else if (!taskData.filter) {
           taskData.filter = "all";
         }
@@ -454,36 +517,45 @@ Only include fields that you can extract from the user's message. If a field is 
     }
     
     // Now process the request based on the extracted intent
-    switch (taskData.intent?.toLowerCase()) {
+    const intent = taskData.intent?.toLowerCase();
+    switch (intent) {
       case "add":
-      case "create":
+      case "create": {
         return handleAITaskCreation(taskData, taskStore);
+      }
       
       case "delete":
-      case "remove":
+      case "remove": {
         return handleAITaskDeletion(taskData, taskStore);
+      }
       
       case "complete":
       case "finish":
-      case "mark":
+      case "mark": {
         return handleAITaskCompletion(taskData, taskStore);
+      }
       
       case "list":
       case "show":
-      case "display":
+      case "display": {
         if (taskData.priority) {
           return handleTaskListByPriority(taskData.priority as "high" | "medium" | "low", taskStore);
         }
         const dateFilter = taskData.date?.toLowerCase() || "all";
         return handleTaskListRequest(dateFilter, taskStore);
+      }
       
       case "modify":
       case "update":
       case "change":
+      case "move":
+      case "set": {
         return handleAITaskModification(taskData, taskStore);
+      }
       
-      default:
+      default: {
         return "I couldn't determine what you want to do with your task. Please try again with a clearer instruction.";
+      }
     }
   } catch (error) {
     console.error("Error processing task with AI:", error);
@@ -831,30 +903,35 @@ function handleAITaskCreation(taskData: any, taskStore: TaskStoreType): string {
 
 /**
  * Find task by number in a list (helper function)
+ * Only includes uncompleted tasks
  */
 function findTaskByNumber(taskNumber: number, taskStore: TaskStoreType): Task | null {
-  const tasks = taskStore.tasks;
-  if (taskNumber < 1 || taskNumber > tasks.length) {
+  // Filter out completed tasks
+  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  
+  if (taskNumber < 1 || taskNumber > activeTasks.length) {
     return null;
   }
-  return tasks[taskNumber - 1] || null;
+  return activeTasks[taskNumber - 1] || null;
 }
 
 /**
  * Find task by title/name in a list (helper function)
+ * Only includes uncompleted tasks
  */
 function findTaskByName(taskTitle: string, taskStore: TaskStoreType): Task | null {
-  const tasks = taskStore.tasks;
+  // Filter out completed tasks
+  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
   const normalizedTitle = taskTitle.toLowerCase().trim();
   
   // First try exact match
-  let matchedTask = tasks.find(task => 
+  let matchedTask = activeTasks.find(task => 
     task.title.toLowerCase() === normalizedTitle
   );
   
   // If no exact match, try contains
   if (!matchedTask) {
-    matchedTask = tasks.find(task => 
+    matchedTask = activeTasks.find(task => 
       task.title.toLowerCase().includes(normalizedTitle)
     );
   }
@@ -886,8 +963,9 @@ function deleteTaskByName(taskTitle: string, taskStore: TaskStoreType): string {
     return `Task "${taskTitle}" not found. Please check the task name and try again.`;
   }
   
+  const { position } = getTaskWithPosition(task, taskStore);
   taskStore.deleteTask(task.id);
-  return `✅ Deleted task: "${task.title}"`;
+  return `✅ Deleted task #${position}: "${task.title}"`;
 }
 
 /**
@@ -914,8 +992,9 @@ function completeTaskByName(taskTitle: string, taskStore: TaskStoreType): string
     return `Task "${taskTitle}" not found. Please check the task name and try again.`;
   }
   
+  const { position } = getTaskWithPosition(task, taskStore);
   taskStore.updateTask(task.id, { status: "done" });
-  return `✅ Marked task "${task.title}" as complete.`;
+  return `✅ Marked task #${position} "${task.title}" as complete.`;
 }
 
 /**
@@ -953,88 +1032,98 @@ function handleAITaskCompletion(taskData: any, taskStore: TaskStoreType): string
 }
 
 /**
- * List tasks for a specific date or filter
+ * Get task with its numerical position in the list of active tasks
+ */
+function getTaskWithPosition(task: Task, taskStore: TaskStoreType): { task: Task; position: number } {
+  // Filter out completed tasks
+  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  const position = activeTasks.findIndex(t => t.id === task.id) + 1;
+  return { task, position };
+}
+
+/**
+ * Format task for display with numerical position
+ */
+function formatTaskWithPosition(task: Task, position: number, includeDetails: boolean = true): string {
+  const dueDate = task.dueDate 
+    ? task.dueDate.toLocaleDateString("en-US", { 
+        weekday: "short", 
+        month: "short", 
+        day: "numeric" 
+      })
+    : "No due date";
+  
+  if (includeDetails) {
+    return `#${position}. ${task.title} (${task.priority} priority, due ${dueDate})${task.status === "done" ? " ✓" : ""}`;
+  } else {
+    return `#${position}. ${task.title}`;
+  }
+}
+
+/**
+ * Handle task list request with numerical ordering
+ * Only includes uncompleted tasks
  */
 function handleTaskListRequest(dateFilter: string, taskStore: TaskStoreType): string {
-  // Get the tasks based on the filter
+  // Get the tasks based on the filter, excluding completed tasks
   let tasks: Task[] = [];
   
   if (dateFilter === "all") {
-    tasks = taskStore.tasks;
+    tasks = taskStore.tasks.filter(task => task.status !== "done");
   } else {
-    tasks = taskStore.getTasksByDate(dateFilter);
+    tasks = taskStore.getTasksByDate(dateFilter).filter(task => task.status !== "done");
   }
   
   if (tasks.length === 0) {
     if (dateFilter === "all") {
-      return "You don't have any tasks. Add some tasks to get started!";
+      return "You don't have any active tasks. Add some tasks to get started!";
     } else {
-      return `You don't have any tasks ${dateFilter === "today" ? "for today" : "for " + dateFilter}.`;
+      return `You don't have any active tasks ${dateFilter === "today" ? "for today" : "for " + dateFilter}.`;
     }
   }
   
-  // Format the task list
-  const formattedTasks = tasks.map((task, index) => {
-    const dueDate = task.dueDate 
-      ? task.dueDate.toLocaleDateString("en-US", { 
-          weekday: "short", 
-          month: "short", 
-          day: "numeric" 
-        })
-      : "No due date";
-    
-    return `${index + 1}. ${task.title} (${task.priority} priority, due ${dueDate})${task.status === "done" ? " ✓" : ""}`;
-  });
+  // Format the task list with numerical positions
+  const formattedTasks = tasks.map((task, index) => formatTaskWithPosition(task, index + 1));
   
-  const dateDescription = dateFilter === "all" ? "all tasks" : `tasks for ${dateFilter}`;
+  const dateDescription = dateFilter === "all" ? "all active tasks" : `active tasks for ${dateFilter}`;
   return `Here are your ${dateDescription}:\n\n${formattedTasks.join("\n")}`;
 }
 
 /**
- * List tasks by priority
+ * Handle task list by priority with numerical ordering
+ * Only includes uncompleted tasks
  */
 function handleTaskListByPriority(priority: "high" | "medium" | "low", taskStore: TaskStoreType): string {
-  const tasks = taskStore.tasks.filter(task => task.priority === priority);
+  const tasks = taskStore.tasks.filter(task => task.priority === priority && task.status !== "done");
   
   if (tasks.length === 0) {
-    return `You don't have any ${priority} priority tasks.`;
+    return `You don't have any active ${priority} priority tasks.`;
   }
   
-  // Format the task list
-  const formattedTasks = tasks.map((task, index) => {
-    const dueDate = task.dueDate 
-      ? task.dueDate.toLocaleDateString("en-US", { 
-          weekday: "short", 
-          month: "short", 
-          day: "numeric" 
-        })
-      : "No due date";
-    
-    return `${index + 1}. ${task.title} (due ${dueDate})${task.status === "done" ? " ✓" : ""}`;
-  });
+  // Format the task list with numerical positions
+  const formattedTasks = tasks.map((task, index) => formatTaskWithPosition(task, index + 1));
   
-  return `Here are your ${priority} priority tasks:\n\n${formattedTasks.join("\n")}`;
+  return `Here are your active ${priority} priority tasks:\n\n${formattedTasks.join("\n")}`;
 }
 
 /**
- * Change a task's due date
+ * Move a task to a specific date by number
  */
-function changeTaskDueDateByNumber(taskNumber: number, newDateStr: string, taskStore: TaskStoreType): string {
+function moveTaskByNumber(taskNumber: number, targetDate: string, taskStore: TaskStoreType): string {
   const task = findTaskByNumber(taskNumber, taskStore);
-  const correctYear = 2025; // Hardcoded to 2025 per requirement
   
   if (!task) {
     return `Task #${taskNumber} not found. Please check the task number and try again.`;
   }
   
-  const newDate = parseDateReference(newDateStr);
+  const newDate = parseDateReference(targetDate);
   if (!newDate) {
-    return `I couldn't understand the date "${newDateStr}". Please try a different format.`;
+    return `I couldn't understand the date "${targetDate}". Please try a different format.`;
   }
   
-  // Ensure correct year
-  if (newDate.getFullYear() !== correctYear) {
-    newDate.setFullYear(correctYear);
+  // Ensure correct year (2025)
+  if (newDate.getFullYear() !== 2025) {
+    newDate.setFullYear(2025);
   }
   
   taskStore.updateTask(task.id, { dueDate: newDate });
@@ -1045,164 +1134,187 @@ function changeTaskDueDateByNumber(taskNumber: number, newDateStr: string, taskS
     day: "numeric"
   });
   
-  return `✅ Updated due date for task "${task.title}" to ${dueDateString}.`;
+  return `✅ Moved task #${taskNumber} "${task.title}" to ${dueDateString}.`;
+}
+
+/**
+ * Change a task's priority by number
+ */
+function priorityTaskByNumber(taskNumber: number, priority: "high" | "medium" | "low", taskStore: TaskStoreType): string {
+  const task = findTaskByNumber(taskNumber, taskStore);
+  
+  if (!task) {
+    return `Task #${taskNumber} not found. Please check the task number and try again.`;
+  }
+  
+  taskStore.updateTask(task.id, { priority });
+  return `✅ Changed priority of task #${taskNumber} "${task.title}" to ${priority}.`;
 }
 
 /**
  * Handle task modification based on AI-parsed data
  */
 function handleAITaskModification(taskData: any, taskStore: TaskStoreType): string {
-  const correctYear = 2025; // Hardcoded to 2025 per requirement
-
-  // Currently only supports changing due date
-  if (taskData.taskNumber !== undefined && taskData.date) {
-    return changeTaskDueDateByNumber(taskData.taskNumber, taskData.date, taskStore);
+  console.log("Handling task modification:", taskData);
+  
+  // Handle moving tasks to specific dates
+  if (taskData.taskNumber !== undefined && taskData.targetDate) {
+    return moveTaskByNumber(taskData.taskNumber, taskData.targetDate, taskStore);
   }
   
-  // If task is identified by title and we have a new date
-  if (taskData.taskTitle && taskData.date) {
+  // Handle updating task priority by number
+  if (taskData.taskNumber !== undefined && (taskData.priority || (taskData.property === "priority" && taskData.value))) {
+    const priorityValue = taskData.priority || taskData.value;
+    return priorityTaskByNumber(
+      taskData.taskNumber,
+      priorityValue.toLowerCase() as "high" | "medium" | "low",
+      taskStore
+    );
+  }
+  
+  // Handle updating task priority by name
+  if (taskData.taskTitle && (taskData.priority || (taskData.property === "priority" && taskData.value))) {
+    const priorityValue = taskData.priority || taskData.value;
     const task = findTaskByName(taskData.taskTitle, taskStore);
     
     if (!task) {
-      return `Task "${taskData.taskTitle}" not found. Please check the task name and try again.`;
+      return `Task "${taskData.taskTitle}" not found.`;
     }
     
-    const newDate = parseDateReference(taskData.date);
-    if (!newDate) {
-      return `I couldn't understand the date "${taskData.date}". Please try a different format.`;
-    }
-    
-    // Ensure correct year
-    if (newDate.getFullYear() !== correctYear) {
-      newDate.setFullYear(correctYear);
-    }
-    
-    taskStore.updateTask(task.id, { dueDate: newDate });
-    
-    const dueDateString = newDate.toLocaleDateString("en-US", { 
-      weekday: "long", 
-      month: "short", 
-      day: "numeric"
-    });
-    
-    return `✅ Updated due date for task "${task.title}" to ${dueDateString}.`;
-  }
-  
-  // If we're changing priority
-  if ((taskData.taskNumber !== undefined || taskData.taskTitle) && taskData.priority) {
-    const task = taskData.taskNumber !== undefined 
-      ? findTaskByNumber(taskData.taskNumber, taskStore)
-      : findTaskByName(taskData.taskTitle, taskStore);
-    
-    if (!task) {
-      return `Task ${taskData.taskNumber !== undefined ? `#${taskData.taskNumber}` : `"${taskData.taskTitle}"`} not found.`;
-    }
-    
+    const { position } = getTaskWithPosition(task, taskStore);
     taskStore.updateTask(task.id, { 
-      priority: taskData.priority.toLowerCase() as "low" | "medium" | "high" 
+      priority: priorityValue.toLowerCase() as "low" | "medium" | "high" 
     });
     
-    return `✅ Updated priority for task "${task.title}" to ${taskData.priority}.`;
+    return `✅ Updated priority for task #${position} "${task.title}" to ${priorityValue}.`;
   }
   
   return "I couldn't determine how to modify the task. Please specify what you want to change.";
 }
 
 /**
- * Handle bulk actions like "delete all tasks" or "complete all tasks for today"
+ * Handle bulk action with numerical ordering
+ * Only affects uncompleted tasks
  */
 function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   console.log("Handling bulk action with data:", taskData);
   
-  // Ensure we have an intent
+  // Enhanced intent detection
   const intent = taskData.intent?.toLowerCase() || 
                (taskData.message?.toLowerCase().includes("delete") ? "delete" : 
                 taskData.message?.toLowerCase().includes("complete") ? "complete" :
-                taskData.message?.toLowerCase().includes("move") ? "move" : "unknown");
+                taskData.message?.toLowerCase().includes("move") || 
+                taskData.message?.toLowerCase().includes("set") ||
+                taskData.message?.toLowerCase().includes("change") ? "update" : "unknown");
+  
+  // Enhanced property detection
+  const propertyUpdate = taskData.property?.toLowerCase() || 
+                      (taskData.message?.toLowerCase().includes("priority") ? "priority" :
+                       taskData.message?.toLowerCase().includes("status") ? "status" :
+                       taskData.message?.toLowerCase().includes("due") ? "dueDate" : null);
+  
+  // Enhanced value detection
+  const updateValue = taskData.value || 
+                   (taskData.message?.toLowerCase().includes("high") ? "high" :
+                    taskData.message?.toLowerCase().includes("medium") ? "medium" :
+                    taskData.message?.toLowerCase().includes("low") ? "low" : null);
   
   // Determine filter
   let filter = taskData.filter?.toLowerCase() || "all";
   let dateFilter = taskData.date?.toLowerCase();
   
-  console.log("Bulk action intent:", intent, "filter:", filter, "dateFilter:", dateFilter);
+  // Check for target date (for "move all tasks to X")
+  const targetDate = taskData.targetDate || 
+                   (taskData.message?.toLowerCase().includes("today") ? "today" : 
+                    taskData.message?.toLowerCase().includes("tomorrow") ? "tomorrow" : null);
+  
+  console.log("Bulk action:", { intent, propertyUpdate, updateValue, filter, dateFilter, targetDate });
   
   // If there's a date mentioned, use it as the filter
   if (dateFilter) {
     filter = dateFilter;
   }
   
-  // Get the filtered tasks
+  // Get the filtered tasks with their positions, excluding completed tasks
   let filteredTasks: Task[] = [];
   
   if (filter === "all") {
-    filteredTasks = taskStore.tasks;
+    filteredTasks = taskStore.tasks.filter(task => task.status !== "done");
   } else if (filter === "today" || filter === "tomorrow" || filter === "this week" || filter === "next week" || filter === "overdue" || filter === "no date" || filter === "undated") {
-    filteredTasks = taskStore.getTasksByDate(filter);
-  } else if (filter === "high" || filter === "medium" || filter === "low") {
-    filteredTasks = taskStore.tasks.filter(task => task.priority === filter);
+    filteredTasks = taskStore.getTasksByDate(filter).filter(task => task.status !== "done");
   }
   
-  console.log(`Found ${filteredTasks.length} tasks matching filter "${filter}"`);
-  
-  // Handle no tasks case
-  if (filteredTasks.length === 0) {
-    if (filter === "all") {
-      return "You don't have any tasks to " + intent + ".";
-    } else {
-      return `You don't have any tasks for ${filter} to ${intent}.`;
+  // Handle moving all tasks to a specific date
+  if ((intent === "move" || intent === "update") && targetDate) {
+    const newDate = parseDateReference(targetDate);
+    if (!newDate) {
+      return `I couldn't understand the date "${targetDate}". Please try a different format.`;
     }
+    
+    // Ensure correct year (2025)
+    if (newDate.getFullYear() !== 2025) {
+      newDate.setFullYear(2025);
+    }
+    
+    const updatedTasks: string[] = [];
+    
+    filteredTasks.forEach((task, index) => {
+      taskStore.updateTask(task.id, { dueDate: newDate });
+      updatedTasks.push(formatTaskWithPosition(task, index + 1, false));
+    });
+    
+    if (updatedTasks.length > 0) {
+      const dueDateString = newDate.toLocaleDateString("en-US", { 
+        weekday: "long", 
+        month: "short", 
+        day: "numeric"
+      });
+      
+      return `✅ Moved the following tasks to ${dueDateString}:\n\n${updatedTasks.join("\n")}`;
+    }
+    
+    return `No active tasks found to move ${filter !== "all" ? `for ${filter}` : ""}.`;
   }
   
-  // Process based on intent
+  // Handle property updates with position information
+  if (intent === "update" && propertyUpdate && updateValue) {
+    let updatedTasks: string[] = [];
+    
+    filteredTasks.forEach((task, index) => {
+      if (propertyUpdate === "priority") {
+        task.priority = updateValue as "high" | "medium" | "low";
+        taskStore.updateTask(task.id, { priority: task.priority });
+        updatedTasks.push(formatTaskWithPosition(task, index + 1, false));
+      }
+    });
+    
+    if (updatedTasks.length > 0) {
+      return `Updated the following tasks to ${updateValue} ${propertyUpdate}:\n\n${updatedTasks.join("\n")}`;
+    }
+    return `No active tasks found to update ${filter !== "all" ? `for ${filter}` : ""}.`;
+  }
+  
+  // Handle other bulk actions with position information
   if (intent === "delete" || intent === "remove") {
-    // Delete all the filtered tasks
-    const count = filteredTasks.length;
-    filteredTasks.forEach(task => {
-      taskStore.deleteTask(task.id);
-    });
+    const tasksToDelete = filteredTasks.map((task, index) => formatTaskWithPosition(task, index + 1, false));
+    filteredTasks.forEach(task => taskStore.deleteTask(task.id));
     
-    return `✅ Deleted ${count} task${count !== 1 ? 's' : ''} ${filter !== "all" ? 'for ' + filter : ''}.`;
-  } 
-  else if (intent === "complete" || intent === "finish" || intent === "mark") {
-    // Complete all the filtered tasks
-    const count = filteredTasks.length;
-    filteredTasks.forEach(task => {
-      taskStore.updateTask(task.id, { status: "done" });
-    });
-    
-    return `✅ Marked ${count} task${count !== 1 ? 's' : ''} as complete ${filter !== "all" ? 'for ' + filter : ''}.`;
+    if (tasksToDelete.length > 0) {
+      return `✅ Deleted the following tasks:\n\n${tasksToDelete.join("\n")}`;
+    }
+    return `No active tasks found to delete ${filter !== "all" ? `for ${filter}` : ""}.`;
   }
-  else if (intent === "move" || intent === "set" || intent === "update") {
-    // Determine target date
-    let targetDateStr = taskData.targetDate?.toLowerCase();
-    let targetDate: Date | null = null;
-    
-    // If target date is "today", set to today's date
-    if (targetDateStr === "today" || !targetDateStr) {
-      targetDate = new Date();
-    } else if (targetDateStr === "tomorrow") {
-      targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + 1);
-    } else if (targetDateStr) {
-      // Try to parse the date
-      targetDate = parseDateReference(targetDateStr);
-    }
-    
-    if (!targetDate) {
-      return "I couldn't determine the target date for the tasks.";
-    }
-    
-    // Use the bulk update method to update all filtered tasks
-    const count = filteredTasks.length;
-    taskStore.bulkUpdateTasks(filter, { dueDate: targetDate });
-    
-    const formattedDate = targetDate.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      month: 'long', 
-      day: 'numeric' 
+  
+  if (intent === "complete" || intent === "finish" || intent === "mark") {
+    const completedTasks = filteredTasks.map((task, index) => {
+      taskStore.updateTask(task.id, { status: "done" });
+      return formatTaskWithPosition(task, index + 1, false);
     });
     
-    return `✅ Updated ${count} task${count !== 1 ? 's' : ''} to be due on ${formattedDate}.`;
+    if (completedTasks.length > 0) {
+      return `✅ Marked the following tasks as complete:\n\n${completedTasks.join("\n")}`;
+    }
+    return `No active tasks found to complete ${filter !== "all" ? `for ${filter}` : ""}.`;
   }
   
   return "I couldn't determine what bulk action you want to perform on your tasks.";
@@ -1501,4 +1613,49 @@ Only include fields that you can extract from the text. If a field is not mentio
 function countMatches(text: string, regex: RegExp): number {
   const matches = text.match(new RegExp(regex, 'g'));
   return matches ? matches.length : 0;
+}
+
+function listTasks(taskStore: TaskStoreType, filter?: (task: Task) => boolean): string {
+  // Filter out completed tasks first
+  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  const filteredTasks = filter ? activeTasks.filter(filter) : activeTasks;
+  
+  if (filteredTasks.length === 0) {
+    return "No active tasks found.";
+  }
+
+  return filteredTasks
+    .map((task, index) => formatTaskWithPosition(task, index + 1))
+    .join("\n");
+}
+
+function listTasksByPriority(priority: Priority, taskStore: TaskStoreType): string {
+  // Filter by priority and exclude completed tasks
+  const tasks = taskStore.tasks.filter(task => task.priority === priority && task.status !== "done");
+  
+  if (tasks.length === 0) {
+    return `No active ${priority} priority tasks found.`;
+  }
+
+  return tasks
+    .map((task, index) => formatTaskWithPosition(task, index + 1))
+    .join("\n");
+}
+
+function listTasksByDate(date: string, taskStore: TaskStoreType): string {
+  const parsedDate = parseISO(date);
+  // Filter by date and exclude completed tasks
+  const tasks = taskStore.tasks.filter(task => {
+    if (!task.dueDate || task.status === "done") return false;
+    const taskDate = task.dueDate instanceof Date ? task.dueDate : parseISO(task.dueDate);
+    return isSameDay(taskDate, parsedDate);
+  });
+  
+  if (tasks.length === 0) {
+    return `No active tasks found for ${date}.`;
+  }
+
+  return tasks
+    .map((task, index) => formatTaskWithPosition(task, index + 1))
+    .join("\n");
 }
