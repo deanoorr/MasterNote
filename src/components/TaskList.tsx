@@ -577,6 +577,7 @@ export default function TaskList() {
 
     // Sort by date and group tasks
     const groupedTasks = groupTasksByDate(tasksToRender);
+    let taskNumber = 1; // Initialize task numbering counter
 
     return (
       <>
@@ -599,7 +600,9 @@ export default function TaskList() {
             
             {/* Tasks for this date */}
             <Stack gap="sm">
-              {tasks.map((task, index) => (
+              {tasks.map((task) => {
+                const currentTaskNumber = taskNumber++;
+                return (
                 <Paper
                   key={task.id}
                   p="sm"
@@ -617,7 +620,7 @@ export default function TaskList() {
                     overflow: 'hidden',
                     transition: 'all 0.15s ease-in-out',
                     animation: `fadeIn 0.3s ease forwards`,
-                    animationDelay: `${index * 0.05}s`,
+                    animationDelay: `${currentTaskNumber * 0.05}s`,
                     borderRadius: '6px',
                     '&:hover': {
                       boxShadow: isDark 
@@ -629,6 +632,23 @@ export default function TaskList() {
                 >
                   <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
                     <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                      <Box style={{ 
+                        width: '24px', 
+                        display: 'flex', 
+                        justifyContent: 'center',
+                        alignItems: 'center' 
+                      }}>
+                        <Text 
+                          size="xs" 
+                          fw={600} 
+                          style={{ 
+                            color: isDark ? '#6c757d' : '#adb5bd',
+                            opacity: task.status === 'done' ? 0.5 : 0.8
+                          }}
+                        >
+                          {currentTaskNumber}.
+                        </Text>
+                      </Box>
                       <Checkbox
                         checked={task.status === 'done'}
                         onChange={(e) => handleStatusChange(task.id, e as any)}
@@ -801,7 +821,8 @@ export default function TaskList() {
                     </Menu>
                   </Group>
                 </Paper>
-              ))}
+                );
+              })}
             </Stack>
           </Box>
         ))}

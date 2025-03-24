@@ -826,8 +826,16 @@ function handleAITaskCreation(taskData: any, taskStore: TaskStoreType): string {
  * Only includes uncompleted tasks
  */
 function findTaskByNumber(taskNumber: number, taskStore: TaskStoreType): Task | null {
-  // Filter out completed tasks
-  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  // Get tasks in the current sort order and filter completed ones
+  let activeTasks;
+  
+  // If getSortedTasks is available (it should be), use it to get tasks in proper order
+  if (taskStore.getSortedTasks) {
+    activeTasks = taskStore.getSortedTasks().filter(task => task.status !== "done");
+  } else {
+    // Fallback to unsorted tasks
+    activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  }
   
   if (taskNumber < 1 || taskNumber > activeTasks.length) {
     return null;
@@ -955,8 +963,17 @@ function handleAITaskCompletion(taskData: any, taskStore: TaskStoreType): string
  * Get task with its numerical position in the list of active tasks
  */
 function getTaskWithPosition(task: Task, taskStore: TaskStoreType): { task: Task; position: number } {
-  // Filter out completed tasks
-  const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  // Get tasks in the current sort order and filter completed ones
+  let activeTasks;
+  
+  // If getSortedTasks is available (it should be), use it to get tasks in proper order
+  if (taskStore.getSortedTasks) {
+    activeTasks = taskStore.getSortedTasks().filter(task => task.status !== "done");
+  } else {
+    // Fallback to unsorted tasks
+    activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  }
+  
   const position = activeTasks.findIndex(t => t.id === task.id) + 1;
   return { task, position };
 }
