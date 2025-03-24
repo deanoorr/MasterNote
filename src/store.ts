@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Message, Task } from './types';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
-export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical';
+export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical' | 'task-order';
 
 interface Store {
   messages: Message[];
@@ -22,6 +22,7 @@ interface Store {
   getSortedTasks: () => Task[];
   getTasksByDate: (dateFilter: string) => Task[];
   syncWithSupabase: () => Promise<void>;
+  fixTaskOrdersInitial: () => void;
 }
 
 // Custom storage for handling both localStorage and Supabase
@@ -42,7 +43,7 @@ export const useStore = create<Store>()(
     (set, get) => ({
       messages: [],
       tasks: [],
-      sortOrder: 'due-date' as SortOption,
+      sortOrder: 'task-order' as SortOption,
       userId: null,
       
       setUserId: (id: string | null) => set({ userId: id }),
@@ -51,6 +52,53 @@ export const useStore = create<Store>()(
         set((state) => ({
           messages: [...state.messages, message],
         })),
+        
+      fixTaskOrdersInitial: () => 
+        set((state) => {
+          // Only run this if we have tasks but they don't have orderIds
+          const needsOrdering = state.tasks.some(task => !task.orderId);
+          if (!needsOrdering || state.tasks.length === 0) {
+            return state; // No changes needed
+          }
+
+          console.log("Fixing task ordering...");
+          const updatedTasks = [...state.tasks];
+          
+          // Find the retrofit cost document task and set it as task #1
+          const costDocIndex = updatedTasks.findIndex(task => 
+            task.title.toLowerCase().includes('retrofit cost document'));
+          
+          if (costDocIndex >= 0) {
+            updatedTasks[costDocIndex] = {
+              ...updatedTasks[costDocIndex],
+              orderId: 1
+            };
+          }
+          
+          // Find the market analysis task and set it as task #2
+          const marketAnalysisIndex = updatedTasks.findIndex(task => 
+            task.title.toLowerCase().includes('market analysis'));
+          
+          if (marketAnalysisIndex >= 0) {
+            updatedTasks[marketAnalysisIndex] = {
+              ...updatedTasks[marketAnalysisIndex],
+              orderId: 2
+            };
+          }
+          
+          // Assign order IDs to any remaining tasks without them
+          let nextOrderId = 3;
+          for (let i = 0; i < updatedTasks.length; i++) {
+            if (!updatedTasks[i].orderId && i !== costDocIndex && i !== marketAnalysisIndex) {
+              updatedTasks[i] = {
+                ...updatedTasks[i],
+                orderId: nextOrderId++
+              };
+            }
+          }
+          
+          return { tasks: updatedTasks };
+        }),
         
       addTask: (task) =>
         set((state) => {
@@ -61,6 +109,14 @@ export const useStore = create<Store>()(
             ...task,
             title: task.title.replace(/^\d+\.\s*/, '')
           };
+          
+          // Assign an orderId if not provided
+          if (!cleanedTask.orderId) {
+            // Find the maximum orderId and add 1, or start with 1 if none exist
+            const maxOrderId = state.tasks.reduce((max, t) => 
+              t.orderId && t.orderId > max ? t.orderId : max, 0);
+            cleanedTask.orderId = maxOrderId + 1;
+          }
           
           // Store in Supabase if configured
           const userId = get().userId;
@@ -79,7 +135,8 @@ export const useStore = create<Store>()(
                   created_at: new Date(cleanedTask.createdAt).toISOString(),
                   updated_at: new Date(cleanedTask.updatedAt).toISOString(),
                   ai_generated: cleanedTask.aiGenerated || false,
-                  notes: cleanedTask.notes || ''
+                  notes: cleanedTask.notes || '',
+                  order_id: cleanedTask.orderId || null
                 });
                 
                 if (error) {
@@ -147,7 +204,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date().toISOString(),
                   created_at: updatedTask.createdAt ? new Date(updatedTask.createdAt).toISOString() : new Date().toISOString(),
                   ai_generated: updatedTask.aiGenerated || false,
-                  notes: updatedTask.notes || ''
+                  notes: updatedTask.notes || '',
+                  order_id: updatedTask.orderId || null
                 });
                 
                 if (error) {
@@ -273,6 +331,17 @@ export const useStore = create<Store>()(
             // Sort alphabetically by title
             return tasksCopy.sort((a, b) => a.title.localeCompare(b.title));
           
+          case 'task-order':
+            // Sort by task order (orderId)
+            return tasksCopy.sort((a, b) => {
+              // Tasks with orderIds come first, sorted by orderId
+              if (a.orderId && b.orderId) return a.orderId - b.orderId;
+              if (a.orderId) return -1;
+              if (b.orderId) return 1;
+              // Fall back to creation date for tasks without orderIds
+              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            });
+          
           default:
             return tasksCopy;
         }
@@ -355,18 +424,19 @@ export const useStore = create<Store>()(
           if (tasksData) {
             console.log("Received tasks from Supabase:", tasksData.length);
             
-            // Convert from Supabase format to app format
-            const formattedTasks: Task[] = tasksData.map(task => ({
-              id: task.id,
-              title: task.title,
-              description: task.description || '',
-              priority: task.priority as 'low' | 'medium' | 'high',
-              status: task.status as 'todo' | 'in_progress' | 'done',
-              dueDate: task.due_date ? new Date(task.due_date) : undefined,
-              createdAt: new Date(task.created_at),
-              updatedAt: new Date(task.updated_at),
-              aiGenerated: task.ai_generated || false,
-              notes: task.notes || ''
+            // Convert Supabase data format to our app's format
+            const formattedTasks: Task[] = tasksData.map(item => ({
+              id: item.id,
+              title: item.title || '',
+              description: item.description || '',
+              priority: item.priority as Task['priority'],
+              status: item.status as Task['status'],
+              dueDate: item.due_date ? new Date(item.due_date) : undefined,
+              createdAt: new Date(item.created_at || new Date()),
+              updatedAt: new Date(item.updated_at || new Date()),
+              aiGenerated: item.ai_generated || false,
+              notes: item.notes || '',
+              orderId: item.order_id || undefined
             }));
             
             // STEP 1: Check for recently modified local tasks (within the last 5 minutes)
@@ -394,7 +464,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date(localTask.updatedAt).toISOString(),
                   created_at: new Date(localTask.createdAt).toISOString(),
                   ai_generated: localTask.aiGenerated || false,
-                  notes: localTask.notes || ''
+                  notes: localTask.notes || '',
+                  order_id: localTask.orderId || null
                 });
               }
             }
@@ -420,10 +491,20 @@ export const useStore = create<Store>()(
                 
                 if (localUpdateTime > remoteUpdateTime) {
                   console.log(`Task "${localTask.title}" more recent locally, keeping local version`);
-                  mergedTasks.push(localTask);
+                  // If the local task has no orderId but remote does, preserve the remote orderId
+                  if (!localTask.orderId && remoteTask.orderId) {
+                    mergedTasks.push({...localTask, orderId: remoteTask.orderId});
+                  } else {
+                    mergedTasks.push(localTask);
+                  }
                 } else {
                   console.log(`Task "${remoteTask.title}" more recent in Supabase, using remote version`);
-                  mergedTasks.push(remoteTask);
+                  // If the remote task has no orderId but local does, preserve the local orderId
+                  if (!remoteTask.orderId && localTask.orderId) {
+                    mergedTasks.push({...remoteTask, orderId: localTask.orderId});
+                  } else {
+                    mergedTasks.push(remoteTask);
+                  }
                 }
               }
             }
@@ -446,7 +527,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date(localTask.updatedAt).toISOString(),
                   created_at: new Date(localTask.createdAt).toISOString(),
                   ai_generated: localTask.aiGenerated || false,
-                  notes: localTask.notes || ''
+                  notes: localTask.notes || '',
+                  order_id: localTask.orderId || null
                 });
               }
             }
@@ -455,6 +537,9 @@ export const useStore = create<Store>()(
             
             // STEP 3: Update the local store with the merged tasks
             set({ tasks: mergedTasks });
+            
+            // Call fixTaskOrdersInitial after syncing to ensure task ordering is correct
+            get().fixTaskOrdersInitial();
           }
         } catch (error) {
           console.error('Error syncing with Supabase:', error);
@@ -494,7 +579,8 @@ export const useStore = create<Store>()(
                   due_date: updatedTask.dueDate ? new Date(updatedTask.dueDate).toISOString() : null,
                   updated_at: new Date().toISOString(),
                   ai_generated: updatedTask.aiGenerated || false,
-                  notes: updatedTask.notes || ''
+                  notes: updatedTask.notes || '',
+                  order_id: updatedTask.orderId || null
                 })
                 .then(({ error }) => {
                   if (error) console.error("Error updating task in Supabase:", error);

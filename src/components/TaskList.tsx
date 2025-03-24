@@ -358,6 +358,7 @@ export default function TaskList() {
   };
 
   const sortOptions = [
+    { value: 'task-order', label: 'By Task Number' },
     { value: 'due-date', label: 'By Due Date' },
     { value: 'priority-high', label: 'By Priority' },
     { value: 'created-newest', label: 'Recently Added' },
@@ -645,7 +646,13 @@ export default function TaskList() {
                     transition: 'all 0.15s ease-in-out',
                     animation: `fadeIn 0.3s ease forwards`,
                     animationDelay: `${index * 0.05}s`,
-                    borderRadius: '6px',
+                    borderRadius: '8px',
+                    borderLeft: task.orderId ? `3px solid ${
+                      task.orderId === 1 ? '#fa5252' : 
+                      task.orderId === 2 ? '#fd7e14' : 
+                      '#20C997'
+                    }` : undefined,
+                    paddingLeft: task.orderId ? '12px' : undefined,
                     '&:hover': {
                       boxShadow: isDark 
                         ? '0 3px 6px rgba(0, 0, 0, 0.2)' 
@@ -690,26 +697,66 @@ export default function TaskList() {
                             transition: 'all 0.2s ease'
                           }}
                         >
+                          {task.orderId ? (
+                            <Badge 
+                              size="xs" 
+                              variant={isDark ? "light" : "filled"}
+                              radius="xl"
+                              color={task.orderId === 1 ? "red" : task.orderId === 2 ? "orange" : "teal"}
+                              mr={8}
+                              style={{ 
+                                minWidth: '24px',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                letterSpacing: '0.5px',
+                                padding: '4px 8px',
+                                boxShadow: isDark ? 
+                                  '0 2px 4px rgba(0, 0, 0, 0.2)' : 
+                                  '0 2px 4px rgba(0, 0, 0, 0.1)',
+                                display: 'inline-flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                position: 'relative',
+                                top: '-1px',
+                                border: isDark ? 
+                                  `1px solid ${task.orderId === 1 ? '#fa5252' : task.orderId === 2 ? '#fd7e14' : '#20C997'}` : 
+                                  'none',
+                                opacity: task.status === 'done' ? 0.7 : 1
+                              }}
+                            >
+                              #{task.orderId}
+                            </Badge>
+                          ) : ''} 
                           {task.title}
                         </Text>
                         
                         <Group mt={6} gap="xs">
                           {/* Remove the date badge since we're using date dividers */}
                           <Badge 
-                            variant="filled"
+                            variant={isDark ? "dot" : "filled"}
                             size="xs"
                             style={{ 
-                              padding: '4px 10px',
+                              padding: '4px 8px',
                               fontWeight: 500,
                               borderRadius: '50px',
                               textTransform: 'uppercase',
-                              fontSize: '10px',
-                              border: 'none',
-                              backgroundColor: 
+                              fontSize: '9px',
+                              letterSpacing: '0.6px',
+                              border: isDark ? 
+                                `1px solid ${
+                                  task.priority === 'high' ? '#862e2e' : 
+                                  task.priority === 'medium' ? '#8c6d1f' : 
+                                  '#1864ab'
+                                }` : 'none',
+                              backgroundColor: isDark ? 
+                                'rgba(0, 0, 0, 0.2)' :
                                 task.priority === 'high' ? '#862e2e' : 
                                 task.priority === 'medium' ? '#8c6d1f' : 
                                 '#1864ab',
-                              color: '#fff'
+                              color: isDark ? 
+                                (task.priority === 'high' ? '#fa5252' : 
+                                task.priority === 'medium' ? '#fcc419' : 
+                                '#339af0') : '#fff'
                             }}
                           >
                             {task.priority}

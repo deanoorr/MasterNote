@@ -13,6 +13,7 @@ export interface Task {
   dependencies?: string[];
   tags?: string[];
   notes?: string;
+  orderId?: number;
 }
 
 export interface Message {

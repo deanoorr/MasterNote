@@ -142,8 +142,14 @@ function AppContent() {
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [authModalOpened, setAuthModalOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages, setUserId, syncWithSupabase, tasks } = useStore();
+  const { messages, clearMessages, setUserId, syncWithSupabase, tasks, fixTaskOrdersInitial } = useStore();
   const { user, loading, setDemoUser, isDemoMode } = useAuth();
+
+  // Fix task ordering on app startup
+  useEffect(() => {
+    // Ensure task numbering is correct
+    fixTaskOrdersInitial();
+  }, []); // Empty dependency array means this runs once on mount
 
   // Save the selected model to localStorage whenever it changes
   useEffect(() => {
