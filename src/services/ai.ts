@@ -110,18 +110,18 @@ const getMonthNumber = (monthName: string): number | undefined => {
 
 // Initialize OpenAI with the API key
 async function getOpenAIClient(): Promise<OpenAI> {
-  const apiKey = await getApiKey();
-  console.log("OpenAI API key length:", apiKey ? apiKey.length : 0);
-  console.log("API key starts with:", apiKey ? apiKey.substring(0, 4) : "N/A");
-  
-  if (!apiKey) {
-    throw new Error('API key not found. Please set it in the settings.');
-  }
-  
   try {
+    const apiKey = await getApiKey();
+    console.log("OpenAI API key length:", apiKey ? apiKey.length : 0);
+    console.log("API key starts with:", apiKey ? apiKey.substring(0, 4) : "N/A");
+    
+    if (!apiKey) {
+      throw new Error('API key not found. Please set it in the settings.');
+    }
+    
     return new OpenAI({
       apiKey,
-      dangerouslyAllowBrowser: true,
+      dangerouslyAllowBrowser: true
     });
   } catch (error) {
     console.error("Error initializing OpenAI client:", error);
@@ -314,211 +314,86 @@ type Priority = 'high' | 'medium' | 'low';
  * Process natural language task instructions using OpenAI's GPT model
  * This gives us true AI understanding of task requests without needing manual pattern matching
  */
-async function processTaskWithAI(message: string, taskStore: TaskStoreType): Promise<string> {
-  console.log("Processing task with AI:", message);
+export async function processTaskWithAI(message: string, taskStore: TaskStoreType): Promise<string> {
   try {
     const openai = await getOpenAIClient();
+    if (!openai) {
+      throw new Error("Failed to initialize OpenAI client");
+    }
+
+    console.log("Processing message with AI:", message);
     
     // Create a comprehensive system prompt that guides the model to extract task intent
     const systemPrompt = `You are a task assistant that understands natural language instructions for task management.
+Extract the task management intent from the user's message. Focus on:
 
-CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
+1. Task Creation: "add task", "create task", "remind me to"
+2. Task Updates: "change priority", "move to tomorrow"
+3. Task Deletion: "delete task", "remove task"
+4. Task Completion: "mark done", "complete task"
+5. Task Queries: "show tasks", "list tasks"
+6. Multi-task Selection: "tasks 1 and 2", "tasks 3,4,5"
 
-Analyze the user's message and extract the task management intent. Pay special attention to:
-
-1. Task creation intents ("create a task", "add a new task", "remind me to")
-2. Task modification intents ("change priority", "move task to tomorrow")
-3. Task deletion intents ("delete task", "remove task")
-4. Task completion intents ("mark as done", "complete task")
-5. Task query intents ("show tasks", "what tasks")
-6. Multi-task selection patterns ("task 1 and 2", "tasks 3, 4, and 5")
-
-For multi-task selections patterns, identify:
-- The specific task numbers mentioned
-- The action to perform (move, mark complete, change priority)
-- Any properties to update (priority, due date)
-- The new value for those properties
-
-Return a structured JSON with the extracted intent:
+Return a JSON response with:
 {
-  "taskAction": "create|update|delete|complete|list|bulk",
-  "bulkAction": true|false,
-  "multiTaskSelection": true|false,
-  "selectedTaskNumbers": [1, 2, 3], // Only include if multiTaskSelection is true
-  "message": "original message",
-  "title": "task title",
-  "date": "due date",
-  "targetDate": "date to move to",
-  "priority": "high|medium|low",
-  "status": "todo|in_progress|done",
-  "filter": "all|today|tomorrow|this week",
-  "property": "priority|status|dueDate",
-  "intent": "create|update|delete|complete|move|list|query",
-  "value": "new value for the property"
-}
-
-Only include relevant fields based on the intent.
-
-Example multi-task selection:
-For "move tasks 1 and 3 to tomorrow", return:
-{
-  "taskAction": "update",
-  "bulkAction": false,
-  "multiTaskSelection": true,
-  "selectedTaskNumbers": [1, 3],
-  "message": "move tasks 1 and 3 to tomorrow",
-  "targetDate": "tomorrow",
-  "property": "dueDate",
-  "intent": "move",
-  "value": "tomorrow"
-}
-
-For "mark tasks 2 and 4 as complete", return:
-{
-  "taskAction": "complete",
-  "bulkAction": false,
-  "multiTaskSelection": true,
-  "selectedTaskNumbers": [2, 4],
-  "message": "mark tasks 2 and 4 as complete",
-  "intent": "complete"
+  "intent": "create|update|delete|complete|list",
+  "taskTitle": "task title if creating",
+  "taskNumber": number if referencing specific task,
+  "date": "due date if specified",
+  "priority": "high|medium|low if specified",
+  "targetDate": "date to move to if moving task",
+  "property": "what to update if modifying",
+  "value": "new value for update"
 }`;
-    
+
     // Send the request to the OpenAI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      response_format: { type: "json_object" },
-      temperature: 0.3
+      temperature: 0.3,
+      max_tokens: 500
     });
-    
-    // Extract and parse the JSON from the response
+
     const content = response.choices[0].message.content;
     if (!content) {
       throw new Error("Empty response from OpenAI");
     }
-    
+
     try {
-      // Parse the task data from the JSON response
       const taskData = JSON.parse(content);
-      console.log("Extracted task data:", taskData);
-      
-      // Check for multi-task selection pattern first
-      if (taskData.multiTaskSelection === true) {
-        console.log("Handling multi-task selection");
-        
-        // Ensure we have task numbers
-        if (!taskData.selectedTaskNumbers || !Array.isArray(taskData.selectedTaskNumbers) || taskData.selectedTaskNumbers.length === 0) {
-          // Try to extract task numbers directly from the message as a fallback
-          taskData.selectedTaskNumbers = extractTaskNumbers(message);
-          
-          if (taskData.selectedTaskNumbers.length === 0) {
-            return "I couldn't identify which tasks you're referring to. Please specify the task numbers clearly.";
-          }
-        }
-        
-        // Add the full message for reference
-        taskData.message = message;
-        
-        // Use the bulk action handler which now handles multi-task selection
-        return handleBulkAction(taskData, taskStore);
-      }
-      
-      // Handle bulk actions for all tasks
-      if (taskData.bulkAction === true) {
-        console.log("Handling bulk action");
-        return handleBulkAction(taskData, taskStore);
-      }
-      
-      // Check for numerical task references in input
-      if (!taskData.taskNumber && message.match(/task\s+#?(\d+)|#(\d+)/i)) {
-        const matches = message.match(/task\s+#?(\d+)|#(\d+)/i);
-        if (matches && (matches[1] || matches[2])) {
-          taskData.taskNumber = parseInt(matches[1] || matches[2]);
-          console.log("Extracted task number from message:", taskData.taskNumber);
-        }
-      }
-      
-      // Check for commands with task numbers but missing intent
-      if (taskData.taskNumber !== undefined && !taskData.intent) {
-        // Try to determine intent from message
-        if (message.toLowerCase().includes("delete") || message.toLowerCase().includes("remove")) {
-          taskData.intent = "delete";
-        } else if (message.toLowerCase().includes("complete") || message.toLowerCase().includes("finish") || message.toLowerCase().includes("done")) {
-          taskData.intent = "complete";
-        } else if (message.toLowerCase().includes("move") || message.toLowerCase().includes("change") || message.toLowerCase().includes("set")) {
-          if (message.toLowerCase().includes("priority")) {
-            taskData.intent = "update";
-            taskData.property = "priority";
-            
-            // Try to determine priority value
-            if (message.toLowerCase().includes("high")) {
-              taskData.value = "high";
-            } else if (message.toLowerCase().includes("medium")) {
-              taskData.value = "medium";
-            } else if (message.toLowerCase().includes("low")) {
-              taskData.value = "low";
-            }
-          } else if (message.toLowerCase().includes("tomorrow")) {
-            taskData.intent = "move";
-            taskData.targetDate = "tomorrow";
-          } else if (message.toLowerCase().includes("today")) {
-            taskData.intent = "move";
-            taskData.targetDate = "today";
-          }
-        }
-      }
-      
-      // Now process the request based on the extracted intent
-      const intent = taskData.intent?.toLowerCase();
-      switch (intent) {
-        case "add":
-        case "create": {
+      console.log("Parsed task data:", taskData);
+
+      switch (taskData.intent?.toLowerCase()) {
+        case "create":
           return handleAITaskCreation(taskData, taskStore);
-        }
-        
-        case "delete":
-        case "remove": {
-          return handleAITaskDeletion(taskData, taskStore);
-        }
-        
-        case "complete":
-        case "finish":
-        case "mark": {
-          return handleAITaskCompletion(taskData, taskStore);
-        }
-        
-        case "list":
-        case "show":
-        case "display": {
-          if (taskData.priority) {
-            return handleTaskListByPriority(taskData.priority as "high" | "medium" | "low", taskStore);
-          }
-          const dateFilter = taskData.date?.toLowerCase() || "all";
-          return handleTaskListRequest(dateFilter, taskStore);
-        }
-        
-        case "modify":
         case "update":
-        case "change":
-        case "move":
-        case "set": {
           return handleAITaskModification(taskData, taskStore);
-        }
-        
-        default: {
-          return "I couldn't determine what you want to do with your task. Please try again with a clearer instruction.";
-        }
+        case "delete":
+          return handleAITaskDeletion(taskData, taskStore);
+        case "complete":
+          return handleAITaskCompletion(taskData, taskStore);
+        case "list":
+          if (taskData.priority) {
+            return handleTaskListByPriority(taskData.priority, taskStore);
+          }
+          return handleTaskListRequest(taskData.date || "all", taskStore);
+        default:
+          return "I couldn't understand what you want to do with your tasks. Please try again with a clearer instruction.";
       }
     } catch (error) {
-      console.error("Error processing task with AI:", error);
-      return "Sorry, I encountered an error while processing your request. Please try again.";
+      console.error("Error processing task data:", error);
+      return "I had trouble understanding your request. Please try rephrasing it.";
     }
   } catch (error) {
-    console.error("Error processing task with AI:", error);
-    return "Sorry, I encountered an error while processing your request. Please try again.";
+    console.error("Error in processTaskWithAI:", error);
+    throw new Error(
+      error instanceof Error 
+        ? error.message 
+        : "Failed to process task. Please check your API key in settings."
+    );
   }
 }
 
@@ -563,13 +438,13 @@ Format your response as a JSON object:
     
     // Send the request to the OpenAI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `I need to ${mainActivity}. What tasks should I create?` }
       ],
-      response_format: { type: "json_object" },
-      temperature: 0.7 // Higher temperature for more creative subtask generation
+      temperature: 0.7,
+      max_tokens: 1000
     });
     
     // Parse the response
@@ -786,78 +661,43 @@ function parseDateReference(dateStr: string): Date | null {
  * Handle task creation based on AI-parsed data
  */
 function handleAITaskCreation(taskData: any, taskStore: TaskStoreType): string {
-  let title = taskData.taskTitle;
-  let description = taskData.description || "";
-  let priority = (taskData.priority || "medium").toLowerCase() as "low" | "medium" | "high";
-  const correctYear = 2025; // Hardcoded to 2025 per requirement
-  
-  // Parse the date
-  let dueDate = new Date();
-  dueDate.setFullYear(correctYear);
-  
+  // Extract task details
+  const title = taskData.taskTitle || taskData.title;
+  if (!title) {
+    return "I couldn't understand the task title. Please specify what task you want to create.";
+  }
+
+  // Parse date if provided
+  let dueDate: Date | undefined = undefined;
   if (taskData.date) {
-    const dateStr = taskData.date.toLowerCase();
-    
-    if (dateStr === "today") {
-      dueDate = new Date();
-      dueDate.setFullYear(correctYear);
-    } else if (dateStr === "tomorrow") {
-      dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 1);
-      dueDate.setFullYear(correctYear);
-    } else if (dateStr === "next week") {
-      dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 7);
-      dueDate.setFullYear(correctYear);
-    } else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      // ISO format date (YYYY-MM-DD)
-      dueDate = new Date(dateStr);
-      
-      // Use correct year 
-      if (dueDate.getFullYear() !== correctYear) {
-        dueDate.setFullYear(correctYear);
-      }
-    } else {
-      // Try to parse natural language date
-      const parsedDate = parseDateReference(dateStr);
-      if (parsedDate) {
-        dueDate = parsedDate;
-      }
+    const parsedDate = parseDateReference(taskData.date);
+    if (parsedDate) {
+      dueDate = parsedDate;
     }
   }
-  
-  // Additional check to ensure correct year
-  if (dueDate.getFullYear() !== correctYear) {
-    dueDate.setFullYear(correctYear);
-  }
-  
-  // Create a unique ID for the task
-  const id = Date.now().toString();
-  
-  // Create the task object
-  const newTask = {
-    id,
-    title,
-    description,
-    dueDate,
-    priority,
-    status: "todo" as "todo" | "in_progress" | "done",
+
+  // Create task object
+  const task: Task = {
+    id: Date.now().toString(),
+    title: title,
+    description: taskData.description || "",
+    priority: (taskData.priority || "medium").toLowerCase() as "high" | "medium" | "low",
+    status: "todo" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
+    dueDate: dueDate,
     aiGenerated: true
   };
-  
-  // Add the task to the store
-  taskStore.addTask(newTask);
-  
-  // Format the due date for display
-  const dueDateString = dueDate.toLocaleDateString("en-US", { 
-    weekday: "long", 
-    month: "short", 
-    day: "numeric"
-  });
-  
-  return `✅ Added task: "${title}"${description ? ` (${description})` : ""} due ${dueDateString}.`;
+
+  // Add task to store
+  taskStore.addTask(task);
+
+  // Format response
+  const dueDateStr = task.dueDate 
+    ? task.dueDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+    : "no due date";
+
+  return `✅ Added task: "${task.title}" (${task.priority} priority, ${dueDateStr})`;
 }
 
 /**
@@ -1420,7 +1260,7 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     console.log("taskStore available:", !!taskStore);
     
     // Get current model from localStorage
-    const currentModel = localStorage.getItem('selected_model') as AIModel || 'gpt4o';
+    const currentModel = localStorage.getItem('selected_model') as AIModel || 'gpt-3.5-turbo';
     
     // Get the normalized message for logging
     const normalizedMessage = message.toLowerCase().trim();
@@ -1431,7 +1271,7 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     
     // Get comprehensive classification using AI understanding
     const classificationResponse = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Use GPT-3.5 Turbo for classification to ensure consistent results across all models
+      model: "gpt-3.5-turbo",
       messages: [
         { 
           role: 'system', 
@@ -1491,7 +1331,7 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         // Call OpenAI API
         console.log("Calling OpenAI API with messages:", messages);
         const response = await openai.chat.completions.create({
-          model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-4o",
+          model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-3.5-turbo",
           messages,
           temperature: 0.7,
           max_tokens: 1000
