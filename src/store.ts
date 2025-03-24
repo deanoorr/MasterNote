@@ -168,21 +168,21 @@ export const useStore = create<Store>()(
         
       updateTask: (taskId, updates) =>
         set((state) => {
-          console.log("Updating task", taskId, "with updates:", updates);
+          const taskIndex = state.tasks.findIndex((t) => t.id === taskId);
+          if (taskIndex === -1) return state;
           
-          // Always include the updated timestamp
-          const updatesWithTimestamp = {
+          console.log("Store: Updating task with ID:", taskId, "with updates:", updates);
+          
+          const updatedTask = {
+            ...state.tasks[taskIndex],
             ...updates,
-            updatedAt: new Date()
+            updatedAt: new Date() // Always update the timestamp
           };
           
-          const updatedTasks = state.tasks.map((task) =>
-            task.id === taskId ? { ...task, ...updatesWithTimestamp } : task
-          );
+          console.log("Store: Task after update:", updatedTask);
           
-          // Find the updated task
-          const updatedTask = updatedTasks.find(task => task.id === taskId);
-          console.log("Updated task:", updatedTask);
+          const updatedTasks = [...state.tasks];
+          updatedTasks[taskIndex] = updatedTask;
           
           // Store in Supabase if configured
           const userId = get().userId;

@@ -257,6 +257,8 @@ export default function TaskList() {
         dueDate.setFullYear(2025);
       }
       
+      console.log("Updating task priority to:", editTaskPriority); // Debug log
+      
       updateTask(editTaskId, { 
         title: editTaskTitle,
         priority: editTaskPriority,
@@ -648,8 +650,9 @@ export default function TaskList() {
                     animationDelay: `${index * 0.05}s`,
                     borderRadius: '8px',
                     borderLeft: task.orderId ? `3px solid ${
-                      task.orderId === 1 ? '#fa5252' : 
-                      task.orderId === 2 ? '#fd7e14' : 
+                      task.priority === 'low' ? '#1864ab' :
+                      task.priority === 'medium' ? '#fd7e14' :
+                      task.priority === 'high' ? '#fa5252' :
                       '#20C997'
                     }` : undefined,
                     paddingLeft: task.orderId ? '12px' : undefined,
@@ -699,10 +702,11 @@ export default function TaskList() {
                         >
                           {task.orderId ? (
                             <Badge 
+                              key={`order-${task.id}-${task.priority}`}
                               size="xs" 
                               variant={isDark ? "light" : "filled"}
                               radius="xl"
-                              color={task.orderId === 1 ? "red" : task.orderId === 2 ? "orange" : "teal"}
+                              color={task.priority === 'low' ? "blue" : task.priority === 'medium' ? "orange" : "red"}
                               mr={8}
                               style={{ 
                                 minWidth: '24px',
@@ -719,8 +723,11 @@ export default function TaskList() {
                                 position: 'relative',
                                 top: '-1px',
                                 border: isDark ? 
-                                  `1px solid ${task.orderId === 1 ? '#fa5252' : task.orderId === 2 ? '#fd7e14' : '#20C997'}` : 
-                                  'none',
+                                  `1px solid ${
+                                    task.priority === 'low' ? '#1864ab' : 
+                                    task.priority === 'medium' ? '#fd7e14' : 
+                                    '#fa5252'
+                                  }` : 'none',
                                 opacity: task.status === 'done' ? 0.7 : 1
                               }}
                             >
@@ -733,8 +740,10 @@ export default function TaskList() {
                         <Group mt={6} gap="xs">
                           {/* Remove the date badge since we're using date dividers */}
                           <Badge 
+                            key={`priority-${task.id}-${task.priority}`}
                             variant={isDark ? "dot" : "filled"}
                             size="xs"
+                            title="Edit task to change priority"
                             style={{ 
                               padding: '4px 8px',
                               fontWeight: 500,
@@ -743,20 +752,10 @@ export default function TaskList() {
                               fontSize: '9px',
                               letterSpacing: '0.6px',
                               border: isDark ? 
-                                `1px solid ${
-                                  task.priority === 'high' ? '#862e2e' : 
-                                  task.priority === 'medium' ? '#8c6d1f' : 
-                                  '#1864ab'
-                                }` : 'none',
-                              backgroundColor: isDark ? 
-                                'rgba(0, 0, 0, 0.2)' :
-                                task.priority === 'high' ? '#862e2e' : 
-                                task.priority === 'medium' ? '#8c6d1f' : 
-                                '#1864ab',
-                              color: isDark ? 
-                                (task.priority === 'high' ? '#fa5252' : 
-                                task.priority === 'medium' ? '#fcc419' : 
-                                '#339af0') : '#fff'
+                                `1px solid ${getPriorityBorderColor(task.priority)}` : 'none',
+                              backgroundColor: getPriorityBackgroundColor(task.priority),
+                              color: getPriorityTextColor(task.priority),
+                              cursor: 'default'
                             }}
                           >
                             {task.priority}
@@ -844,6 +843,38 @@ export default function TaskList() {
         ))}
       </>
     );
+  };
+
+  // Add these helper functions
+  const getPriorityBorderColor = (priority: Task['priority']): string => {
+    switch (priority) {
+      case 'high': return isDark ? '#862e2e' : '#e03131';
+      case 'medium': return isDark ? '#8c6d1f' : '#e67700';
+      case 'low': return isDark ? '#1864ab' : '#1971c2';
+      default: return isDark ? '#373A40' : '#ced4da';
+    }
+  };
+
+  const getPriorityBackgroundColor = (priority: Task['priority']): string => {
+    if (isDark) return 'rgba(0, 0, 0, 0.2)';
+    
+    switch (priority) {
+      case 'high': return '#862e2e';
+      case 'medium': return '#8c6d1f';
+      case 'low': return '#1864ab';
+      default: return '#6c757d';
+    }
+  };
+
+  const getPriorityTextColor = (priority: Task['priority']): string => {
+    if (!isDark) return '#fff';
+    
+    switch (priority) {
+      case 'high': return '#fa5252';
+      case 'medium': return '#fcc419';
+      case 'low': return '#339af0';
+      default: return '#ced4da';
+    }
   };
 
   return (
@@ -1153,12 +1184,25 @@ export default function TaskList() {
                 value={editTaskPriority}
                 onChange={(value) => setEditTaskPriority(value as 'low' | 'medium' | 'high')}
                 data={[
-                  { value: 'low', label: '🟢 Low Priority' },
-                  { value: 'medium', label: '🟡 Medium Priority' },
-                  { value: 'high', label: '🔴 High Priority' }
+                  { 
+                    value: 'low', 
+                    label: '🟢 Low Priority',
+                  },
+                  { 
+                    value: 'medium', 
+                    label: '🟡 Medium Priority',
+                  },
+                  { 
+                    value: 'high', 
+                    label: '🔴 High Priority',
+                  }
                 ]}
                 leftSectionWidth={42}
-                leftSection={<IconFlag size={18} color="#20C997" />}
+                leftSection={<IconFlag size={18} color={
+                  editTaskPriority === 'high' ? '#fa5252' : 
+                  editTaskPriority === 'medium' ? '#fd7e14' : 
+                  '#20C997'
+                } />}
                 style={{ position: 'relative', zIndex: 1 }}
                 styles={{
                   input: {
