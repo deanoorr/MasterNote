@@ -65,22 +65,43 @@ export const useStore = create<Store>()(
           // Store in Supabase if configured
           const userId = get().userId;
           if (isSupabaseConfigured() && userId) {
-            supabase.from('tasks').upsert({
-              id: cleanedTask.id,
-              user_id: userId,
-              title: cleanedTask.title,
-              description: cleanedTask.description || '',
-              priority: cleanedTask.priority,
-              status: cleanedTask.status,
-              due_date: cleanedTask.dueDate ? new Date(cleanedTask.dueDate).toISOString() : null,
-              created_at: new Date(cleanedTask.createdAt).toISOString(),
-              updated_at: new Date(cleanedTask.updatedAt).toISOString(),
-              ai_generated: cleanedTask.aiGenerated || false,
-              notes: cleanedTask.notes || ''
-            })
-            .then(({ error }) => {
-              if (error) console.error("Error storing task in Supabase:", error);
-            });
+            // Add a retry mechanism for Supabase updates
+            const saveToSupabase = async (retries = 3) => {
+              try {
+                const { error, data } = await supabase.from('tasks').upsert({
+                  id: cleanedTask.id,
+                  user_id: userId,
+                  title: cleanedTask.title,
+                  description: cleanedTask.description || '',
+                  priority: cleanedTask.priority,
+                  status: cleanedTask.status,
+                  due_date: cleanedTask.dueDate ? new Date(cleanedTask.dueDate).toISOString() : null,
+                  created_at: new Date(cleanedTask.createdAt).toISOString(),
+                  updated_at: new Date(cleanedTask.updatedAt).toISOString(),
+                  ai_generated: cleanedTask.aiGenerated || false,
+                  notes: cleanedTask.notes || ''
+                });
+                
+                if (error) {
+                  console.error("Error storing task in Supabase:", error);
+                  if (retries > 0) {
+                    console.log(`Retrying Supabase add, ${retries} attempts left`);
+                    setTimeout(() => saveToSupabase(retries - 1), 1000);
+                  }
+                } else {
+                  console.log("Task successfully added to Supabase:", data);
+                }
+              } catch (err) {
+                console.error("Exception during Supabase add:", err);
+                if (retries > 0) {
+                  console.log(`Retrying after exception, ${retries} attempts left`);
+                  setTimeout(() => saveToSupabase(retries - 1), 1000);
+                }
+              }
+            };
+            
+            // Start the save process
+            saveToSupabase();
           }
           
           return {
@@ -92,8 +113,14 @@ export const useStore = create<Store>()(
         set((state) => {
           console.log("Updating task", taskId, "with updates:", updates);
           
+          // Always include the updated timestamp
+          const updatesWithTimestamp = {
+            ...updates,
+            updatedAt: new Date()
+          };
+          
           const updatedTasks = state.tasks.map((task) =>
-            task.id === taskId ? { ...task, ...updates, updatedAt: new Date() } : task
+            task.id === taskId ? { ...task, ...updatesWithTimestamp } : task
           );
           
           // Find the updated task
@@ -106,25 +133,43 @@ export const useStore = create<Store>()(
             const dueDateForDB = updatedTask.dueDate ? new Date(updatedTask.dueDate).toISOString() : null;
             console.log("Saving to Supabase with due_date:", dueDateForDB);
             
-            supabase.from('tasks').upsert({
-              id: updatedTask.id,
-              user_id: userId,
-              title: updatedTask.title,
-              description: updatedTask.description || '',
-              priority: updatedTask.priority,
-              status: updatedTask.status,
-              due_date: dueDateForDB,
-              updated_at: new Date().toISOString(),
-              ai_generated: updatedTask.aiGenerated || false,
-              notes: updatedTask.notes || ''
-            })
-            .then(({ error, data }) => {
-              if (error) {
-                console.error("Error updating task in Supabase:", error);
-              } else {
-                console.log("Supabase update successful:", data);
+            // Add a retry mechanism for Supabase updates
+            const saveToSupabase = async (retries = 3) => {
+              try {
+                const { error, data } = await supabase.from('tasks').upsert({
+                  id: updatedTask.id,
+                  user_id: userId,
+                  title: updatedTask.title,
+                  description: updatedTask.description || '',
+                  priority: updatedTask.priority,
+                  status: updatedTask.status,
+                  due_date: dueDateForDB,
+                  updated_at: new Date().toISOString(),
+                  created_at: updatedTask.createdAt ? new Date(updatedTask.createdAt).toISOString() : new Date().toISOString(),
+                  ai_generated: updatedTask.aiGenerated || false,
+                  notes: updatedTask.notes || ''
+                });
+                
+                if (error) {
+                  console.error("Error updating task in Supabase:", error);
+                  if (retries > 0) {
+                    console.log(`Retrying Supabase update, ${retries} attempts left`);
+                    setTimeout(() => saveToSupabase(retries - 1), 1000);
+                  }
+                } else {
+                  console.log("Supabase update successful:", data);
+                }
+              } catch (err) {
+                console.error("Exception during Supabase update:", err);
+                if (retries > 0) {
+                  console.log(`Retrying after exception, ${retries} attempts left`);
+                  setTimeout(() => saveToSupabase(retries - 1), 1000);
+                }
               }
-            });
+            };
+            
+            // Start the save process
+            saveToSupabase();
           }
           
           return {
@@ -294,9 +339,10 @@ export const useStore = create<Store>()(
         if (!isSupabaseConfigured() || !userId) return;
         
         try {
-          console.log("Syncing with Supabase...");
+          console.log("Syncing with Supabase for user:", userId);
           // Get current local tasks
           const currentTasks = get().tasks;
+          console.log("Current local tasks:", currentTasks.length);
           
           // Fetch tasks from Supabase
           const { data: tasksData, error: tasksError } = await supabase
@@ -309,6 +355,7 @@ export const useStore = create<Store>()(
           if (tasksData) {
             console.log("Received tasks from Supabase:", tasksData.length);
             
+            // Convert from Supabase format to app format
             const formattedTasks: Task[] = tasksData.map(task => ({
               id: task.id,
               title: task.title,
@@ -322,20 +369,20 @@ export const useStore = create<Store>()(
               notes: task.notes || ''
             }));
             
-            // Check if we have any tasks that were recently modified locally (especially status changes)
-            // Use a 10-second threshold to consider a task "recently modified"
-            const tenSecondsAgo = new Date(Date.now() - 10000);
+            // STEP 1: Check for recently modified local tasks (within the last 5 minutes)
+            // and push them to Supabase to ensure they're available to other browsers
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
             const recentlyModifiedTasks = currentTasks.filter(task => 
-              task.updatedAt && new Date(task.updatedAt) > tenSecondsAgo
+              task.updatedAt && new Date(task.updatedAt) > fiveMinutesAgo
             );
             
             if (recentlyModifiedTasks.length > 0) {
-              console.log(`Found ${recentlyModifiedTasks.length} recently modified tasks - prioritizing local state`);
+              console.log(`Pushing ${recentlyModifiedTasks.length} recently modified tasks to Supabase`);
               
-              // Push these changes to Supabase instead of pulling
               for (const localTask of recentlyModifiedTasks) {
-                console.log(`Updating Supabase with local task ${localTask.id} (status: ${localTask.status})`);
+                console.log(`Pushing local task "${localTask.title}" to Supabase`);
                 
+                // Update Supabase with the local task
                 await supabase.from('tasks').upsert({
                   id: localTask.id,
                   user_id: userId,
@@ -345,44 +392,68 @@ export const useStore = create<Store>()(
                   status: localTask.status,
                   due_date: localTask.dueDate ? new Date(localTask.dueDate).toISOString() : null,
                   updated_at: new Date(localTask.updatedAt).toISOString(),
+                  created_at: new Date(localTask.createdAt).toISOString(),
                   ai_generated: localTask.aiGenerated || false,
                   notes: localTask.notes || ''
                 });
               }
             }
             
-            // Merge tasks, preferring local tasks that have been updated more recently
-            const mergedTasks = formattedTasks.map(remoteTask => {
+            // STEP 2: Create a merged task list
+            // For each remote task, check if it exists locally
+            const mergedTasks: Task[] = [];
+            const processedIds = new Set<string>();
+            
+            // Process Supabase tasks
+            for (const remoteTask of formattedTasks) {
+              processedIds.add(remoteTask.id);
               const localTask = currentTasks.find(t => t.id === remoteTask.id);
-              if (!localTask) return remoteTask;
               
-              // Always prefer local task status if it was modified in the last 10 seconds
-              if (localTask.updatedAt && new Date(localTask.updatedAt) > tenSecondsAgo) {
-                console.log(`Task ${localTask.id} was recently modified locally, keeping local version`);
-                return localTask;
+              if (!localTask) {
+                // Task only exists in Supabase, add it
+                console.log(`Adding remote-only task "${remoteTask.title}" to local store`);
+                mergedTasks.push(remoteTask);
+              } else {
+                // Task exists in both places, use the most recently updated one
+                const localUpdateTime = new Date(localTask.updatedAt).getTime();
+                const remoteUpdateTime = new Date(remoteTask.updatedAt).getTime();
+                
+                if (localUpdateTime > remoteUpdateTime) {
+                  console.log(`Task "${localTask.title}" more recent locally, keeping local version`);
+                  mergedTasks.push(localTask);
+                } else {
+                  console.log(`Task "${remoteTask.title}" more recent in Supabase, using remote version`);
+                  mergedTasks.push(remoteTask);
+                }
               }
-              
-              // For older modifications, compare timestamps
-              if (localTask.updatedAt && remoteTask.updatedAt && 
-                  new Date(localTask.updatedAt) > new Date(remoteTask.updatedAt)) {
-                console.log(`Task ${localTask.id} has more recent local changes, keeping local version`);
-                return localTask;
-              }
-              
-              return remoteTask;
-            });
+            }
             
-            // Add any local tasks that don't exist in remote
-            currentTasks.forEach(localTask => {
-              if (!mergedTasks.some(t => t.id === localTask.id)) {
-                console.log(`Adding local-only task ${localTask.id} to merged tasks`);
+            // Process local-only tasks (not in Supabase)
+            for (const localTask of currentTasks) {
+              if (!processedIds.has(localTask.id)) {
+                console.log(`Adding local-only task "${localTask.title}" to merged list`);
                 mergedTasks.push(localTask);
+                
+                // Also push to Supabase so other browsers can see it
+                await supabase.from('tasks').upsert({
+                  id: localTask.id,
+                  user_id: userId,
+                  title: localTask.title,
+                  description: localTask.description || '',
+                  priority: localTask.priority,
+                  status: localTask.status,
+                  due_date: localTask.dueDate ? new Date(localTask.dueDate).toISOString() : null,
+                  updated_at: new Date(localTask.updatedAt).toISOString(),
+                  created_at: new Date(localTask.createdAt).toISOString(),
+                  ai_generated: localTask.aiGenerated || false,
+                  notes: localTask.notes || ''
+                });
               }
-            });
+            }
             
-            console.log(`Merged ${mergedTasks.length} tasks (${currentTasks.length} local, ${formattedTasks.length} remote)`);
+            console.log(`Final merged task list contains ${mergedTasks.length} tasks`);
             
-            // Update the store with merged tasks
+            // STEP 3: Update the local store with the merged tasks
             set({ tasks: mergedTasks });
           }
         } catch (error) {

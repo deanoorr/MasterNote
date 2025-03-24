@@ -216,29 +216,40 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       setUserId(user.id);
-      // Don't sync immediately on every login - allow local state to be the source of truth
-      // Only sync if the store is empty
-      if (tasks.length === 0) {
-        console.log("No tasks in local state, syncing with Supabase...");
-        syncWithSupabase();
-      } else {
-        console.log("Using local tasks, skipping initial Supabase sync");
-      }
+      // Always sync with Supabase, but our improved sync logic will
+      // intelligently merge the data, preserving local modifications
+      console.log("User authenticated, syncing with Supabase using smart merge...");
+      syncWithSupabase();
     }
-  }, [user, setUserId, syncWithSupabase, tasks.length]);
+  }, [user, setUserId, syncWithSupabase]);
+
+  // Set up periodic sync to keep multiple browsers in sync
+  useEffect(() => {
+    if (!user) return; // Only sync when user is logged in
+    
+    console.log("Setting up periodic sync with Supabase");
+    
+    // Sync every 60 seconds to catch any changes from other browsers
+    const syncInterval = setInterval(() => {
+      console.log("Running periodic sync with Supabase");
+      syncWithSupabase();
+    }, 60000); // 60 seconds
+    
+    // Clean up interval on unmount
+    return () => {
+      console.log("Clearing periodic sync interval");
+      clearInterval(syncInterval);
+    };
+  }, [user, syncWithSupabase]);
 
   // Show auth modal only if explicitly requested now
   // We've removed the auto-popup of auth modal
 
   const handleAuthSuccess = (userId: string) => {
     setUserId(userId);
-    // Only sync if the store is empty
-    if (tasks.length === 0) {
-      console.log("Auth success with no local tasks, syncing with Supabase...");
-      syncWithSupabase();
-    } else {
-      console.log("Auth success with existing local tasks, skipping Supabase sync");
-    }
+    // Always sync on auth success, we're using smart merge now
+    console.log("Auth success, syncing with Supabase...");
+    syncWithSupabase();
     setAuthModalOpened(false);
   };
 

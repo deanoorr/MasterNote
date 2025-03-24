@@ -213,12 +213,9 @@ export default function TaskList() {
       // Clean the task title - remove any leading numbers/formats like "1. " or "3."
       const cleanTitle = newTaskTitle.trim().replace(/^\d+\.\s*/, '');
       
-      // Set due date year to 2025 if it exists
-      let dueDate = taskDueDate;
-      if (dueDate) {
-        dueDate = new Date(dueDate);
-        dueDate.setFullYear(2025);
-      }
+      // Use the actual date selected by the user, don't force to 2025
+      let dueDate = taskDueDate ? new Date(taskDueDate) : undefined;
+      console.log("Creating task with due date:", dueDate);
       
       const task: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
