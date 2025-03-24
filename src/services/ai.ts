@@ -68,6 +68,15 @@ const getDeepSeekApiKey = async (userId?: string) => {
   return envKey;
 };
 
+// Get Grok API key
+const getGrokApiKey = async (userId?: string) => {
+  const storageKey = await storageService.getItem('grok_api_key', userId);
+  if (storageKey) return storageKey;
+  
+  const envKey = import.meta.env.VITE_GROK_API_KEY || '';
+  return envKey;
+};
+
 // Get Claude API key
 const getClaudeApiKey = () => {
   const localStorageKey = localStorage.getItem('claude_api_key');
@@ -251,6 +260,67 @@ const callDeepSeekAPI = async (message: string) => {
   }
 };
 
+// Call Grok API
+export const callGrokAPI = async (message: string, userId?: string) => {
+  console.log("Calling Grok API...");
+  try {
+    const apiKey = await getGrokApiKey(userId);
+    
+    if (!apiKey) {
+      return "Please add your Grok API key in settings to use Grok 2. You can find this in your xAI account settings.";
+    }
+    
+    // Get conversation history for context
+    const conversationHistory = await getConversationHistory(userId || "user123");
+    
+    // Create a more comprehensive system prompt
+    const systemPrompt = 'You are a helpful assistant with strong reasoning and coding capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions.';
+    
+    // Create messages array with system prompt, history, and user message
+    const grokMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+    
+    const response = await axios.post(
+      'https://api.xai.com/v1/chat/completions', // Replace with actual Grok API endpoint when available
+      {
+        model: 'grok-2-1212',
+        messages: grokMessages,
+        max_tokens: 1000,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response.data && response.data.choices && response.data.choices.length > 0) {
+      const responseContent = response.data.choices[0].message.content;
+      
+      // Save the conversation for context in future interactions
+      await saveMessageToHistory(userId || "user123", 'user', message);
+      await saveMessageToHistory(userId || "user123", 'assistant', responseContent);
+      
+      return responseContent;
+    } else {
+      return 'No response content received from Grok API. Please try again.';
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Grok API error:", error.response?.data || error.message);
+      return `Grok error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
+    } else {
+      console.error("Unexpected error:", error);
+      return "An unexpected error occurred with the Grok service. Please try again later.";
+    }
+  }
+};
+
 // Test OpenAI connection
 export const testOpenAIConnection = async () => {
   try {
@@ -293,6 +363,51 @@ export const testOpenAIConnection = async () => {
     return { 
       success: false, 
       error: error.message || "Unknown error occurred" 
+    };
+  }
+};
+
+// Test Grok API connection
+export const testGrokAPIConnection = async (userId?: string) => {
+  console.log("Testing Grok API connection...");
+  try {
+    const apiKey = await getGrokApiKey(userId);
+    
+    if (!apiKey) {
+      return {
+        success: false,
+        error: "No Grok API key found. Please provide a valid API key in settings."
+      };
+    }
+    
+    // Test with a simple request to the models endpoint
+    const response = await axios.get('https://api.xai.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.status === 200) {
+      return {
+        success: true,
+        models: response.data.data || response.data,
+        response: response.data
+      };
+    } else {
+      return {
+        success: false,
+        status: response.status,
+        error: "Failed to connect to Grok API. Status: " + response.status,
+        response: response.data
+      };
+    }
+  } catch (error: any) {
+    console.error("Error testing Grok API connection:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      response: error.response?.data
     };
   }
 };
@@ -1317,6 +1432,8 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         return await callPerplexityAPI(message);
       } else if (currentModel === 'deepseek-r1') {
         return await callDeepSeekAPI(message);
+      } else if (currentModel === 'grok-2-1212') {
+        return await callGrokAPI(message, userId);
       } else {
         // For GPT-4o or GPT-o3 Mini models, use general conversation
         const history = await getConversationHistory(userId);

@@ -28,6 +28,7 @@ export const storageService: StorageService = {
           if (key === 'openai_api_key') return data?.openai_key;
           if (key === 'perplexity_api_key') return data?.perplexity_key;
           if (key === 'deepseek_api_key') return data?.deepseek_key;
+          if (key === 'grok_api_key') return data?.grok_key;
         }
         
         // Handle user preferences
@@ -91,6 +92,7 @@ export const storageService: StorageService = {
           if (key === 'openai_api_key') updates.openai_key = value;
           if (key === 'perplexity_api_key') updates.perplexity_key = value;
           if (key === 'deepseek_api_key') updates.deepseek_key = value;
+          if (key === 'grok_api_key') updates.grok_key = value;
           
           const { error } = await supabase
             .from('api_keys')
@@ -166,6 +168,7 @@ export const storageService: StorageService = {
           if (key === 'openai_api_key') updates.openai_key = null;
           if (key === 'perplexity_api_key') updates.perplexity_key = null;
           if (key === 'deepseek_api_key') updates.deepseek_key = null;
+          if (key === 'grok_api_key') updates.grok_key = null;
           
           const { error } = await supabase
             .from('api_keys')

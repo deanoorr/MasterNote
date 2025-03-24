@@ -12,6 +12,8 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const isDark = true; // Always use dark mode
+  const { user } = useAuth();
+  const userId = user?.id;
   const [apiKey, setApiKey] = useState('');
   const [perplexityApiKey, setPerplexityApiKey] = useState('');
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
@@ -24,7 +26,6 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [taskTemplate, setTaskTemplate] = useState('');
   const [loading, setLoading] = useState(true);
-  const { user, userId } = useAuth();
 
   useEffect(() => {
     const loadApiKeys = async () => {

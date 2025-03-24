@@ -5,6 +5,7 @@ import { AIModel, Message, Task } from '../types';
 import { useStore } from '../store';
 import { getAIResponse } from '../services/ai';
 import MarkdownRenderer from './MarkdownRenderer';
+import { useAuth } from '../contexts/AuthContext';
 
 interface AIChatProps {
   model: AIModel;
@@ -13,6 +14,8 @@ interface AIChatProps {
 export default function AIChat({ model }: AIChatProps) {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === 'dark';
+  const { user } = useAuth();
+  const userId = user?.id;
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingReasoning, setLoadingReasoning] = useState<string[]>([]);
@@ -90,9 +93,9 @@ export default function AIChat({ model }: AIChatProps) {
     }, 0);
 
     try {
-      const userID = "user123"; // Replace with actual user ID if available
+      // Use the user ID from auth context, or fall back to default
+      const userID = userId || "user123";
       console.log(`Processing message with input: ${currentInput}`);
-      // Get response from the updated function (now without mode parameter)
       const response = await getAIResponse(currentInput, userID);
       console.log("AI response received:", response);
 
@@ -128,6 +131,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return 'Perplexity Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT-o3 Mini';
+      case 'grok-2-1212': return 'Grok 2';
       default: return 'AI Assistant';
     }
   };
@@ -138,6 +142,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return '#5282FF';
       case 'deepseek-r1': return '#FA5252';
       case 'gpt-o3-mini': return '#FFA94D';
+      case 'grok-2-1212': return '#8E44AD';
       default: return '#20C997';
     }
   };
@@ -149,6 +154,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return 'Search-focused AI assistant';
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
       case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
+      case 'grok-2-1212': return 'Versatile AI assistant';
       default: return 'Intelligent Assistant';
     }
   };
@@ -178,7 +184,8 @@ export default function AIChat({ model }: AIChatProps) {
             <Avatar size="sm" radius="xl" color={
               model === 'perplexity-sonar' ? 'blue' : 
               model === 'deepseek-r1' ? 'red' : 
-              model === 'gpt-o3-mini' ? 'orange' : 'teal'
+              model === 'gpt-o3-mini' ? 'orange' : 
+              model === 'grok-2-1212' ? 'grape' : 'teal'
             } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
               {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
             </Avatar>
@@ -189,7 +196,8 @@ export default function AIChat({ model }: AIChatProps) {
                   color={
                     model === 'perplexity-sonar' ? 'blue' : 
                     model === 'deepseek-r1' ? 'red' : 
-                    model === 'gpt-o3-mini' ? 'orange' : 'teal'
+                    model === 'gpt-o3-mini' ? 'orange' : 
+                    model === 'grok-2-1212' ? 'grape' : 'teal'
                   }
                   variant="light"
                   size="xs"
@@ -198,7 +206,12 @@ export default function AIChat({ model }: AIChatProps) {
                   {getModelDescription()}
                 </Badge>
               </Group>
-              <Text size="xs" c="dimmed">Powered by {model === 'perplexity-sonar' ? 'Perplexity' : model === 'deepseek-r1' ? 'DeepSeek' : model.includes('claude') ? 'Anthropic' : 'OpenAI'}</Text>
+              <Text size="xs" c="dimmed">Powered by {
+                model === 'perplexity-sonar' ? 'Perplexity' : 
+                model === 'deepseek-r1' ? 'DeepSeek' : 
+                model === 'grok-2-1212' ? 'xAI' : 
+                model.includes('claude') ? 'Anthropic' : 'OpenAI'
+              }</Text>
             </div>
           </Group>
           
