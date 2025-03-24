@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthModal from './components/Auth/AuthModal';
 import UserProfile from './components/Auth/UserProfile';
 import { isSupabaseConfigured } from './lib/supabase';
+import { storageService } from './services/storage';
 
 // Add CSS for animations
 const cssStyles = `
@@ -141,7 +142,7 @@ function AppContent() {
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [authModalOpened, setAuthModalOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages, setUserId, syncWithSupabase } = useStore();
+  const { messages, clearMessages, setUserId, syncWithSupabase, tasks } = useStore();
   const { user, loading, setDemoUser, isDemoMode } = useAuth();
 
   // Save the selected model to localStorage whenever it changes
@@ -150,11 +151,46 @@ function AppContent() {
     console.log('Saved model to localStorage:', selectedModel);
   }, [selectedModel]);
 
+  // Open settings modal if no API key is set
   useEffect(() => {
-    // Check if API key is set in localStorage
-    const apiKey = localStorage.getItem('openai_api_key');
-    setApiKeySet(!!apiKey);
+    const checkApiKey = async () => {
+      try {
+        // First check if we're logged in
+        if (user && user.id) {
+          // Try to load API key from Supabase via the storage service
+          const apiKeyFromSupabase = await storageService.getItem('openai_api_key', user.id);
+          setApiKeySet(!!apiKeyFromSupabase);
+          
+          // Only open settings if we've confirmed no API key exists in Supabase
+          if (!apiKeyFromSupabase) {
+            setSettingsOpened(true);
+          }
+        } else {
+          // Not logged in, check localStorage directly
+          const apiKey = localStorage.getItem('openai_api_key');
+          setApiKeySet(!!apiKey);
+          if (!apiKey) {
+            setSettingsOpened(true);
+          }
+        }
+      } catch (error) {
+        console.error("Error checking API key:", error);
+        // On error, fall back to localStorage check
+        const apiKey = localStorage.getItem('openai_api_key');
+        setApiKeySet(!!apiKey);
+        if (!apiKey) {
+          setSettingsOpened(true);
+        }
+      }
+    };
     
+    // Run the check after a short delay to allow auth to complete
+    const timeoutId = setTimeout(checkApiKey, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [user]);
+
+  // Load model preference
+  useEffect(() => {
     // Load the saved model preference from localStorage
     const savedModel = localStorage.getItem('selected_model');
     // Allow gpt4o, perplexity-sonar, deepseek-r1, or gpt-o3-mini
@@ -165,11 +201,6 @@ function AppContent() {
       // Default to gpt-o3-mini
       setSelectedModel('gpt-o3-mini');
       localStorage.setItem('selected_model', 'gpt-o3-mini');
-    }
-    
-    // If no API key is set, open settings modal automatically
-    if (!apiKey) {
-      setSettingsOpened(true);
     }
   }, []);
 
@@ -185,15 +216,39 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       setUserId(user.id);
-      syncWithSupabase(); // Sync tasks when user logs in
+      // Always sync with Supabase, but our improved sync logic will
+      // intelligently merge the data, preserving local modifications
+      console.log("User authenticated, syncing with Supabase using smart merge...");
+      syncWithSupabase();
     }
   }, [user, setUserId, syncWithSupabase]);
+
+  // Set up periodic sync to keep multiple browsers in sync
+  useEffect(() => {
+    if (!user) return; // Only sync when user is logged in
+    
+    console.log("Setting up periodic sync with Supabase");
+    
+    // Sync every 60 seconds to catch any changes from other browsers
+    const syncInterval = setInterval(() => {
+      console.log("Running periodic sync with Supabase");
+      syncWithSupabase();
+    }, 60000); // 60 seconds
+    
+    // Clean up interval on unmount
+    return () => {
+      console.log("Clearing periodic sync interval");
+      clearInterval(syncInterval);
+    };
+  }, [user, syncWithSupabase]);
 
   // Show auth modal only if explicitly requested now
   // We've removed the auto-popup of auth modal
 
   const handleAuthSuccess = (userId: string) => {
     setUserId(userId);
+    // Always sync on auth success, we're using smart merge now
+    console.log("Auth success, syncing with Supabase...");
     syncWithSupabase();
     setAuthModalOpened(false);
   };

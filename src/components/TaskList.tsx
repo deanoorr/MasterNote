@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea, Flex } from '@mantine/core';
+import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea, Flex, Checkbox } from '@mantine/core';
 import { DatePickerInput, DatesProvider } from '@mantine/dates';
-import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes } from '@tabler/icons-react';
+import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes, IconEdit } from '@tabler/icons-react';
 import { useStore, SortOption } from '../store';
 import { Task } from '../types';
 
@@ -183,19 +183,13 @@ export default function TaskList() {
     e.stopPropagation(); // Prevent propagation to parent elements
     const task = tasks.find((t) => t.id === taskId);
     if (task) {
-      // Mark task as done (don't toggle back to todo in the handler)
-      if (task.status !== 'done') {
+      console.log("Changing task status from", task.status, "to", task.status !== 'done' ? 'done' : 'todo');
+      
+      // Mark task as done or back to todo
       updateTask(taskId, { 
-          status: 'done',
-          updatedAt: new Date()
-        });
-      } else {
-        // If task is already done, we can toggle it back to todo
-        updateTask(taskId, { 
-          status: 'todo',
-        updatedAt: new Date()
+        status: task.status !== 'done' ? 'done' : 'todo',
+        updatedAt: new Date() // Ensure timestamp is updated
       });
-      }
     }
   };
 
@@ -219,12 +213,9 @@ export default function TaskList() {
       // Clean the task title - remove any leading numbers/formats like "1. " or "3."
       const cleanTitle = newTaskTitle.trim().replace(/^\d+\.\s*/, '');
       
-      // Set due date year to 2025 if it exists
-      let dueDate = taskDueDate;
-      if (dueDate) {
-        dueDate = new Date(dueDate);
-        dueDate.setFullYear(2025);
-      }
+      // Use the actual date selected by the user, don't force to 2025
+      let dueDate = taskDueDate ? new Date(taskDueDate) : undefined;
+      console.log("Creating task with due date:", dueDate);
       
       const task: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -288,12 +279,9 @@ export default function TaskList() {
     e.stopPropagation(); // Prevent propagation to parent elements
     console.log("Changing due date of task", taskId, "to", dueDate);
     
-    // Set due date year to 2025 if it exists
-    let newDueDate = dueDate;
-    if (newDueDate) {
-      newDueDate = new Date(newDueDate);
-      newDueDate.setFullYear(2025);
-    }
+    // Don't set a fixed year to 2025, use the actual date selected
+    let newDueDate = dueDate ? new Date(dueDate) : null;
+    console.log("New due date object:", newDueDate);
     
     updateTask(taskId, {
       dueDate: newDueDate || undefined,
@@ -370,11 +358,9 @@ export default function TaskList() {
   };
 
   const sortOptions = [
-    { value: 'priority-high', label: 'Priority (High to Low)' },
-    { value: 'priority-low', label: 'Priority (Low to High)' },
-    { value: 'due-date', label: 'Due Date (Earliest First)' },
-    { value: 'created-newest', label: 'Recently Created' },
-    { value: 'created-oldest', label: 'Oldest Created' },
+    { value: 'due-date', label: 'By Due Date' },
+    { value: 'priority-high', label: 'By Priority' },
+    { value: 'created-newest', label: 'Recently Added' },
     { value: 'alphabetical', label: 'Alphabetical' },
   ];
 
@@ -518,6 +504,301 @@ export default function TaskList() {
     }
   };
 
+  const cssAnimations = `
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    
+    @keyframes taskCardAnimation {
+      0% {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .task-card {
+      animation: taskCardAnimation 0.3s ease forwards;
+    }
+    
+    .task-card:nth-child(1) { animation-delay: 0.05s; }
+    .task-card:nth-child(2) { animation-delay: 0.1s; }
+    .task-card:nth-child(3) { animation-delay: 0.15s; }
+    .task-card:nth-child(4) { animation-delay: 0.2s; }
+    .task-card:nth-child(5) { animation-delay: 0.25s; }
+    .task-card:nth-child(6) { animation-delay: 0.3s; }
+    .task-card:nth-child(7) { animation-delay: 0.35s; }
+    .task-card:nth-child(8) { animation-delay: 0.4s; }
+    .task-card:nth-child(9) { animation-delay: 0.45s; }
+    .task-card:nth-child(10) { animation-delay: 0.5s; }
+  `;
+
+  // Add this function to group tasks by date
+  const groupTasksByDate = (tasks: Task[]) => {
+    // Group tasks by date
+    const grouped = new Map<string, Task[]>();
+    
+    tasks.forEach(task => {
+      // Format the date as a string to use as a key
+      let dateKey = task.dueDate ? formatDueDate(new Date(task.dueDate)) : 'No Due Date';
+      
+      if (!grouped.has(dateKey)) {
+        grouped.set(dateKey, []);
+      }
+      grouped.get(dateKey)?.push(task);
+    });
+    
+    // Sort the groups by date
+    const sortedGroups = Array.from(grouped.entries()).sort((a, b) => {
+      if (a[0] === 'No Due Date') return 1;
+      if (b[0] === 'No Due Date') return -1;
+      if (a[0] === 'Today') return -1;
+      if (b[0] === 'Today') return 1;
+      if (a[0] === 'Tomorrow') return -1;
+      if (b[0] === 'Tomorrow') return 1;
+      return a[0].localeCompare(b[0]);
+    });
+    
+    return sortedGroups;
+  };
+
+  const renderTasks = (tasksToRender: Task[]) => {
+    if (tasksToRender.length === 0) {
+      return (
+        <Box 
+          style={{ 
+            padding: '20px', 
+            textAlign: 'center', 
+            color: isDark ? '#909296' : '#6c757d',
+            border: `1px dashed ${isDark ? '#373A40' : '#dee2e6'}`,
+            borderRadius: '8px',
+            backgroundColor: isDark ? 'rgba(26, 27, 30, 0.4)' : 'rgba(248, 249, 250, 0.4)'
+          }}
+        >
+          <IconNotes style={{ width: 40, height: 40, opacity: 0.4, margin: '0 auto 10px' }} />
+          <Text size="sm">No tasks here yet</Text>
+        </Box>
+      );
+    }
+
+    // Sort by date and group tasks
+    const groupedTasks = groupTasksByDate(tasksToRender);
+
+    return (
+      <>
+        {groupedTasks.map(([dateKey, tasks]) => (
+          <Box key={dateKey} mb="md">
+            {/* Date header */}
+            <Box 
+              style={{
+                padding: '8px 0',
+                marginBottom: '8px',
+                borderBottom: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <IconCalendar size={16} style={{ opacity: 0.7 }} />
+              <Text size="sm" fw={600} c={isDark ? '#909296' : '#6c757d'}>
+                {dateKey}
+              </Text>
+            </Box>
+            
+            {/* Tasks for this date */}
+            <Stack gap="sm">
+              {tasks.map((task, index) => (
+                <Paper
+                  key={task.id}
+                  p="sm"
+                  withBorder
+                  style={{
+                    position: 'relative',
+                    marginBottom: '4px',
+                    backgroundColor: isDark 
+                      ? (task.status === 'done' ? 'rgba(26, 27, 30, 0.4)' : '#1A1B1E') 
+                      : (task.status === 'done' ? 'rgba(248, 249, 250, 0.4)' : '#ffffff'),
+                    opacity: task.status === 'done' ? 0.7 : 1,
+                    boxShadow: isDark 
+                      ? '0 1px 3px rgba(0, 0, 0, 0.15)' 
+                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                    overflow: 'hidden',
+                    transition: 'all 0.15s ease-in-out',
+                    animation: `fadeIn 0.3s ease forwards`,
+                    animationDelay: `${index * 0.05}s`,
+                    borderRadius: '6px',
+                    '&:hover': {
+                      boxShadow: isDark 
+                        ? '0 3px 6px rgba(0, 0, 0, 0.2)' 
+                        : '0 3px 6px rgba(0, 0, 0, 0.08)',
+                      transform: 'translateY(-1px)'
+                    }
+                  }}
+                >
+                  <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
+                    <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                      <Checkbox
+                        checked={task.status === 'done'}
+                        onChange={(e) => handleStatusChange(task.id, e as any)}
+                        styles={{
+                          input: {
+                            cursor: 'pointer',
+                            backgroundColor: isDark ? '#25262B' : '#ffffff',
+                            border: `1px solid ${isDark ? '#373A40' : '#ced4da'}`,
+                            borderRadius: '4px',
+                            '&:checked': {
+                              backgroundColor: '#20C997',
+                              borderColor: '#20C997'
+                            },
+                            transition: 'all 0.2s ease',
+                          },
+                          icon: {
+                            color: 'white'
+                          }
+                        }}
+                        size="sm"
+                      />
+                      <Box style={{ flex: 1, minWidth: 0, marginTop: '2px' }}>
+                        <Text 
+                          size="sm"
+                          fw={500}
+                          lineClamp={2}
+                          style={{ 
+                            textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                            opacity: task.status === 'done' ? 0.7 : 1,
+                            fontSize: '14px',
+                            wordBreak: 'break-word',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          {task.title}
+                        </Text>
+                        
+                        <Group mt={6} gap="xs">
+                          {/* Remove the date badge since we're using date dividers */}
+                          <Badge 
+                            variant="filled"
+                            size="xs"
+                            style={{ 
+                              padding: '4px 10px',
+                              fontWeight: 500,
+                              borderRadius: '50px',
+                              textTransform: 'uppercase',
+                              fontSize: '10px',
+                              border: 'none',
+                              backgroundColor: 
+                                task.priority === 'high' ? '#862e2e' : 
+                                task.priority === 'medium' ? '#8c6d1f' : 
+                                '#1864ab',
+                              color: '#fff'
+                            }}
+                          >
+                            {task.priority}
+                          </Badge>
+                          
+                          {task.notes && (
+                            <Badge 
+                              color="teal" 
+                              variant="light"
+                              size="xs"
+                              leftSection={<IconNotes size={12} />}
+                              style={{ 
+                                padding: '3px 7px',
+                                fontWeight: 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  backgroundColor: isDark ? '#0CA678' : '#20C997',
+                                  color: 'white'
+                                }
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleNotesOpen(task.id, task.notes, e);
+                              }}
+                            >
+                              Notes
+                            </Badge>
+                          )}
+                        </Group>
+                      </Box>
+                    </Box>
+                    
+                    <Group gap="xs">
+                      <ActionIcon 
+                        size="sm" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditTask(task.id, e);
+                        }}
+                        style={{ 
+                          color: isDark ? '#909296' : '#495057',
+                          backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                          border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                          borderRadius: '4px',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: isDark ? '#2C2E33' : '#e9ecef',
+                            color: isDark ? '#C1C2C5' : '#495057'
+                          }
+                        }}
+                        title="Edit task"
+                      >
+                        <IconEdit size={14} stroke={1.5} />
+                      </ActionIcon>
+                      <ActionIcon 
+                        size="sm" 
+                        style={{ 
+                          color: isDark ? '#FA5252' : '#e03131',
+                          backgroundColor: isDark ? '#25262B' : '#f8f9fa',
+                          border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                          borderRadius: '4px',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: isDark ? '#902129' : '#FFEBEB',
+                            color: '#FA5252'
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to delete this task?')) {
+                            handleDeleteTask(task.id, e);
+                          }
+                        }}
+                        title="Delete task"
+                      >
+                        <IconTrash size={14} stroke={1.5} />
+                      </ActionIcon>
+                    </Group>
+                  </Group>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+        ))}
+      </>
+    );
+  };
+
   return (
     <DatesProvider settings={{ locale: 'en', firstDayOfWeek: 0 }}>
       <Paper style={{ 
@@ -525,48 +806,45 @@ export default function TaskList() {
         backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '12px',
-        boxShadow: isDark ? '0 8px 30px rgba(0, 0, 0, 0.2)' : '0 8px 30px rgba(0, 0, 0, 0.05)',
+        borderRadius: '8px',
+        boxShadow: isDark ? '0 2px 10px rgba(0, 0, 0, 0.15)' : '0 2px 10px rgba(0, 0, 0, 0.05)',
         overflow: 'hidden'
       }}>
+        {/* Add CSS animations */}
+        <style>{cssAnimations}</style>
+        
         <Box 
           style={{ 
-            padding: '20px',
+            padding: '16px',
             flex: 1,
             overflowY: 'auto'
           }}
         >
-          <Group justify="space-between" mb="md">
-            <Text size="xl" fw={600} c={isDark ? undefined : 'gray.8'}>
+          <Group justify="space-between" mb="md" style={{ borderBottom: `1px solid ${isDark ? '#2C2E33' : '#e9ecef'}`, paddingBottom: '12px' }}>
+            <Text size="lg" fw={600} c={isDark ? undefined : 'gray.8'}>
               {viewingCompletedTasks ? 'Completed Tasks' : 'Tasks'}
             </Text>
             <Group>
               <Button 
-                variant={viewingCompletedTasks ? "filled" : "light"}
+                variant={viewingCompletedTasks ? "filled" : "subtle"}
                 color={viewingCompletedTasks ? "blue" : "gray"} 
-                size="sm" 
+                size="xs" 
                 onClick={() => setViewingCompletedTasks(!viewingCompletedTasks)}
-                leftSection={<IconCheck size={16} />}
-                style={{
-                  transition: 'all 0.2s ease',
-                }}
+                leftSection={<IconCheck size={14} />}
               >
                 {viewingCompletedTasks ? 'Back to Tasks' : 'View Completed'}
               </Button>
               {viewingCompletedTasks && completedTasks.length > 0 && (
                 <Button
-                  variant="light"
+                  variant="subtle"
                   color="red"
-                  size="sm"
+                  size="xs"
                   onClick={() => {
                     if (window.confirm('Are you sure you want to delete all completed tasks? This action cannot be undone.')) {
                       deleteCompletedTasks();
                     }
                   }}
-                  leftSection={<IconTrash size={16} />}
-                  style={{
-                    transition: 'all 0.2s ease',
-                  }}
+                  leftSection={<IconTrash size={14} />}
                 >
                   Clear All
                 </Button>
@@ -574,32 +852,29 @@ export default function TaskList() {
               {!viewingCompletedTasks && (
                 <>
               <Select
-                placeholder="Sort by"
+                placeholder="Sort"
                 data={sortOptions}
                 value={sortOrder}
                 onChange={handleSortChange}
-                rightSection={<IconSortAscending size={16} />}
-                size="sm"
-                style={{ width: 200 }}
+                rightSection={<IconSortAscending size={14} style={{ color: isDark ? '#909296' : '#6c757d' }} />}
+                size="xs"
+                style={{ width: 150 }}
                 styles={{
                   input: {
-                    backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                    borderRadius: '6px',
+                    height: '28px',
+                    minHeight: '28px',
+                    borderRadius: '4px'
                   }
                 }}
               />
               <Button 
-                variant="light" 
+                variant="filled" 
                 color="teal" 
-                size="sm" 
+                size="xs" 
                 onClick={() => setAddingTask(true)}
-                leftSection={<IconPlus size={16} />}
-                style={{
-                  transition: 'all 0.2s ease',
-                }}
+                leftSection={<IconPlus size={14} />}
               >
-                Add Task
+                Add
               </Button>
                 </>
               )}
@@ -610,240 +885,77 @@ export default function TaskList() {
             {addingTask && (
               <Paper 
                 p="md" 
+                mb="xl"
                 style={{
                   backgroundColor: isDark ? '#25262B' : '#f8f9fa',
-                  borderRadius: '10px',
-                  border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                  boxShadow: isDark ? '0 4px 15px rgba(0,0,0,0.2)' : '0 4px 15px rgba(0,0,0,0.05)',
-                  animation: 'fadeIn 0.3s ease-in-out'
+                  borderRadius: '12px',
+                  border: `1px solid ${isDark ? '#2C2E33' : '#e9ecef'}`,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  marginBottom: '24px',
+                  transform: 'translateY(0)',
+                  animation: 'slideDown 0.3s ease'
                 }}
               >
+                <Text fw={600} mb="sm" size="md">New Task</Text>
                 <TextInput
                   placeholder="Task title"
                   value={newTaskTitle}
                   onChange={(e) => setNewTaskTitle(e.target.value)}
-                  autoFocus
-                  mb="sm"
+                  mb="md"
+                  variant="filled"
+                  radius="md"
+                  required
                   styles={{
                     input: {
-                      backgroundColor: isDark ? '#2C2E33' : '#ffffff',
-                      border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                      borderRadius: '8px',
-                      padding: '12px 16px',
-                      fontSize: '16px',
-                      transition: 'all 0.2s ease',
-                      '&:focus': {
-                        borderColor: '#20C997',
-                        backgroundColor: isDark ? '#373A40' : '#f1f3f5'
-                      }
+                      fontSize: '15px',
+                      padding: '12px 16px'
                     }
                   }}
                 />
-                <Box mb="sm">
-                  {!dueDateMenuOpened ? (
-                    <Group style={{ alignItems: 'center' }}>
-                      <DatePickerInput
-                        valueFormat="MMM D"
-                        placeholder="Due date (optional)"
-                        value={taskDueDate}
-                        onChange={handleTaskDueDateChange}
-                        clearable
-                        maxLevel="month"
-                        firstDayOfWeek={0}
-                        style={{ flex: 1 }}
-                        leftSection={<IconCalendar size={16} color="#20C997" />}
-                        styles={{
-                          input: {
-                            backgroundColor: isDark ? '#2C2E33' : '#ffffff',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            borderRadius: '8px',
-                            padding: '12px 16px 12px 36px',
-                            fontSize: '16px',
-                            transition: 'all 0.2s ease',
-                            '&:focus': {
-                              borderColor: '#20C997',
-                              backgroundColor: isDark ? '#373A40' : '#f1f3f5'
-                            }
-                          },
-                          section: {
-                            width: '36px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          },
-                          ...calendarStyles
-                        }}
-                      />
-                      <Button 
-                        variant="subtle" 
-                        size="xs" 
-                        color="teal" 
-                        onClick={() => setDueDateMenuOpened(true)}
-                        leftSection={<IconCalendarEvent size={14} />}
-                        style={{ marginLeft: '4px' }}
-                      >
-                        Presets
-                      </Button>
-                    </Group>
-                  ) : (
-                    <Box style={{ animation: 'fadeIn 0.2s ease' }}>
-                      <Text size="xs" fw={500} c="dimmed" mb="xs">Select a date preset:</Text>
-                      <SimpleGrid cols={3} spacing="xs" mb="sm">
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getRelativeDate(0));
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>Today</Text>
-                        </UnstyledButton>
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getRelativeDate(1));
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>Tomorrow</Text>
-                        </UnstyledButton>
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getRelativeDate(2));
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>In 2 days</Text>
-                        </UnstyledButton>
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getRelativeDate(7));
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>Next week</Text>
-                        </UnstyledButton>
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getNextWeekday(1)); // Monday
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>Monday</Text>
-                        </UnstyledButton>
-                        <UnstyledButton 
-                          style={{
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: isDark ? '#2C2E33' : '#f1f3f5',
-                            border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            '&:hover': { backgroundColor: isDark ? '#373A40' : '#e9ecef' }
-                          }}
-                          onClick={() => {
-                            handleTaskDueDateChange(getNextWeekday(5)); // Friday
-                            setDueDateMenuOpened(false);
-                          }}
-                        >
-                          <Text size="xs" fw={500}>Friday</Text>
-                        </UnstyledButton>
-                      </SimpleGrid>
-                      <Group justify="space-between">
-                        <Button 
-                          variant="subtle" 
-                          size="xs" 
-                          color="gray" 
-                          onClick={() => setDueDateMenuOpened(false)}
-                        >
-                          Custom date
-                        </Button>
-                        {taskDueDate && (
-                          <Button 
-                            variant="subtle" 
-                            size="xs" 
-                            color="red" 
-                            onClick={() => {
-                              handleTaskDueDateChange(null);
-                              setDueDateMenuOpened(false);
-                            }}
-                          >
-                            Clear
-                          </Button>
-                        )}
-                      </Group>
-                    </Box>
-                  )}
-                </Box>
-                <Group justify="flex-end">
+                
+                <Group grow mb="md">
+                  <Select
+                    label="Priority"
+                    value={taskPriority}
+                    onChange={(value) => setTaskPriority(value as 'low' | 'medium' | 'high')}
+                    data={[
+                      { value: 'high', label: 'High' },
+                      { value: 'medium', label: 'Medium' },
+                      { value: 'low', label: 'Low' },
+                    ]}
+                    styles={{
+                      input: {
+                        backgroundColor: isDark ? '#1A1B1E' : '#ffffff',
+                        borderRadius: '8px',
+                      }
+                    }}
+                  />
+                  <DatePickerInput
+                    label="Due Date"
+                    placeholder="Optional"
+                    value={taskDueDate}
+                    onChange={handleTaskDueDateChange}
+                    clearable
+                    styles={calendarStyles}
+                  />
+                </Group>
+                
+                <Group justify="flex-end" mt="lg">
                   <Button 
                     variant="subtle" 
-                    color="gray" 
-                    size="sm"
                     onClick={() => setAddingTask(false)}
                   >
                     Cancel
                   </Button>
                   <Button 
-                    variant="filled" 
                     color="teal" 
-                    size="sm"
                     onClick={handleAddTask}
                     disabled={!newTaskTitle.trim()}
                     style={{
-                      transition: 'all 0.2s ease',
+                      background: 'linear-gradient(135deg, #20C997 0%, #0CA678 100%)',
+                      boxShadow: '0 4px 10px rgba(32, 201, 151, 0.3)',
                       '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 4px 12px rgba(32, 201, 151, 0.25)'
+                        boxShadow: '0 6px 14px rgba(32, 201, 151, 0.4)'
                       }
                     }}
                   >
@@ -856,409 +968,14 @@ export default function TaskList() {
             {viewingCompletedTasks ? (
               // Completed tasks view
               completedTasks.length > 0 ? (
-                completedTasks.map((task) => (
-                  <Paper
-                    key={task.id}
-                    p="md"
-                    mb="md"
-                    style={{
-                      backgroundColor: isDark ? '#25262B' : '#ffffff',
-                      borderRadius: '10px',
-                      opacity: 0.7,
-                      border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
-                      transition: 'all 0.2s ease',
-                      boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.05)',
-                      cursor: 'pointer',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                    onClick={() => {
-                      setNoteTaskId(task.id);
-                      setCurrentNotes(task.notes || '');
-                      setNotesModalOpened(true);
-                    }}
-                  >
-                    {/* Priority indicator line */}
-                    <Box style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '4px',
-                      height: '100%',
-                      backgroundColor: getPriorityColor(task.priority),
-                      opacity: 0.5
-                    }} />
-                    
-                    {/* Main content container */}
-                    <Box style={{ marginLeft: '12px' }}>
-                      {/* Header row with title and badges */}
-                      <Flex justify="space-between" align="flex-start" mb="xs">
-                        {/* Task title */}
-                        <Text fw={600} size="sm" style={{ 
-                          textDecoration: 'line-through',
-                          color: isDark ? '#909296' : '#adb5bd',
-                          fontSize: '15px',
-                          flex: 1
-                        }}>
-                          {task.title}
-                        </Text>
-                        
-                        {/* Badges container */}
-                        <Flex gap="xs" align="center">
-                          <Badge 
-                            color={getPriorityColor(task.priority)} 
-                            size="sm" 
-                            variant="filled"
-                            style={{ 
-                              height: '24px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            <IconFlag size={12} style={{ marginRight: '4px' }} />
-                            {task.priority.toUpperCase()}
-                          </Badge>
-                          
-                          {/* Action buttons */}
-                          <ActionIcon 
-                            size="md" 
-                            variant="filled" 
-                            color="blue"
-                            radius="md"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateTask(task.id, { 
-                                status: 'todo',
-                                updatedAt: new Date()
-                              });
-                            }}
-                            title="Mark as not done"
-                          >
-                            <IconClock size={16} />
-                          </ActionIcon>
-                          
-                          <ActionIcon 
-                            size="md" 
-                            variant="filled" 
-                            color={task.notes ? "teal" : "gray"}
-                            radius="md"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNotesOpen(task.id, task.notes, e);
-                            }}
-                            title={task.notes ? "View notes" : "Add notes"}
-                          >
-                            <IconNotes size={16} />
-                          </ActionIcon>
-                          
-                          <ActionIcon 
-                            size="md" 
-                            variant="filled" 
-                            color="red"
-                            radius="md"
-                            onClick={(e) => handleDeleteTask(task.id, e)}
-                            title="Delete task"
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Flex>
-                      </Flex>
-                      
-                      {/* Completion date */}
-                      <Text size="xs" c="dimmed" style={{ marginTop: '4px' }}>
-                        Completed: {new Date(task.updatedAt).toLocaleDateString()}
-                      </Text>
-                      
-                      {/* Display notes indicator if notes exist */}
-                      {task.notes && (
-                        <Group gap="xs" mt="xs" onClick={(e) => {
-                          e.stopPropagation();
-                          handleNotesOpen(task.id, task.notes, e);
-                        }} style={{ cursor: 'pointer' }}>
-                          <IconNotes size={14} />
-                          <Text size="xs" fw={500} c="dimmed" style={{ textDecoration: 'line-through' }}>
-                            {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
-                          </Text>
-                        </Group>
-                      )}
-                    </Box>
-                  </Paper>
-                ))
+                renderTasks(completedTasks)
               ) : (
                 <Text ta="center" mt="xl" c="dimmed">No completed tasks</Text>
               )
             ) : (
               // Active tasks view
               activeTasks.length > 0 ? (
-                activeTasks.map((task) => {
-              const dueDateStatus = task.dueDate ? getDueDateStatus(new Date(task.dueDate)) : 'ok';
-              const dueDateColor = getDueDateColor(dueDateStatus);
-              
-              return (
-                <Paper
-                  key={task.id}
-                  p="md"
-                  style={{
-                    backgroundColor: isDark ? '#25262B' : '#ffffff',
-                    borderRadius: '10px',
-                    border: `1px solid ${
-                      task.priority === 'high' ? `rgba(255, 76, 76, ${isDark ? 0.3 : 0.2})` : 
-                      task.priority === 'medium' ? `rgba(255, 193, 7, ${isDark ? 0.3 : 0.2})` : 
-                      `rgba(3, 102, 214, ${isDark ? 0.3 : 0.2})`}`,
-                    transition: 'all 0.2s ease',
-                    boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.15)' : '0 2px 8px rgba(0,0,0,0.05)',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    marginBottom: '12px',
-                    '&:hover': {
-                      backgroundColor: isDark ? '#2C2E33' : '#f8f9fa',
-                      transform: 'translateY(-2px)',
-                      boxShadow: isDark ? '0 4px 12px rgba(0,0,0,0.25)' : '0 4px 12px rgba(0,0,0,0.1)'
-                    }
-                  }}
-                  onClick={() => {
-                    setEditTaskId(task.id);
-                    setEditTaskTitle(task.title);
-                    setEditTaskPriority(task.priority);
-                    setEditTaskDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
-                    setEditModalOpened(true);
-                  }}
-                >
-                  {/* Priority indicator line */}
-                  <Box style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '4px',
-                    height: '100%',
-                    backgroundColor: getPriorityColor(task.priority),
-                  }} />
-                      
-                  {/* Task number badge */}
-                  <Box style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '4px',
-                    borderRadius: '0 0 6px 0',
-                    padding: '2px 6px',
-                    backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa',
-                    opacity: 0.9,
-                    zIndex: 1
-                  }}>
-                    <Text size="xs" fw={700} c={isDark ? 'dimmed' : 'gray.6'}>
-                      #{activeTasks.indexOf(task) + 1}
-                    </Text>
-                  </Box>
-                  
-                  {/* Main content container */}
-                  <Box style={{ marginLeft: '28px' }}>
-                    {/* Header row with title and badge */}
-                    <Flex justify="space-between" align="flex-start" mb="xs">
-                      {/* Task title */}
-                      <Text 
-                        fw={600} 
-                        size="sm" 
-                        style={{ 
-                          textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                          color: task.status === 'done' ? (isDark ? '#909296' : '#adb5bd') : (isDark ? '#C1C2C5' : '#495057'),
-                          fontSize: '15px',
-                          flex: 1,
-                          paddingRight: '12px'
-                        }}
-                      >
-                        {task.title}
-                      </Text>
-                      
-                      {/* Badges container */}
-                      <Flex gap="xs" align="center">
-                        {/* Priority badge */}
-                        <Badge 
-                          color={getPriorityColor(task.priority)} 
-                          size="sm" 
-                          variant="filled" 
-                          style={{ 
-                            height: '24px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          <IconFlag size={12} style={{ marginRight: '4px' }} />
-                          {task.priority.toUpperCase()}
-                        </Badge>
-
-                        {/* AI Badge */}
-                        {task.aiGenerated && (
-                          <Badge 
-                            color="teal" 
-                            size="sm" 
-                            variant="filled" 
-                            style={{ 
-                              height: '24px',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                          >
-                            AI
-                          </Badge>
-                        )}
-                      </Flex>
-                    </Flex>
-                    
-                    {/* Task description */}
-                    {task.description && (
-                      <Text 
-                        c="dimmed" 
-                        size="sm" 
-                        mb="xs" 
-                        style={{
-                          textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                          fontSize: '13px',
-                          lineHeight: 1.5
-                        }}
-                      >
-                        {task.description}
-                      </Text>
-                    )}
-                    
-                    {/* Due date */}
-                    {task.dueDate && (
-                      <Flex align="center" mt="xs" mb="xs">
-                        <Menu shadow="md" width={280} position="bottom-start">
-                          <Menu.Target>
-                            <Group style={{ cursor: 'pointer' }}>
-                              <IconClock size={14} color={dueDateColor !== 'dimmed' ? `var(--mantine-color-${dueDateColor}-filled)` : undefined} />
-                              <Text size="xs" c={dueDateColor} style={{
-                                fontWeight: dueDateColor !== 'dimmed' ? 600 : 400
-                              }}>
-                                {dueDateStatus === 'overdue' ? 'Overdue: ' : 
-                                dueDateStatus === 'due-soon' ? 'Due soon: ' : ''}
-                                {formatDueDate(new Date(task.dueDate))}
-                              </Text>
-                            </Group>
-                          </Menu.Target>
-                          <Menu.Dropdown>
-                            <Menu.Label>Change Due Date</Menu.Label>
-                            <Box p="xs">
-                              <DatePickerInput
-                                valueFormat="MMM D"
-                                placeholder="Select date"
-                                value={task.dueDate ? new Date(task.dueDate) : null}
-                                onChange={(date: Date | null) => 
-                                  handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
-                                }
-                                clearable
-                                maxLevel="month"
-                                firstDayOfWeek={0}
-                                leftSection={<IconCalendar size={16} />}
-                                styles={calendarStyles}
-                              />
-                            </Box>
-                          </Menu.Dropdown>
-                        </Menu>
-                      </Flex>
-                    )}
-                    
-                    {/* Add due date button */}
-                    {!task.dueDate && (
-                      <Menu shadow="md" width={280}>
-                        <Menu.Target>
-                          <Button 
-                            variant="subtle" 
-                            size="xs" 
-                            mt="xs" 
-                            leftSection={<IconCalendar size={14} />}
-                            style={{ padding: '2px 6px' }}
-                          >
-                            Add due date
-                          </Button>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Label>Set Due Date</Menu.Label>
-                          <Box p="xs">
-                            <DatePickerInput
-                              valueFormat="MMM D"
-                              placeholder="Select date"
-                              value={null}
-                              onChange={(date: Date | null) => 
-                                handleDueDateChange(task.id, date, {stopPropagation: () => {}} as any)
-                              }
-                              clearable
-                              maxLevel="month"
-                              firstDayOfWeek={0}
-                              leftSection={<IconCalendar size={16} />}
-                              styles={calendarStyles}
-                            />
-                          </Box>
-                        </Menu.Dropdown>
-                      </Menu>
-                    )}
-                    
-                    {/* Notes indicator */}
-                    {task.notes && (
-                      <Group gap="xs" mt="xs" onClick={(e) => {
-                        e.stopPropagation();
-                        handleNotesOpen(task.id, task.notes, e);
-                      }} style={{ cursor: 'pointer' }}>
-                        <IconNotes size={14} />
-                        <Text size="xs" fw={500}>
-                          {task.notes.length > 50 ? `${task.notes.substring(0, 50)}...` : task.notes}
-                        </Text>
-                      </Group>
-                    )}
-                    
-                    {/* Action buttons */}
-                    <Flex justify="flex-end" gap="sm" mt="md">
-                      <ActionIcon 
-                        color={task.status === 'done' ? 'orange' : 'teal'} 
-                        variant="filled"
-                        radius="md"
-                        size="md"
-                        onClick={(e) => handleStatusChange(task.id, e)}
-                        title={task.status === 'done' ? 'Mark as not done' : 'Mark as done'}
-                      >
-                        {task.status === 'done' ? <IconClock size={16} /> : <IconCheck size={16} />}
-                      </ActionIcon>
-                      
-                      <ActionIcon 
-                        color="blue" 
-                        variant="filled"
-                        radius="md"
-                        size="md"
-                        onClick={(e) => handleEditTask(task.id, e)}
-                        title="Edit task"
-                      >
-                        <IconPencil size={16} />
-                      </ActionIcon>
-
-                      <ActionIcon 
-                        color={task.notes ? "teal" : "gray"} 
-                        variant="filled"
-                        radius="md"
-                        size="md"
-                        onClick={(e) => handleNotesOpen(task.id, task.notes, e)}
-                        title={task.notes ? "Edit notes" : "Add notes"}
-                      >
-                        <IconNotes size={16} />
-                      </ActionIcon>
-                      
-                      <ActionIcon 
-                        color="red" 
-                        variant="filled"
-                        radius="md"
-                        size="md"
-                        onClick={(e) => handleDeleteTask(task.id, e)}
-                        title="Delete task"
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Flex>
-                  </Box>
-                </Paper>
-              );
-                })
+                renderTasks(activeTasks)
               ) : (
                 <Text ta="center" mt="xl" c="dimmed">No tasks to display. Add a new task to get started!</Text>
               )
@@ -1266,32 +983,24 @@ export default function TaskList() {
           </Stack>
         </Box>
         
-        {!addingTask && tasks.length > 0 && (
-          <Box 
-            p="md" 
-            style={{ 
-              borderTop: `1px solid ${isDark ? '#2C2E33' : '#e9ecef'}`,
-              textAlign: 'center',
-              backgroundColor: isDark ? '#1A1B1E' : '#f8f9fa'
-            }}
-          >
-            <Button
-              variant="light"
-              color="teal"
-              size="sm"
-              leftSection={<IconPlus size={16} />}
-              onClick={() => setAddingTask(true)}
-              data-add-task-btn="true"
-              style={{
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(32, 201, 151, 0.25)'
-                }
-              }}
-            >
-              Add Task
-            </Button>
+        {!viewingCompletedTasks && (
+          <Box style={{ 
+            borderTop: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+            padding: '10px 16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: isDark ? '#1e1f22' : '#f8f9fa'
+          }}>
+            <Group gap="xs">
+              <Text size="xs" c="dimmed">
+                {activeTasks.length} {activeTasks.length === 1 ? 'task' : 'tasks'} active
+              </Text>
+              <Text size="xs" c="dimmed" style={{ opacity: 0.7 }}>•</Text>
+              <Text size="xs" c="dimmed">
+                {completedTasks.length} completed
+              </Text>
+            </Group>
           </Box>
         )}
 
