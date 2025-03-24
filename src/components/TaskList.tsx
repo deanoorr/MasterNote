@@ -633,20 +633,25 @@ export default function TaskList() {
                   <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
                     <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                       <Box style={{ 
-                        width: '24px', 
+                        minWidth: '24px',
+                        height: '24px',
                         display: 'flex', 
                         justifyContent: 'center',
-                        alignItems: 'center' 
+                        alignItems: 'center',
+                        backgroundColor: isDark ? '#25262b' : '#f1f3f5',
+                        borderRadius: '50%',
+                        marginRight: '2px'
                       }}>
                         <Text 
                           size="xs" 
                           fw={600} 
                           style={{ 
-                            color: isDark ? '#6c757d' : '#adb5bd',
-                            opacity: task.status === 'done' ? 0.5 : 0.8
+                            color: isDark ? '#c1c2c5' : '#495057',
+                            lineHeight: 1,
+                            userSelect: 'none'
                           }}
                         >
-                          {currentTaskNumber}.
+                          {currentTaskNumber}
                         </Text>
                       </Box>
                       <Checkbox
