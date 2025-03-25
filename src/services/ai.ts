@@ -1405,6 +1405,9 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
   return "I couldn't determine what bulk action you want to perform on your tasks.";
 }
 
+// Add this variable to track the last task the user was working on
+let lastWorkedOnTask: { id: string, title: string, description?: string } | null = null;
+
 /**
  * Main function to handle AI responses for the chat interface
  * This function intelligently determines if the query is task-related or a general question
@@ -1423,6 +1426,568 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     const normalizedMessage = message.toLowerCase().trim();
     console.log("Processing normalized message:", normalizedMessage);
     
+    // Check for task transition commands
+    const completeCurrentTaskPattern = /^(complete|finish|done with)\s+(current|last|this)\s+(task|todo)(\s+and\s+move\s+(on\s+)?to\s+(task|todo)?\s*(\d+))?/i;
+    const deleteCurrentTaskPattern = /^(delete|remove)\s+(current|last|this)\s+(task|todo)(\s+and\s+move\s+(on\s+)?to\s+(task|todo)?\s*(\d+))?/i;
+    const moveToTaskPattern = /^move\s+(on\s+)?to\s+(task|todo)?\s*(\d+)/i;
+    
+    // Additional patterns for direct task transitions
+    const completeAndMovePattern = /^(complete|finish|done with)\s+(task|todo)?\s*(\d+)(\s+and\s+move\s+(onto|on\s+to|to)\s+(task|todo)?\s*(\d+))/i;
+    const deleteAndMovePattern = /^(delete|remove)\s+(task|todo)?\s*(\d+)(\s+and\s+move\s+(onto|on\s+to|to)\s+(task|todo)?\s*(\d+))/i;
+    
+    const completeMatch = normalizedMessage.match(completeCurrentTaskPattern);
+    const deleteMatch = normalizedMessage.match(deleteCurrentTaskPattern);
+    const moveMatch = normalizedMessage.match(moveToTaskPattern);
+    const completeAndMoveMatch = normalizedMessage.match(completeAndMovePattern);
+    const deleteAndMoveMatch = normalizedMessage.match(deleteAndMovePattern);
+    
+    // New patterns for task working
+    const workingOnTaskPattern = /^i\s+am\s+(now\s+)?working\s+on\s+(task|todo|to-do)(\s+#?)?\s*(\d+|\w+)|^working\s+on\s+(task|todo|to-do)(\s+#?)?\s*(\d+|\w+)/i;
+    const workingOnTitlePattern = /^i\s+am\s+(now\s+)?working\s+on\s+(.+)$/i;
+    const goingToWorkPattern = /^i\s+am\s+going\s+to\s+work\s+on\s+(task|todo|to-do)?(\s+#?)?\s*(\d+|\w+)(\s+now)?/i;
+    const startingTaskPattern = /^(starting|beginning|going\s+to\s+start|let's\s+start)(\s+on)?\s+(task|todo|to-do)?(\s+#?)?\s*(\d+|\w+)/i;
+    
+    // Add simple patterns for specific phrases
+    const goingToWorkSimplePattern = /^i\s+am\s+(now\s+)?going\s+to\s+work\s+on\s+task\s+(\d+)(\s+now)?/i;
+    const goingToWorkSimpleMatch = message.match(goingToWorkSimplePattern);
+    
+    // Add a direct pattern for "I am working on task X"
+    const workingOnTaskSimplePattern = /^i\s+am\s+(now\s+)?working\s+on\s+task\s+(\d+)(\s+now)?/i;
+    const workingOnTaskSimpleMatch = message.match(workingOnTaskSimplePattern);
+    
+    // Add a direct pattern for "I am going to start on task X"
+    const startingTaskSimplePattern = /^i\s+am\s+(now\s+)?going\s+to\s+start\s+on\s+task\s+(\d+)(\s+now)?/i;
+    const startingTaskSimpleMatch = message.match(startingTaskSimplePattern);
+    
+    // Add a direct pattern for "I am going to start task X" (without "on")
+    const startTaskDirectPattern = /^i\s+am\s+(now\s+)?going\s+to\s+start\s+task\s+(\d+)(\s+now)?/i;
+    const startTaskDirectMatch = message.match(startTaskDirectPattern);
+    
+    const workingOnTaskMatch = message.match(workingOnTaskPattern);
+    const workingOnTitleMatch = message.match(workingOnTitlePattern);
+    const goingToWorkMatch = message.match(goingToWorkPattern);
+    const startingTaskMatch = message.match(startingTaskPattern);
+    
+    // Check if current message is a task command or starting a new task
+    const isTaskCommand = completeMatch || deleteMatch || moveMatch || 
+                          completeAndMoveMatch || deleteAndMoveMatch || 
+                          workingOnTaskMatch || workingOnTitleMatch || 
+                          goingToWorkMatch || startingTaskMatch || goingToWorkSimpleMatch || 
+                          workingOnTaskSimpleMatch || startingTaskSimpleMatch || 
+                          startTaskDirectMatch;
+    
+    // Additional check for common task management commands that don't match our explicit patterns
+    const taskCommandPatterns = [
+      /^add(\s+a)?(\s+new)?(\s+task|to-?do)(\s+to|\s+called|\s+named|\s+about|\s+for)?/i,  // Add task
+      /^create(\s+a)?(\s+new)?(\s+task|to-?do)(\s+to|\s+called|\s+named|\s+about|\s+for)?/i, // Create task
+      /^set(\s+a)?(\s+new)?(\s+due\s+date|\s+priority|\s+reminder)(\s+for|\s+on)?(\s+task)?/i, // Set attributes
+      /^change(\s+the)?(\s+priority|\s+due\s+date|\s+status|\s+title)(\s+of)?(\s+task)?/i, // Change attributes
+      /^mark(\s+task)?(\s+as)?(\s+complete|\s+done|\s+finished)/i, // Mark task as done
+      /^delete(\s+task)?/i, // Delete task
+      /^remove(\s+task)?/i, // Remove task
+      /^list(\s+all|\s+my|\s+the)?(\s+tasks|to-?dos)/i, // List tasks
+      /^show(\s+all|\s+my|\s+the)?(\s+tasks|to-?dos)/i, // Show tasks
+      /^update(\s+task)?/i  // Update task
+    ];
+    
+    const isCommonTaskCommand = taskCommandPatterns.some(pattern => pattern.test(normalizedMessage));
+    
+    // If it looks like a task command, process it as such
+    if (isCommonTaskCommand) {
+      console.log("Detected common task command pattern:", message);
+      return await processAITaskQuery(message, taskStore);
+    }
+    
+    // Handle follow-up questions after task assistance if we have a current task context
+    if (currentTaskContext && !isTaskCommand) {
+      console.log("Handling follow-up question for task:", currentTaskContext.taskTitle);
+      
+      // Get the OpenAI client
+      const openai = await getOpenAIClient();
+      
+      // First check if this might actually be a task-related command by using a more comprehensive check
+      const taskKeywords = ['task', 'todo', 'add', 'create', 'update', 'change', 'modify', 'complete', 'finish', 
+                           'delete', 'remove', 'priority', 'due', 'date', 'status', 'list', 'show', 'done'];
+      
+      // Check if message has task-related keywords
+      const containsTaskKeywords = taskKeywords.some(keyword => normalizedMessage.includes(keyword));
+      const isLikelyTaskCommand = /^(add|create|make|update|change|modify|complete|finish|done|delete|remove|list|show)/i.test(normalizedMessage);
+      
+      if (containsTaskKeywords || isLikelyTaskCommand) {
+        console.log("Follow-up message looks like a task command, performing deeper classification");
+        
+        try {
+          // Get a more definitive classification from AI
+          const taskClassifierResponse = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+              { 
+                role: 'system', 
+                content: `You are a task intent classifier that analyzes if a message is a task management command or a question about a task.
+
+Task management commands include:
+- Creating a new task (e.g., "add a task to call mom")
+- Updating a task (e.g., "change priority of task 1" or "set due date for task 2")
+- Completing a task (e.g., "mark task 1 as done")
+- Deleting a task (e.g., "delete task 3")
+- Listing tasks (e.g., "show my tasks")
+
+Questions about a task include:
+- Asking for information about how to complete the current task
+- Asking for clarification about the task
+- Requesting help with a specific aspect of the task
+- Any other questions that don't modify the task system
+
+Analyze the user's message and respond with ONLY ONE WORD:
+"COMMAND" - if it's a task management command that should modify the system
+"QUESTION" - if it's just a question about the task they're working on`
+              },
+              { role: 'user', content: message }
+            ],
+            temperature: 0.1,
+            max_tokens: 10
+          });
+          
+          const classification = taskClassifierResponse.choices[0].message.content?.trim().toUpperCase();
+          console.log("Task classifier result:", classification);
+          
+          if (classification === 'COMMAND') {
+            console.log("AI classified follow-up as a task command, passing to task processor");
+            currentTaskContext.isInFollowUp = false; // Exit follow-up mode
+            // Process as a regular task command
+            return await processAITaskQuery(message, taskStore);
+          }
+          
+          // Otherwise continue with follow-up handling
+        } catch (error) {
+          console.error("Error with task classification:", error);
+          // Continue with follow-up handling if classification fails
+        }
+      }
+      
+      // Create a contextualized system prompt for the follow-up conversation
+      const systemPrompt = `You are a helpful AI assistant engaged in a conversation about the user's task: "${currentTaskContext.taskTitle}".
+${currentTaskContext.taskDescription ? `Additional details about the task: "${currentTaskContext.taskDescription}"` : ''}
+
+The user previously asked for help with this task, and now they are asking follow-up questions.
+Provide helpful, accurate, and detailed responses focused on helping them complete this task.
+Draw on your full knowledge to give the best possible assistance - there are no special constraints
+on your responses now, just be helpful and thorough in your answers.
+
+Respond conversationally and naturally to any questions related to this task.`;
+      
+      try {
+        // Call OpenAI API for the follow-up conversation
+        const response = await openai.chat.completions.create({
+          model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-3.5-turbo",
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        });
+        
+        // Get and return the response content
+        const responseContent = response.choices[0].message.content || "I'm not sure how to help with that aspect of your task.";
+        
+        // Save the conversation
+        await saveMessageToHistory(userId, 'user', message);
+        await saveMessageToHistory(userId, 'assistant', responseContent);
+        
+        return responseContent;
+      } catch (error) {
+        console.error("Error processing follow-up question:", error);
+        // If there's an error, continue with normal processing
+      }
+    }
+    
+    // Handle direct "complete task X and move to task Y" pattern
+    if (completeAndMoveMatch) {
+      console.log("User wants to complete a specific task and move to another one");
+      
+      const taskToCompleteNum = parseInt(completeAndMoveMatch[3]);
+      const nextTaskNum = parseInt(completeAndMoveMatch[7]);
+      
+      // Get active tasks
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      // Validate task numbers
+      if (taskToCompleteNum <= 0 || taskToCompleteNum > activeTasks.length) {
+        return `I couldn't find task #${taskToCompleteNum}. Please check the task number and try again.`;
+      }
+      
+      // Get the task to complete
+      const taskToComplete = activeTasks[taskToCompleteNum - 1];
+      
+      // Complete the task
+      taskStore.updateTask(taskToComplete.id, { status: "done" });
+      
+      // Get updated active tasks after completion
+      const updatedActiveTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      // Validate next task number
+      if (nextTaskNum <= 0 || nextTaskNum > updatedActiveTasks.length) {
+        return `✅ Marked task #${taskToCompleteNum} "${taskToComplete.title}" as complete. However, I couldn't find task #${nextTaskNum} to move to. Please check the task number and try again.`;
+      }
+      
+      // Get the next task
+      const nextTask = updatedActiveTasks[nextTaskNum - 1];
+      
+      // Update last worked on task
+      lastWorkedOnTask = { 
+        id: nextTask.id, 
+        title: nextTask.title, 
+        description: nextTask.description 
+      };
+      
+      return `✅ Marked task #${taskToCompleteNum} "${taskToComplete.title}" as complete. Now helping you with task #${nextTaskNum}: "${nextTask.title}".\n\n${await provideTaskAssistance(nextTask.title, nextTask.description)}`;
+    }
+    
+    // Handle direct "delete task X and move to task Y" pattern
+    if (deleteAndMoveMatch) {
+      console.log("User wants to delete a specific task and move to another one");
+      
+      const taskToDeleteNum = parseInt(deleteAndMoveMatch[3]);
+      const nextTaskNum = parseInt(deleteAndMoveMatch[7]);
+      
+      // Get active tasks
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      // Validate task numbers
+      if (taskToDeleteNum <= 0 || taskToDeleteNum > activeTasks.length) {
+        return `I couldn't find task #${taskToDeleteNum}. Please check the task number and try again.`;
+      }
+      
+      // Get the task to delete
+      const taskToDelete = activeTasks[taskToDeleteNum - 1];
+      const deletedTaskTitle = taskToDelete.title;
+      
+      // Delete the task
+      taskStore.deleteTask(taskToDelete.id);
+      
+      // Get updated active tasks after deletion
+      const updatedActiveTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      // Validate next task number
+      if (nextTaskNum <= 0 || nextTaskNum > updatedActiveTasks.length) {
+        return `✅ Deleted task #${taskToDeleteNum} "${deletedTaskTitle}". However, I couldn't find task #${nextTaskNum} to move to. Please check the task number and try again.`;
+      }
+      
+      // Get the next task
+      const nextTask = updatedActiveTasks[nextTaskNum - 1];
+      
+      // Update last worked on task
+      lastWorkedOnTask = { 
+        id: nextTask.id, 
+        title: nextTask.title, 
+        description: nextTask.description 
+      };
+      
+      return `✅ Deleted task #${taskToDeleteNum} "${deletedTaskTitle}". Now helping you with task #${nextTaskNum}: "${nextTask.title}".\n\n${await provideTaskAssistance(nextTask.title, nextTask.description)}`;
+    }
+    
+    // Handle completing the current task
+    if (completeMatch && lastWorkedOnTask) {
+      console.log("User wants to complete the current task:", lastWorkedOnTask.title);
+      
+      // Find the task in the task store
+      const taskToComplete = taskStore.tasks.find(task => task.id === lastWorkedOnTask?.id);
+      if (taskToComplete) {
+        // Mark the task as complete
+        taskStore.updateTask(taskToComplete.id, { status: "done" });
+        
+        // Check if we should move to another task
+        const nextTaskNumber = completeMatch[7] ? parseInt(completeMatch[7]) : null;
+        
+        if (nextTaskNumber) {
+          // Find the next task by number
+          const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+          
+          if (nextTaskNumber > 0 && nextTaskNumber <= activeTasks.length) {
+            const nextTask = activeTasks[nextTaskNumber - 1];
+            lastWorkedOnTask = { 
+              id: nextTask.id, 
+              title: nextTask.title, 
+              description: nextTask.description 
+            };
+            
+            return `✅ Marked "${taskToComplete.title}" as complete. Now helping you with task #${nextTaskNumber}: "${nextTask.title}".\n\n${await provideTaskAssistance(nextTask.title, nextTask.description)}`;
+          }
+          
+          return `✅ Marked "${taskToComplete.title}" as complete. I couldn't find task #${nextTaskNumber}. Please check the task number and try again.`;
+        }
+        
+        // Clear the last worked on task
+        const completedTaskTitle = lastWorkedOnTask.title;
+        lastWorkedOnTask = null;
+        
+        return `✅ Marked "${completedTaskTitle}" as complete.`;
+      }
+      
+      return `I couldn't find the task "${lastWorkedOnTask.title}" in your task list. It may have been deleted or already completed.`;
+    }
+    
+    // Handle deleting the current task
+    if (deleteMatch && lastWorkedOnTask) {
+      console.log("User wants to delete the current task:", lastWorkedOnTask.title);
+      
+      // Find the task in the task store
+      const taskToDelete = taskStore.tasks.find(task => task.id === lastWorkedOnTask?.id);
+      if (taskToDelete) {
+        // Delete the task
+        taskStore.deleteTask(taskToDelete.id);
+        
+        // Check if we should move to another task
+        const nextTaskNumber = deleteMatch[7] ? parseInt(deleteMatch[7]) : null;
+        
+        if (nextTaskNumber) {
+          // Find the next task by number
+          const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+          
+          if (nextTaskNumber > 0 && nextTaskNumber <= activeTasks.length) {
+            const nextTask = activeTasks[nextTaskNumber - 1];
+            lastWorkedOnTask = { 
+              id: nextTask.id, 
+              title: nextTask.title, 
+              description: nextTask.description 
+            };
+            
+            return `✅ Deleted "${taskToDelete.title}". Now helping you with task #${nextTaskNumber}: "${nextTask.title}".\n\n${await provideTaskAssistance(nextTask.title, nextTask.description)}`;
+          }
+          
+          return `✅ Deleted "${taskToDelete.title}". I couldn't find task #${nextTaskNumber}. Please check the task number and try again.`;
+        }
+        
+        // Clear the last worked on task
+        const deletedTaskTitle = lastWorkedOnTask.title;
+        lastWorkedOnTask = null;
+        
+        return `✅ Deleted "${deletedTaskTitle}".`;
+      }
+      
+      return `I couldn't find the task "${lastWorkedOnTask.title}" in your task list. It may have been already deleted.`;
+    }
+    
+    // Handle moving to another task
+    if (moveMatch) {
+      console.log("User wants to move to another task");
+      
+      const taskNumber = moveMatch[3] ? parseInt(moveMatch[3]) : null;
+      
+      if (taskNumber) {
+        // Find the next task by number
+        const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+        
+        if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+          const nextTask = activeTasks[taskNumber - 1];
+          lastWorkedOnTask = { 
+            id: nextTask.id, 
+            title: nextTask.title, 
+            description: nextTask.description 
+          };
+          
+          return `Now helping you with task #${taskNumber}: "${nextTask.title}".\n\n${await provideTaskAssistance(nextTask.title, nextTask.description)}`;
+        }
+        
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
+    // Check if user is indicating they're working on a task
+    if (workingOnTaskMatch) {
+      console.log("User indicated they are working on a task with identifier");
+      
+      // Extract task identifier
+      const taskIdentifier = workingOnTaskMatch[4] || workingOnTaskMatch[7];
+      
+      // If it's a number, find by task number in active tasks
+      if (/^\d+$/.test(taskIdentifier)) {
+        const taskNumber = parseInt(taskIdentifier);
+        const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+        
+        if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+          const task = activeTasks[taskNumber - 1];
+          console.log("Found task by number:", task);
+          // Update the last worked on task
+          lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+          return await provideTaskAssistance(task.title, task.description);
+        }
+      }
+      
+      // Otherwise, try to find by title match
+      const taskByTitle = taskStore.tasks.find(task => 
+        task.title.toLowerCase().includes(taskIdentifier.toLowerCase()) ||
+        (task.description && task.description.toLowerCase().includes(taskIdentifier.toLowerCase()))
+      );
+      
+      if (taskByTitle) {
+        console.log("Found task by title match:", taskByTitle);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: taskByTitle.id, title: taskByTitle.title, description: taskByTitle.description };
+        return await provideTaskAssistance(taskByTitle.title, taskByTitle.description);
+      }
+    }
+    
+    // Handle "starting task X" pattern
+    if (startingTaskMatch) {
+      console.log("User indicated they are starting a task");
+      
+      // Extract task identifier (either number or keyword)
+      const taskIdentifier = startingTaskMatch[5];
+      
+      // If it's a number, find by task number in active tasks
+      if (/^\d+$/.test(taskIdentifier)) {
+        const taskNumber = parseInt(taskIdentifier);
+        const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+        
+        if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+          const task = activeTasks[taskNumber - 1];
+          console.log("Found task by number:", task);
+          // Update the last worked on task
+          lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+          return await provideTaskAssistance(task.title, task.description);
+        }
+      }
+      
+      // Otherwise, try to find by title match
+      const taskByTitle = taskStore.tasks.find(task => 
+        task.title.toLowerCase().includes(taskIdentifier.toLowerCase()) ||
+        (task.description && task.description.toLowerCase().includes(taskIdentifier.toLowerCase()))
+      );
+      
+      if (taskByTitle) {
+        console.log("Found task by title match:", taskByTitle);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: taskByTitle.id, title: taskByTitle.title, description: taskByTitle.description };
+        return await provideTaskAssistance(taskByTitle.title, taskByTitle.description);
+      }
+    }
+    
+    if (workingOnTitleMatch) {
+      console.log("User indicated they are working on a task with direct title:", workingOnTitleMatch[2]);
+      
+      // Extract the task title, but only if it doesn't contain "task" or "todo" to avoid duplication
+      const taskTitleRaw = workingOnTitleMatch[2].trim();
+      // Make sure we're not matching a variant of the first pattern
+      if (!/(^|\s)(task|todo|to-do)(\s+#?)?\s*\d+/i.test(taskTitleRaw)) {
+        console.log("User indicated they are working on a task with direct title:", taskTitleRaw);
+        
+        // Try to find a matching task first
+        const taskByTitle = taskStore.tasks.find(task => 
+          task.title.toLowerCase().includes(taskTitleRaw.toLowerCase()) ||
+          (task.description && task.description.toLowerCase().includes(taskTitleRaw.toLowerCase()))
+        );
+        
+        if (taskByTitle) {
+          console.log("Found task by direct title match:", taskByTitle);
+          // Update the last worked on task
+          lastWorkedOnTask = { id: taskByTitle.id, title: taskByTitle.title, description: taskByTitle.description };
+          return await provideTaskAssistance(taskByTitle.title, taskByTitle.description);
+        }
+        
+        // If no task found, use the provided title directly
+        console.log("Using direct task title for assistance:", taskTitleRaw);
+        // In this case, we don't update lastWorkedOnTask since it's not a real task in our system
+        return await provideTaskAssistance(taskTitleRaw);
+      }
+    }
+    
+    // Handle the simple "I am going to work on task X" pattern
+    if (goingToWorkSimpleMatch) {
+      console.log("User indicated they are going to work on a specific task number:", goingToWorkSimpleMatch[2]);
+      
+      // Extract task number
+      const taskNumber = parseInt(goingToWorkSimpleMatch[2]);
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+        const task = activeTasks[taskNumber - 1];
+        console.log("Found task by number:", task);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+        return await provideTaskAssistance(task.title, task.description);
+      } else {
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
+    // Handle the simple "I am working on task X" pattern
+    if (workingOnTaskSimpleMatch) {
+      console.log("User indicated they are working on a specific task number:", workingOnTaskSimpleMatch[2]);
+      
+      // Extract task number
+      const taskNumber = parseInt(workingOnTaskSimpleMatch[2]);
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+        const task = activeTasks[taskNumber - 1];
+        console.log("Found task by number:", task);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+        return await provideTaskAssistance(task.title, task.description);
+      } else {
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
+    // Handle the simple "I am working on task X" pattern
+    if (workingOnTaskSimpleMatch) {
+      console.log("User indicated they are working on a specific task number:", workingOnTaskSimpleMatch[2]);
+      
+      // Extract task number
+      const taskNumber = parseInt(workingOnTaskSimpleMatch[2]);
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+        const task = activeTasks[taskNumber - 1];
+        console.log("Found task by number:", task);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+        return await provideTaskAssistance(task.title, task.description);
+      } else {
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
+    // Handle the simple "I am going to start on task X" pattern
+    if (startingTaskSimpleMatch) {
+      console.log("User indicated they are going to start on a specific task number:", startingTaskSimpleMatch[2]);
+      
+      // Extract task number
+      const taskNumber = parseInt(startingTaskSimpleMatch[2]);
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+        const task = activeTasks[taskNumber - 1];
+        console.log("Found task by number:", task);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+        return await provideTaskAssistance(task.title, task.description);
+      } else {
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
+    // Handle the direct "I am going to start task X" pattern (without "on")
+    if (startTaskDirectMatch) {
+      console.log("User indicated they are going to start a specific task number (direct pattern):", startTaskDirectMatch[2]);
+      
+      // Extract task number
+      const taskNumber = parseInt(startTaskDirectMatch[2]);
+      const activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+      
+      if (taskNumber > 0 && taskNumber <= activeTasks.length) {
+        const task = activeTasks[taskNumber - 1];
+        console.log("Found task by number:", task);
+        // Update the last worked on task
+        lastWorkedOnTask = { id: task.id, title: task.title, description: task.description };
+        return await provideTaskAssistance(task.title, task.description);
+      } else {
+        return `I couldn't find task #${taskNumber}. Please check the task number and try again.`;
+      }
+    }
+    
     // Use AI-based classification to determine if this is a task-related query
     const openai = await getOpenAIClient();
     
@@ -1435,11 +2000,20 @@ export async function getAIResponse(message: string, userId: string): Promise<st
           content: `You are a classifier that determines if a message is related to task management or a general knowledge question.
 
 Task management queries are about:
-- Creating, updating, managing, or deleting user's personal tasks or to-dos
-- Checking, listing, viewing, or organizing a user's personal tasks
-- Setting deadlines, priorities, or modifying task attributes
-- Completing user's tasks or marking them as done
+- Creating, updating, managing, or deleting user's personal tasks or to-dos (e.g., "add a task to call mom")
+- Checking, listing, viewing, or organizing a user's personal tasks (e.g., "show my tasks")
+- Setting deadlines, priorities, or modifying task attributes (e.g., "change task 1 to high priority")
+- Completing user's tasks or marking them as done (e.g., "mark task 2 as complete")
 - Any query that asks you to interact with the user's task management system
+
+Task-related commands also include patterns like:
+- "add a task called X"
+- "create a task to do Y"
+- "change task X to high priority"
+- "set a due date for task X"
+- "complete task X"
+- "delete task X"
+- "list my tasks for today"
 
 General knowledge queries include:
 - Factual questions about the world, history, science, geography
@@ -1827,4 +2401,86 @@ function listTasksByDate(date: string, taskStore: TaskStoreType): string {
   return tasks
     .map((task, index) => formatTaskWithPosition(task, index + 1))
     .join("\n");
+}
+
+// Add this to track task assistance context
+let currentTaskContext: { 
+  taskTitle: string;
+  taskDescription?: string;
+  isInFollowUp: boolean;
+} | null = null;
+
+/**
+ * Provide AI assistance for a specific task the user is working on
+ * This analyzes the task content and suggests helpful actions based on the task nature
+ */
+export async function provideTaskAssistance(taskTitle: string, taskDescription?: string): Promise<string> {
+  try {
+    const openai = await getOpenAIClient();
+    if (!openai) {
+      throw new Error("Failed to initialize OpenAI client");
+    }
+
+    console.log("Providing assistance for task:", taskTitle);
+    
+    // Store the current task context for follow-up conversations
+    currentTaskContext = {
+      taskTitle,
+      taskDescription,
+      isInFollowUp: false
+    };
+    
+    // Create a system prompt that guides the model to analyze the task and suggest assistance
+    const systemPrompt = `You are a helpful AI assistant that helps users complete tasks. 
+A user has told you they are working on the following task: "${taskTitle}".
+${taskDescription ? `Additional details: "${taskDescription}"` : ''}
+
+Analyze the task and provide a helpful response with specific ways you could assist with this task. 
+Consider different types of assistance you could provide, such as:
+
+1. Research - finding relevant information, articles, or resources
+2. Planning - breaking down the task into smaller steps or creating a plan
+3. Information - providing factual information or explanations related to the task
+4. Creativity - generating ideas, content, or creative solutions
+5. Analysis - analyzing data, patterns, or problems related to the task
+6. Learning - teaching concepts, skills, or knowledge needed for the task
+
+Format your response as a markdown list of 3-5 specific ways you could help, followed by a question asking 
+which type of assistance they'd prefer.
+
+Example response structure:
+"""
+I can help you with your task "Research Tai Chi". Here are some ways I could assist:
+
+1. **Find beginner resources** - I can search for beginner-friendly Tai Chi tutorials, videos, or guides
+2. **Explain key concepts** - I can explain the philosophy, history, and health benefits of Tai Chi
+3. **Compare styles** - I can compare different Tai Chi styles (Yang, Chen, Wu, etc.) to help you choose
+4. **Create a learning plan** - I can help design a structured learning path for Tai Chi practice
+
+Which type of assistance would be most helpful for you right now?
+"""
+
+Be helpful, specific, and tailor your suggestions to the exact nature of the task.`;
+
+    // Send the request to the OpenAI API
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `I am now working on this task: "${taskTitle}"${taskDescription ? `. Description: "${taskDescription}"` : ''}` }
+      ],
+      temperature: 0.7,
+      max_tokens: 800
+    });
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new Error("Empty response from OpenAI");
+    }
+
+    return content;
+  } catch (error) {
+    console.error("Error in provideTaskAssistance:", error);
+    return "I'm sorry, I encountered an error while trying to assist with your task. Please check your API key in settings or try again later.";
+  }
 }
