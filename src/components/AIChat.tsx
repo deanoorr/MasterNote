@@ -131,7 +131,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return 'Perplexity Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT-o3 Mini';
-      case 'grok-2-1212': return 'Grok 2';
+      case 'deepseek-v3': return 'DeepSeek V3';
       default: return 'AI Assistant';
     }
   };
@@ -142,7 +142,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return '#5282FF';
       case 'deepseek-r1': return '#FA5252';
       case 'gpt-o3-mini': return '#FFA94D';
-      case 'grok-2-1212': return '#8E44AD';
+      case 'deepseek-v3': return '#FF3366';
       default: return '#20C997';
     }
   };
@@ -154,7 +154,7 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': return 'Search-focused AI assistant';
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
       case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
-      case 'grok-2-1212': return 'Versatile AI assistant';
+      case 'deepseek-v3': return 'Advanced reasoning AI';
       default: return 'Intelligent Assistant';
     }
   };
@@ -185,7 +185,7 @@ export default function AIChat({ model }: AIChatProps) {
               model === 'perplexity-sonar' ? 'blue' : 
               model === 'deepseek-r1' ? 'red' : 
               model === 'gpt-o3-mini' ? 'orange' : 
-              model === 'grok-2-1212' ? 'grape' : 'teal'
+              model === 'deepseek-v3' ? 'grape' : 'teal'
             } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
               {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
             </Avatar>
@@ -197,7 +197,7 @@ export default function AIChat({ model }: AIChatProps) {
                     model === 'perplexity-sonar' ? 'blue' : 
                     model === 'deepseek-r1' ? 'red' : 
                     model === 'gpt-o3-mini' ? 'orange' : 
-                    model === 'grok-2-1212' ? 'grape' : 'teal'
+                    model === 'deepseek-v3' ? 'grape' : 'teal'
                   }
                   variant="light"
                   size="xs"
@@ -209,7 +209,7 @@ export default function AIChat({ model }: AIChatProps) {
               <Text size="xs" c="dimmed">Powered by {
                 model === 'perplexity-sonar' ? 'Perplexity' : 
                 model === 'deepseek-r1' ? 'DeepSeek' : 
-                model === 'grok-2-1212' ? 'xAI' : 
+                model === 'deepseek-v3' ? 'DeepSeek' : 
                 model.includes('claude') ? 'Anthropic' : 'OpenAI'
               }</Text>
             </div>

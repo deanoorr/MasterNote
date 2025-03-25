@@ -200,20 +200,29 @@ const callPerplexityAPI = async (message: string) => {
 };
 
 // Call DeepSeek API
-const callDeepSeekAPI = async (message: string) => {
+const callDeepSeekAPI = async (message: string, isV3?: boolean) => {
+  console.log(`Starting DeepSeek ${isV3 ? 'V3' : 'R1'} API call`);
   const apiKey = await getDeepSeekApiKey();
   
   if (!apiKey) {
-    return "Reasoning Mode requires a DeepSeek API key. Please go to Settings and add your DeepSeek API key to use this feature.";
+    console.log(`DeepSeek ${isV3 ? 'V3' : 'R1'}: No API key found`);
+    return `${isV3 ? 'DeepSeek V3' : 'Reasoning Mode'} requires a DeepSeek API key. Please go to Settings and add your DeepSeek API key to use this feature.`;
   }
   
   try {
     // Get conversation history for context
     const userId = "user123"; // Use a consistent user ID or pass this from the caller
     const conversationHistory = await getConversationHistory(userId);
+    console.log(`DeepSeek ${isV3 ? 'V3' : 'R1'}: Got conversation history with`, conversationHistory.length, "messages");
     
-    // Create a more comprehensive system prompt
-    const systemPrompt = 'You are a helpful assistant with strong reasoning capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    // Create a more comprehensive system prompt based on model
+    let systemPrompt = '';
+    
+    if (isV3) {
+      systemPrompt = 'You are DeepSeek V3, a helpful assistant with advanced reasoning and problem-solving capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    } else {
+      systemPrompt = 'You are a helpful assistant with strong reasoning capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    }
     
     // Create messages array with system prompt, history, and user message
     const deepseekMessages = [
@@ -237,6 +246,7 @@ const callDeepSeekAPI = async (message: string) => {
         }
       }
     );
+    console.log(`DeepSeek ${isV3 ? 'V3' : 'R1'} API response received:`, response.status);
     
     if (response.data && response.data.choices && response.data.choices.length > 0) {
       const responseContent = response.data.choices[0].message.content;
@@ -247,15 +257,86 @@ const callDeepSeekAPI = async (message: string) => {
       
       return responseContent;
     } else {
-      return 'No response content received from DeepSeek API. Please try again.';
+      return `No response content received from DeepSeek ${isV3 ? 'V3' : 'R1'} API. Please try again.`;
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error("DeepSeek API error:", error.response?.data || error.message);
-      return `Reasoning error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
+      console.error(`DeepSeek ${isV3 ? 'V3' : 'R1'} API error:`, error.response?.data || error.message);
+      return `${isV3 ? 'DeepSeek V3' : 'Reasoning'} error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
     } else {
-      console.error("Unexpected error:", error);
-      return "An unexpected error occurred with the Reasoning service. Please try again later.";
+      console.error(`Unexpected ${isV3 ? 'DeepSeek V3' : 'Reasoning'} error:`, error);
+      return `An unexpected error occurred with the ${isV3 ? 'DeepSeek V3' : 'Reasoning'} service. Please try again later.`;
+    }
+  }
+};
+
+// Call DeepSeek V3 API
+const callDeepSeekV3API = async (message: string) => {
+  console.log("Starting DeepSeek V3 API call");
+  const apiKey = await getDeepSeekApiKey();
+  
+  if (!apiKey) {
+    console.log("DeepSeek V3: No API key found");
+    return "DeepSeek V3 requires a DeepSeek API key. Please go to Settings and add your DeepSeek API key to use this feature.";
+  }
+  
+  try {
+    // Get conversation history for context
+    const userId = "user123"; // Use a consistent user ID or pass this from the caller
+    const conversationHistory = await getConversationHistory(userId);
+    console.log("DeepSeek V3: Got conversation history with", conversationHistory.length, "messages");
+    
+    // Create a more comprehensive system prompt
+    const systemPrompt = 'You are DeepSeek V3, a helpful assistant with advanced reasoning and problem-solving capabilities. You excel at solving complex problems through step-by-step reasoning. You can also help with task management, but specialized task operations are handled separately by the system. Provide thoughtful and detailed responses to questions that require reasoning. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    
+    // Create messages array with system prompt, history, and user message
+    const deepseekMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+    
+    const response = await axios.post(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        model: 'deepseek-v3-0324',  // Updated to correct model name from documentation
+        messages: deepseekMessages,
+        max_tokens: 1000,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    console.log("DeepSeek V3 API response received:", response.status);
+    
+    if (response.data && response.data.choices && response.data.choices.length > 0) {
+      const responseContent = response.data.choices[0].message.content;
+      
+      // Save the conversation for context in future interactions
+      await saveMessageToHistory(userId, 'user', message);
+      await saveMessageToHistory(userId, 'assistant', responseContent);
+      
+      return responseContent;
+    } else {
+      return 'No response content received from DeepSeek V3 API. Please try again.';
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("DeepSeek V3 API error details:", {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        url: 'https://api.deepseek.com/v1/chat/completions'
+      });
+      return `DeepSeek V3 error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
+    } else {
+      console.error("Unexpected DeepSeek V3 error:", error);
+      return "An unexpected error occurred with the DeepSeek V3 service. Please try again later.";
     }
   }
 };
@@ -1722,8 +1803,9 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         return await callPerplexityAPI(message);
       } else if (currentModel === 'deepseek-r1') {
         return await callDeepSeekAPI(message);
-      } else if (currentModel === 'grok-2-1212') {
-        return await callGrokAPI(message, userId);
+      } else if (currentModel === 'deepseek-v3') {
+        // For DeepSeek V3, use the same API implementation as R1 but with a flag
+        return await callDeepSeekAPI(message, true); // Pass true to indicate V3
       } else {
         // For GPT-4o or GPT-o3 Mini models, use general conversation
         const history = await getConversationHistory(userId);
