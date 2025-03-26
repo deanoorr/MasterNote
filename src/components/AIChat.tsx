@@ -440,11 +440,13 @@ export default function AIChat({ model }: AIChatProps) {
                   <Box 
                     style={{
                       backgroundColor: msg.role === 'assistant' 
-                        ? (isDark ? 'rgba(37, 38, 43, 0.4)' : 'white') 
+                        ? (isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(255, 255, 255, 0.95)') 
                         : 'transparent',
                       borderRadius: '0 12px 12px 12px',
                       padding: msg.role === 'assistant' ? '12px 16px' : '0px 8px 12px 34px',
                       marginBottom: '24px',
+                      border: msg.role === 'assistant' ? `1px solid ${isDark ? '#373A40' : '#dee2e6'}` : 'none',
+                      boxShadow: msg.role === 'assistant' ? '0 2px 6px rgba(0, 0, 0, 0.08)' : 'none'
                     }}
                   >
                     {msg.role === 'assistant' ? (
@@ -457,7 +459,7 @@ export default function AIChat({ model }: AIChatProps) {
                           maxWidth: '100%',
                           fontSize: '15px',
                           lineHeight: 1.7,
-                          color: isDark ? '#C1C2C5' : '#212529',
+                          color: isDark ? '#E9ECEF' : '#212529',
                         }}
                       >
                         {msg.content}
@@ -492,10 +494,12 @@ export default function AIChat({ model }: AIChatProps) {
                   {/* Loading indicator */}
                   <Box 
                     style={{ 
-                      backgroundColor: isDark ? 'rgba(37, 38, 43, 0.4)' : 'white',
+                      backgroundColor: isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(255, 255, 255, 0.95)',
                       borderRadius: '0 12px 12px 12px',
                       padding: '16px 20px',
-                      marginBottom: '24px'
+                      marginBottom: '24px',
+                      border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

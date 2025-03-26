@@ -104,16 +104,16 @@ const theme = createTheme({
   primaryColor: 'teal',
   colors: {
     dark: [
-      '#C1C2C5',
-      '#A6A7AB',
-      '#909296',
-      '#5C5F66',
-      '#373A40',
-      '#2C2E33',
-      '#25262B',
-      '#1A1B1E',
-      '#141517',
-      '#101113',
+      '#F8F9FA', // Lightest (previously darkest)
+      '#E9ECEF',
+      '#DEE2E6',
+      '#CED4DA',
+      '#ADB5BD',
+      '#868E96',
+      '#495057',
+      '#343A40',
+      '#212529',
+      '#121416',
     ],
     teal: [
       '#E6FCF5',
@@ -260,14 +260,14 @@ function AppContent() {
   };
 
   return (
-    <MantineProvider theme={theme} defaultColorScheme="dark">
+    <MantineProvider theme={theme} defaultColorScheme="light">
       <style>{cssStyles}</style>
       <AppShell
         padding="md"
         style={{ 
           height: '100vh', 
-          backgroundColor: '#1A1B1E',
-          backgroundImage: 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.07) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 50%)',
+          backgroundColor: '#F8F9FA',
+          backgroundImage: 'radial-gradient(circle at 40% 20%, rgba(15, 95, 95, 0.05) 0%, rgba(15, 95, 95, 0) 60%), radial-gradient(circle at 80% 80%, rgba(15, 95, 95, 0.03) 0%, rgba(15, 95, 95, 0) 50%)',
           overflow: 'hidden' // Prevent outer scrolling
         }}
       >
@@ -277,10 +277,10 @@ function AppContent() {
             style={{
               borderRadius: '12px',
               padding: '12px 20px',
-              backgroundColor: 'rgba(37, 38, 43, 0.6)',
+              backgroundColor: 'rgba(245, 246, 248, 0.8)',
               backdropFilter: 'blur(12px)',
-              border: '1px solid #373A40',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              border: '1px solid #DEE2E6',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               flexShrink: 0
             }}
           >
@@ -290,10 +290,10 @@ function AppContent() {
                   <IconNotes size={22} color="white" stroke={2} />
                   <div className="logo-checkmark"></div>
                 </div>
-                <Title order={3} c="gray.1">MasterNote</Title>
+                <Title order={3} c="gray.7">MasterNote</Title>
               </Group>
               <Group>
-                <Text size="sm" c="dimmed">AI Task Management</Text>
+                <Text size="sm" c="gray.6">AI Task Management</Text>
                 {user ? (
                   <UserProfile openSettings={() => setSettingsOpened(true)} />
                 ) : (
@@ -337,18 +337,18 @@ function AppContent() {
               minHeight: 0, // Important for proper scrolling
               borderRadius: '12px',
               overflow: 'hidden',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.2)',
-              border: '1px solid #373A40',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              border: '1px solid #DEE2E6',
               backdropFilter: 'blur(12px)',
-              backgroundColor: 'rgba(37, 38, 43, 0.5)'
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
             }}>
               <Group 
                 justify="space-between" 
                 mb={0} 
                 p="sm" 
                 style={{ 
-                  backgroundColor: 'rgba(37, 38, 43, 0.9)', 
-                  borderBottom: '1px solid #373A40'
+                  backgroundColor: 'rgba(245, 246, 248, 0.95)', 
+                  borderBottom: '1px solid #DEE2E6'
                 }}
               >
                 <Group>
@@ -364,14 +364,15 @@ function AppContent() {
                     style={{ width: 230 }}
                     styles={{
                       input: {
-                        backgroundColor: 'rgba(37, 38, 43, 0.9)',
-                        borderColor: 'rgba(37, 38, 43, 0.9)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        borderColor: '#DEE2E6',
                         fontWeight: 'bold',
                         borderRadius: '6px',
+                        color: '#495057',
                         transition: 'all 0.2s ease',
                         '&:focus': {
-                          borderColor: '#FA5252',
-                          backgroundColor: '#373A40'
+                          borderColor: '#20C997',
+                          backgroundColor: '#FFFFFF'
                         }
                       }
                     }}
@@ -443,26 +444,28 @@ function AppContent() {
             {/* Right Panel - Task List */}
             <div style={{ 
               flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column',
               minHeight: 0, // Important for proper scrolling
               borderRadius: '12px',
               overflow: 'hidden',
-              border: '1px solid #373A40',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              border: '1px solid #DEE2E6',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
               backdropFilter: 'blur(12px)',
-              backgroundColor: 'rgba(37, 38, 43, 0.5)'
+              backgroundColor: 'rgba(255, 255, 255, 0.7)'
             }}>
               <Group 
                 justify="space-between" 
                 mb={0} 
                 p="sm" 
                 style={{ 
-                  backgroundColor: 'rgba(37, 38, 43, 0.9)', 
-                  borderBottom: '1px solid #373A40'
+                  backgroundColor: 'rgba(245, 246, 248, 0.95)', 
+                  borderBottom: '1px solid #DEE2E6'
                 }}
               >
                 <Group>
                   <IconListCheck size={20} color="#20C997" stroke={2.5} />
-                  <Text fw={600} size="sm" c="gray.1">Task List</Text>
+                  <Text fw={600} size="sm" c="gray.7">Task List</Text>
                 </Group>
               </Group>
               
