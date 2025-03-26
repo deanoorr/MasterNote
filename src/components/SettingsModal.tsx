@@ -1,4 +1,4 @@
-import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code, Switch, Image } from '@mantine/core';
+import { Modal, TextInput, Button, Group, Text, Stack, Box, Divider, Alert, Code, Switch, Image, Tooltip } from '@mantine/core';
 import { IconKey, IconInfoCircle, IconShieldLock, IconAlertCircle, IconSearch, IconCheck, IconBrandOpenai, IconCloudOff, IconX } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import { testOpenAIConnection } from '../services/ai';
@@ -266,8 +266,35 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
             }}
           />
           
+          <Group mt="md" align="center">
+            <Switch
+              label="Use Sonar Pro"
+              checked={localStorage.getItem('use_sonar_pro') === 'true'}
+              onChange={(event) => {
+                const isChecked = event.currentTarget.checked;
+                localStorage.setItem('use_sonar_pro', isChecked.toString());
+                // Force a re-render
+                window.dispatchEvent(new Event('storage'));
+              }}
+              styles={{
+                track: {
+                  backgroundColor: isDark ? '#373A40' : '#e9ecef',
+                  '&[data-checked]': {
+                    backgroundColor: '#228BE6',
+                  },
+                },
+                label: {
+                  color: isDark ? '#C1C2C5' : '#495057',
+                },
+              }}
+            />
+            <Tooltip label="Sonar Pro offers a larger context window (200k) and more powerful processing capabilities">
+              <IconInfoCircle size={16} style={{ color: isDark ? '#909296' : '#adb5bd', cursor: 'help' }} />
+            </Tooltip>
+          </Group>
+          
           <Text size="sm" c="dimmed" mt="xs">
-            Optional: Required only if you want to use the Perplexity Sonar model.
+            Optional: Required only if you want to use the Perplexity Sonar model. Enable Sonar Pro for enhanced capabilities.
           </Text>
         </Box>
         

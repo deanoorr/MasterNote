@@ -128,7 +128,8 @@ export default function AIChat({ model }: AIChatProps) {
   const getModelDisplayName = () => {
     switch(model) {
       case 'gpt4o': return 'GPT-4o';
-      case 'perplexity-sonar': return 'Perplexity Sonar';
+      case 'perplexity-sonar': 
+        return localStorage.getItem('use_sonar_pro') === 'true' ? 'Sonar Pro' : 'Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT-o3 Mini';
       case 'deepseek-v3': return 'DeepSeek V3';
@@ -151,7 +152,10 @@ export default function AIChat({ model }: AIChatProps) {
   const getModelDescription = () => {
     switch(model) {
       case 'gpt4o': return 'All-purpose AI assistant';
-      case 'perplexity-sonar': return 'Search-focused AI assistant';
+      case 'perplexity-sonar': 
+        return localStorage.getItem('use_sonar_pro') === 'true' 
+          ? 'Enhanced search with 200k context window'
+          : 'Search-focused AI assistant';
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
       case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
       case 'deepseek-v3': return 'Advanced reasoning AI';

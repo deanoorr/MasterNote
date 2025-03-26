@@ -164,9 +164,9 @@ const callPerplexityAPI = async (message: string) => {
     const response = await axios.post(
       'https://api.perplexity.ai/chat/completions',
       {
-        model: 'sonar-small-online',
+        model: localStorage.getItem('use_sonar_pro') === 'true' ? 'sonar-pro' : 'sonar',
         messages: perplexityMessages,
-        max_tokens: 1000,
+        max_tokens: localStorage.getItem('use_sonar_pro') === 'true' ? 8000 : 1000, // Sonar Pro has higher token limit
         temperature: 0.7
       },
       {
