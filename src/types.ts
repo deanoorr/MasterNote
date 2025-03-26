@@ -13,6 +13,30 @@ export interface Task {
   dependencies?: string[];
   tags?: string[];
   notes?: string;
+  recurrence?: {
+    pattern: 'daily' | 'weekly' | 'monthly' | 'yearly';
+    interval: number;
+    endDate?: Date;
+    count?: number;
+  };
+  attachments?: Array<{
+    id: string;
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+    uploadedAt: Date;
+  }>;
+  timeTracking?: {
+    totalLogged: number; // in minutes
+    sessions: Array<{
+      start: Date;
+      end?: Date;
+      duration?: number; // in minutes
+    }>;
+  };
+  progress?: number; // 0-100
+  category?: string;
 }
 
 export interface Message {
@@ -34,4 +58,4 @@ export interface AIConfig {
     calendar: boolean;
     email: boolean;
   };
-} 
+}

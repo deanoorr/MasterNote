@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ErrorInfo, useCallback, useMemo } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { MantineProvider, createTheme, AppShell, Group, ActionIcon, Select, Text, Container, Title, Box, Tooltip, Button } from '@mantine/core';
 import { IconSettings, IconBrandOpenai, IconListCheck, IconPlus, IconNotes, IconChecklist, IconSearch, IconEraser, IconBulb } from '@tabler/icons-react';
 import AIChat from './components/AIChat';
@@ -136,73 +137,130 @@ const theme = createTheme({
   },
 });
 
+// Error fallback component
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error, resetErrorBoundary: () => void }) {
+  return (
+    <div style={{ 
+      padding: '2rem',
+      backgroundColor: '#FFF5F5',
+      borderRadius: '8px',
+      border: '1px solid #FFE3E3',
+      margin: '1rem'
+    }}>
+      <Text fw={700} c="red.7" mb="sm">Something went wrong</Text>
+      <Text c="red.6" mb="md">{error.message}</Text>
+      <Button 
+        variant="light" 
+        color="red" 
+        onClick={resetErrorBoundary}
+      >
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+// Log errors to error tracking service
+const logError = (error: Error, info: ErrorInfo) => {
+  console.error('Error:', error, 'Info:', info);
+  // TODO: Add error tracking service integration
+};
+
 // Main App Component
 function AppContent() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('gpt-o3-mini');
   const [settingsOpened, setSettingsOpened] = useState(false);
   const [authModalOpened, setAuthModalOpened] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(false);
-  const { messages, clearMessages, setUserId, syncWithSupabase, tasks } = useStore();
-  const { user, loading, setDemoUser, isDemoMode } = useAuth();
+  const { messages, clearMessages, setUserId, syncWithSupabase } = useStore();
+  const { user, loading } = useAuth();
+
+  // Memoize model options to prevent unnecessary re-renders
+  const modelOptions = useMemo(() => [
+    { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
+    { value: 'gpt4o', label: 'GPT-4o' },
+    { value: 'deepseek-v3', label: 'DeepSeek V3' },
+  ], []);
 
   // Save the selected model to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('selected_model', selectedModel);
-    console.log('Saved model to localStorage:', selectedModel);
-  }, [selectedModel]);
-
-  // Open settings modal if no API key is set
-  useEffect(() => {
-    const checkApiKey = async () => {
-      try {
-        // First check if we're logged in
-        if (user && user.id) {
-          // Try to load API key from Supabase via the storage service
-          const apiKeyFromSupabase = await storageService.getItem('openai_api_key', user.id);
-          setApiKeySet(!!apiKeyFromSupabase);
-          
-          // Only open settings if we've confirmed no API key exists in Supabase
-          if (!apiKeyFromSupabase) {
-            setSettingsOpened(true);
-          }
-        } else {
-          // Not logged in, check localStorage directly
-          const apiKey = localStorage.getItem('openai_api_key');
-          setApiKeySet(!!apiKey);
-          if (!apiKey) {
-            setSettingsOpened(true);
-          }
-        }
-      } catch (error) {
-        console.error("Error checking API key:", error);
-        // On error, fall back to localStorage check
-        const apiKey = localStorage.getItem('openai_api_key');
-        setApiKeySet(!!apiKey);
-        if (!apiKey) {
-          setSettingsOpened(true);
-        }
-      }
-    };
-    
-    // Run the check after a short delay to allow auth to complete
-    const timeoutId = setTimeout(checkApiKey, 1000);
-    return () => clearTimeout(timeoutId);
-  }, [user]);
-
-  // Load model preference
-  useEffect(() => {
-    // Load the saved model preference from localStorage
-    const savedModel = localStorage.getItem('selected_model');
-    // Allow gpt4o, perplexity-sonar, deepseek-r1, gpt-o3-mini, or deepseek-v3
-    if (savedModel && (savedModel === 'gpt4o' || savedModel === 'perplexity-sonar' || 
-        savedModel === 'deepseek-r1' || savedModel === 'gpt-o3-mini' || savedModel === 'deepseek-v3')) {
-      setSelectedModel(savedModel as AIModel);
-    } else {
-      // Default to gpt-o3-mini
-      setSelectedModel('gpt-o3-mini');
-      localStorage.setItem('selected_model', 'gpt-o3-mini');
+  const saveModelToStorage = useCallback((model: AIModel) => {
+    localStorage.setItem('selected_model', model);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Saved model to localStorage:', model);
     }
   }, []);
+
+  useEffect(() => {
+    saveModelToStorage(selectedModel);
+  }, [selectedModel, saveModelToStorage]);
+
+  // Open settings modal if no API key is set
+  const [apiKeyLoading, setApiKeyLoading] = useState(true);
+  
+  const checkApiKey = useCallback(async () => {
+    setApiKeyLoading(true);
+    let apiKeyFound = false;
+    
+    try {
+      if (user?.id) {
+        // Try Supabase first for authenticated users
+        try {
+          const apiKeyFromSupabase = await storageService.getItem('openai_api_key', user.id);
+          if (apiKeyFromSupabase) {
+            apiKeyFound = true;
+            setApiKeySet(true);
+            return;
+          }
+        } catch (supabaseError) {
+          console.warn("Supabase API key check failed, falling back to localStorage:", supabaseError);
+        }
+      }
+      
+      // Fall back to localStorage check
+      const apiKey = localStorage.getItem('openai_api_key');
+      apiKeyFound = !!apiKey;
+      setApiKeySet(apiKeyFound);
+      
+      if (!apiKeyFound) {
+        setSettingsOpened(true);
+      }
+    } catch (error) {
+      console.error("Error checking API key:", error);
+      setApiKeySet(false);
+    } finally {
+      setApiKeyLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(checkApiKey, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [checkApiKey]);
+
+  // Retry API key check every 5 minutes if not found
+  useEffect(() => {
+    if (apiKeySet || apiKeyLoading) return;
+    
+    const retryInterval = setInterval(checkApiKey, 300000); // 5 minutes
+    return () => clearInterval(retryInterval);
+  }, [apiKeySet, apiKeyLoading, checkApiKey]);
+
+  // Load model preference
+  const loadModelFromStorage = useCallback(() => {
+    const savedModel = localStorage.getItem('selected_model');
+    const validModels: AIModel[] = ['gpt4o', 'perplexity-sonar', 'deepseek-r1', 'gpt-o3-mini', 'deepseek-v3'];
+    
+    if (savedModel && validModels.includes(savedModel as AIModel)) {
+      setSelectedModel(savedModel as AIModel);
+    } else {
+      setSelectedModel('gpt-o3-mini');
+      saveModelToStorage('gpt-o3-mini');
+    }
+  }, [saveModelToStorage]);
+
+  useEffect(() => {
+    loadModelFromStorage();
+  }, [loadModelFromStorage]);
 
   // Show authentication modal if no user is logged in
   useEffect(() => {
@@ -262,7 +320,12 @@ function AppContent() {
   return (
     <MantineProvider theme={theme} defaultColorScheme="light">
       <style>{cssStyles}</style>
-      <AppShell
+      <ErrorBoundary
+        FallbackComponent={ErrorFallback}
+        onError={logError}
+        onReset={() => window.location.reload()}
+      >
+        <AppShell
         padding="md"
         style={{ 
           height: '100vh', 
@@ -352,31 +415,54 @@ function AppContent() {
                 }}
               >
                 <Group>
-                  <Select
-                    placeholder="AI Model"
-                    data={[
-                      { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
-                      { value: 'gpt4o', label: 'GPT-4o' },
-                      { value: 'deepseek-v3', label: 'DeepSeek V3' },
-                    ]}
-                    value={selectedModel}
-                    onChange={(value) => value && setSelectedModel(value as AIModel)}
-                    style={{ width: 230 }}
-                    styles={{
-                      input: {
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                        borderColor: '#DEE2E6',
-                        fontWeight: 'bold',
-                        borderRadius: '6px',
-                        color: '#495057',
-                        transition: 'all 0.2s ease',
-                        '&:focus': {
-                          borderColor: '#20C997',
-                          backgroundColor: '#FFFFFF'
+                  <Tooltip label="Select AI model" position="bottom" withArrow>
+                    <Select
+                      placeholder="AI Model"
+                      data={[
+                        { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
+                        { value: 'gpt4o', label: 'GPT-4o' },
+                        { value: 'deepseek-v3', label: 'DeepSeek V3' },
+                      ]}
+                      value={selectedModel}
+                      onChange={(value) => value && setSelectedModel(value as AIModel)}
+                      style={{ width: 230 }}
+                      styles={(theme) => ({
+                        input: {
+                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                          borderColor: '#DEE2E6',
+                          fontWeight: 'bold',
+                          borderRadius: '6px',
+                          color: '#495057',
+                          transition: 'all 0.2s ease',
+                          '&:focus': {
+                            borderColor: '#20C997',
+                            backgroundColor: '#FFFFFF',
+                            boxShadow: '0 0 0 2px rgba(32, 201, 151, 0.2)'
+                          },
+                          '&:hover': {
+                            borderColor: '#ADB5BD'
+                          }
+                        },
+                        dropdown: {
+                          border: '1px solid #DEE2E6',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          borderRadius: '8px',
+                          transition: 'pop 200ms ease-out'
+                        },
+                        option: {
+                          '&[data-selected]': {
+                            backgroundColor: '#E6FCF5',
+                            color: '#087F5B',
+                            fontWeight: '600'
+                          },
+                          '&[data-hovered]': {
+                            backgroundColor: '#F8F9FA',
+                            transition: 'background-color 200ms ease-out'
+                          }
                         }
-                      }
-                    }}
-                  />
+                      })}
+                    />
+                  </Tooltip>
                 </Group>
                 
                 <Group>
@@ -473,7 +559,8 @@ function AppContent() {
             </div>
           </div>
         </Container>
-      </AppShell>
+        </AppShell>
+      </ErrorBoundary>
       
       {/* Modals */}
       <SettingsModal
@@ -498,4 +585,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

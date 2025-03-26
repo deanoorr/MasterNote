@@ -1,15 +1,28 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { StoreApi, UseBoundStore } from 'zustand';
+import type { StateStorage } from 'zustand/middleware';
 import { Message, Task } from './types';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 
+// Define types for error handling
+type SupabaseError = {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+};
+
 export type SortOption = 'priority-high' | 'priority-low' | 'due-date' | 'created-newest' | 'created-oldest' | 'alphabetical';
 
-interface Store {
+interface StoreState {
   messages: Message[];
   tasks: Task[];
   sortOrder: SortOption;
   userId: string | null;
+}
+
+interface StoreActions {
   setUserId: (id: string | null) => void;
   addMessage: (message: Message) => void;
   addTask: (task: Task) => void;
@@ -24,8 +37,17 @@ interface Store {
   syncWithSupabase: () => Promise<void>;
 }
 
+type Store = StoreState & StoreActions;
+
+// Define priority order outside store creation
+const priorityOrder: Record<'high' | 'medium' | 'low', number> = {
+  high: 3,
+  medium: 2, 
+  low: 1
+};
+
 // Custom storage for handling both localStorage and Supabase
-const customStorage = {
+const customStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     return localStorage.getItem(name);
   },
@@ -39,7 +61,7 @@ const customStorage = {
 
 export const useStore = create<Store>()(
   persist(
-    (set, get) => ({
+    (set: StoreApi<Store>['setState'], get: StoreApi<Store>['getState']) => ({
       messages: [],
       tasks: [],
       sortOrder: 'due-date' as SortOption,
@@ -47,13 +69,13 @@ export const useStore = create<Store>()(
       
       setUserId: (id: string | null) => set({ userId: id }),
       
-      addMessage: (message) =>
-        set((state) => ({
+      addMessage: (message: Message) =>
+        set((state: StoreState) => ({
           messages: [...state.messages, message],
         })),
         
-      addTask: (task) =>
-        set((state) => {
+      addTask: (task: Task) =>
+        set((state: StoreState) => {
           console.log("Store: Adding task to state:", task);
           
           // Ensure the task title is cleaned of any leading numbers (like "1. ", "2.", etc.)
@@ -79,7 +101,14 @@ export const useStore = create<Store>()(
                   created_at: new Date(cleanedTask.createdAt).toISOString(),
                   updated_at: new Date(cleanedTask.updatedAt).toISOString(),
                   ai_generated: cleanedTask.aiGenerated || false,
-                  notes: cleanedTask.notes || ''
+                  notes: cleanedTask.notes || '',
+                  dependencies: cleanedTask.dependencies || [],
+                  tags: cleanedTask.tags || [],
+                  recurrence: cleanedTask.recurrence ? JSON.stringify(cleanedTask.recurrence) : null,
+                  attachments: cleanedTask.attachments ? JSON.stringify(cleanedTask.attachments) : null,
+                  time_tracking: cleanedTask.timeTracking ? JSON.stringify(cleanedTask.timeTracking) : null,
+                  progress: cleanedTask.progress || 0,
+                  category: cleanedTask.category || null
                 });
                 
                 if (error) {
@@ -109,8 +138,8 @@ export const useStore = create<Store>()(
           };
         }),
         
-      updateTask: (taskId, updates) =>
-        set((state) => {
+      updateTask: (taskId: string, updates: Partial<Task>) =>
+        set((state: StoreState) => {
           console.log("Updating task", taskId, "with updates:", updates);
           
           // Always include the updated timestamp
@@ -177,8 +206,8 @@ export const useStore = create<Store>()(
           };
         }),
         
-      deleteTask: (taskId) =>
-        set((state) => {
+      deleteTask: (taskId: string) =>
+        set((state: StoreState) => {
           // Store in Supabase if configured
           const userId = get().userId;
           if (isSupabaseConfigured() && userId) {
@@ -186,7 +215,7 @@ export const useStore = create<Store>()(
               .delete()
               .eq('id', taskId)
               .eq('user_id', userId)
-              .then(({ error }) => {
+              .then(({ error }: { error: SupabaseError | null }) => {
                 if (error) console.error("Error deleting task in Supabase:", error);
               });
           }
@@ -197,7 +226,7 @@ export const useStore = create<Store>()(
         }),
         
       deleteCompletedTasks: () =>
-        set((state) => {
+        set((state: StoreState) => {
           // Delete completed tasks in Supabase if configured
           const userId = get().userId;
           const completedTaskIds = state.tasks
@@ -209,7 +238,7 @@ export const useStore = create<Store>()(
               .delete()
               .eq('user_id', userId)
               .in('id', completedTaskIds)
-              .then(({ error }) => {
+              .then(({ error }: { error: SupabaseError | null }) => {
                 if (error) console.error("Error deleting completed tasks in Supabase:", error);
               });
           }
@@ -220,12 +249,12 @@ export const useStore = create<Store>()(
         }),
         
       clearMessages: () => 
-        set(() => ({
+        set((state: StoreState) => ({
           messages: [],
         })),
         
       setSortOrder: (order: SortOption) => 
-        set(() => ({
+        set((state: StoreState) => ({
           sortOrder: order
         })),
         
@@ -236,21 +265,19 @@ export const useStore = create<Store>()(
         switch (sortOrder) {
           case 'priority-high':
             // Sort by priority (high to low)
-            return tasksCopy.sort((a, b) => {
-              const priorityOrder = { high: 3, medium: 2, low: 1 };
+            return tasksCopy.sort((a: Task, b: Task) => {
               return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
             });
           
           case 'priority-low':
             // Sort by priority (low to high)
-            return tasksCopy.sort((a, b) => {
-              const priorityOrder = { high: 3, medium: 2, low: 1 };
+            return tasksCopy.sort((a: Task, b: Task) => {
               return (priorityOrder[a.priority] || 0) - (priorityOrder[b.priority] || 0);
             });
           
           case 'due-date':
             // Sort by due date (closest first, null dates at the end)
-            return tasksCopy.sort((a, b) => {
+            return tasksCopy.sort((a: Task, b: Task) => {
               if (!a.dueDate && !b.dueDate) return 0;
               if (!a.dueDate) return 1;
               if (!b.dueDate) return -1;
@@ -259,19 +286,19 @@ export const useStore = create<Store>()(
           
           case 'created-newest':
             // Sort by creation date (newest first)
-            return tasksCopy.sort((a, b) => 
+            return tasksCopy.sort((a: Task, b: Task) => 
               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
             );
           
           case 'created-oldest':
             // Sort by creation date (oldest first)
-            return tasksCopy.sort((a, b) => 
+            return tasksCopy.sort((a: Task, b: Task) => 
               new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
             );
           
           case 'alphabetical':
             // Sort alphabetically by title
-            return tasksCopy.sort((a, b) => a.title.localeCompare(b.title));
+            return tasksCopy.sort((a: Task, b: Task) => a.title.localeCompare(b.title));
           
           default:
             return tasksCopy;
@@ -291,7 +318,7 @@ export const useStore = create<Store>()(
 
         switch (dateFilter.toLowerCase()) {
           case 'today':
-            return tasks.filter(task => {
+            return tasks.filter((task: Task) => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
               taskDate.setHours(0, 0, 0, 0);
@@ -299,7 +326,7 @@ export const useStore = create<Store>()(
             });
             
           case 'tomorrow':
-            return tasks.filter(task => {
+            return tasks.filter((task: Task) => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
               taskDate.setHours(0, 0, 0, 0);
@@ -307,7 +334,7 @@ export const useStore = create<Store>()(
             });
             
           case 'this week':
-            return tasks.filter(task => {
+            return tasks.filter((task: Task) => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
               taskDate.setHours(0, 0, 0, 0);
@@ -315,7 +342,7 @@ export const useStore = create<Store>()(
             });
             
           case 'overdue':
-            return tasks.filter(task => {
+            return tasks.filter((task: Task) => {
               if (!task.dueDate) return false;
               const taskDate = new Date(task.dueDate);
               taskDate.setHours(0, 0, 0, 0);
@@ -323,29 +350,45 @@ export const useStore = create<Store>()(
             });
             
           case 'completed':
-            return tasks.filter(task => task.status === 'done');
+            return tasks.filter((task: Task) => task.status === 'done');
             
           case 'no date':
           case 'undated':
-            return tasks.filter(task => !task.dueDate);
+            return tasks.filter((task: Task) => !task.dueDate);
             
           default:
             return tasks;
         }
       },
       
-      syncWithSupabase: async () => {
+      syncWithSupabase: async (): Promise<void> => {
         const userId = get().userId;
         if (!isSupabaseConfigured() || !userId) return;
         
         try {
+          type SupabaseTask = {
+            id: string;
+            user_id: string;
+            title: string;
+            description: string | null;
+            priority: 'low' | 'medium' | 'high';
+            status: 'todo' | 'in_progress' | 'done';
+            due_date: string | null;
+            created_at: string;
+            updated_at: string;
+            ai_generated: boolean;
+            notes: string | null;
+          };
           console.log("Syncing with Supabase for user:", userId);
           // Get current local tasks
           const currentTasks = get().tasks;
           console.log("Current local tasks:", currentTasks.length);
           
           // Fetch tasks from Supabase
-          const { data: tasksData, error: tasksError } = await supabase
+          const { data: tasksData, error: tasksError }: { 
+            data: SupabaseTask[] | null; 
+            error: SupabaseError | null 
+          } = await supabase
             .from('tasks')
             .select('*')
             .eq('user_id', userId);
@@ -407,7 +450,7 @@ export const useStore = create<Store>()(
             // Process Supabase tasks
             for (const remoteTask of formattedTasks) {
               processedIds.add(remoteTask.id);
-              const localTask = currentTasks.find(t => t.id === remoteTask.id);
+              const localTask = currentTasks.find((t: Task) => t.id === remoteTask.id);
               
               if (!localTask) {
                 // Task only exists in Supabase, add it
@@ -462,7 +505,7 @@ export const useStore = create<Store>()(
       },
       
       bulkUpdateTasks: (filter: string, updates: Partial<Task>) =>
-        set((state) => {
+        set((state: StoreState) => {
           let tasksToUpdate: Task[] = [];
           
           // Find tasks matching the filter
@@ -471,7 +514,7 @@ export const useStore = create<Store>()(
           } else if (['today', 'tomorrow', 'this week', 'overdue', 'completed', 'no date', 'undated'].includes(filter)) {
             tasksToUpdate = get().getTasksByDate(filter);
           } else if (['high', 'medium', 'low'].includes(filter)) {
-            tasksToUpdate = state.tasks.filter(task => task.priority === filter);
+            tasksToUpdate = state.tasks.filter((task: Task) => task.priority === filter);
           }
           
           console.log(`Bulk updating ${tasksToUpdate.length} tasks matching filter "${filter}"`);
@@ -496,7 +539,7 @@ export const useStore = create<Store>()(
                   ai_generated: updatedTask.aiGenerated || false,
                   notes: updatedTask.notes || ''
                 })
-                .then(({ error }) => {
+                .then(({ error }: { error: SupabaseError | null }) => {
                   if (error) console.error("Error updating task in Supabase:", error);
                 });
               }
@@ -516,4 +559,4 @@ export const useStore = create<Store>()(
       storage: createJSONStorage(() => customStorage),
     }
   )
-); 
+);
