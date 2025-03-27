@@ -450,10 +450,10 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
                   body: JSON.stringify({
                     contents: [{ 
                       role: 'user',
-                      parts: [{ text: 'Hello! This is a test message to validate the API key.' }]
+                      parts: [{ text: 'Hello' }]
                     }],
                     generationConfig: {
-                      maxOutputTokens: 50,
+                      maxOutputTokens: 10,
                       temperature: 0.1
                     }
                   })
@@ -466,7 +466,18 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
                 } else {
                   const errorData = await response.json().catch(() => ({}));
                   console.error("Gemini API test failed:", response.status, errorData);
-                  alert(`Gemini API key test failed: ${response.status} ${response.statusText}`);
+                  
+                  let errorMessage = `Gemini API key test failed: ${response.status}`;
+                  
+                  if (response.status === 429) {
+                    errorMessage = "Rate limit exceeded. Your Gemini API key appears valid but you've hit the request limit. Try again later.";
+                  } else if (errorData?.error?.message) {
+                    errorMessage = `Error: ${errorData.error.message}`;
+                  } else if (errorData?.error?.status) {
+                    errorMessage = `Error: ${errorData.error.status}`;
+                  }
+                  
+                  alert(errorMessage);
                 }
               } catch (error) {
                 console.error("Gemini API test error:", error);

@@ -2230,48 +2230,69 @@ const callGeminiAPI = async (message: string) => {
       { role: 'user', content: message }
     ];
     
-    const response = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent',
-      {
-        contents: geminiMessages.map(msg => ({
-          role: msg.role === 'system' ? 'user' : msg.role,
-          parts: [{ text: msg.content }]
-        })),
-        generationConfig: {
-          maxOutputTokens: 4000,
-          temperature: 0.7
-        }
-      },
-      {
-        headers: {
-          'x-goog-api-key': apiKey,
-          'Content-Type': 'application/json'
+    try {
+      const response = await axios.post(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent',
+        {
+          contents: geminiMessages.map(msg => ({
+            role: msg.role === 'system' ? 'user' : msg.role,
+            parts: [{ text: msg.content }]
+          })),
+          generationConfig: {
+            maxOutputTokens: 4000,
+            temperature: 0.7
+          }
         },
-        params: {
-          key: apiKey
+        {
+          headers: {
+            'x-goog-api-key': apiKey,
+            'Content-Type': 'application/json'
+          },
+          params: {
+            key: apiKey
+          }
+        }
+      );
+      
+      console.log("Gemini API response received:", response.status);
+      
+      if (response.data && response.data.candidates && response.data.candidates.length > 0) {
+        const candidate = response.data.candidates[0];
+        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+          const responseContent = candidate.content.parts[0].text;
+          
+          // Save the conversation for context in future interactions
+          await saveMessageToHistory(userId, 'user', message);
+          await saveMessageToHistory(userId, 'assistant', responseContent);
+          
+          return responseContent;
         }
       }
-    );
-    
-    console.log("Gemini API response received:", response.status);
-    
-    if (response.data && response.data.candidates && response.data.candidates.length > 0) {
-      const candidate = response.data.candidates[0];
-      if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-        const responseContent = candidate.content.parts[0].text;
-        
-        // Save the conversation for context in future interactions
-        await saveMessageToHistory(userId, 'user', message);
-        await saveMessageToHistory(userId, 'assistant', responseContent);
-        
-        return responseContent;
+      
+      return 'No response content received from Gemini API. Please try again.';
+    } catch (error) {
+      // Handle rate limiting specifically
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        console.error("Gemini API rate limit exceeded:", error.response.data);
+        return "Rate limit exceeded for Gemini API. Your key appears valid but you've reached the request limit. Please try again later or use a different model.";
       }
+      
+      // Re-throw for general error handling
+      throw error;
     }
-    
-    return 'No response content received from Gemini API. Please try again.';
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error("Gemini API error:", error.response?.data || error.message);
+      
+      // Handle specific error types
+      if (error.response?.data?.error?.code === 400) {
+        return `Gemini error: Invalid request format. This may be due to an issue with the system prompt or message format.`;
+      } else if (error.response?.status === 401 || error.response?.status === 403) {
+        return `Gemini error: Authentication failed. Please check that your API key is valid and has appropriate permissions.`;
+      } else if (error.response?.status === 404) {
+        return `Gemini error: The specified model (gemini-2.5-pro-exp-03-25) was not found. Google may have changed their model naming.`;
+      }
+      
       return `Gemini error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
     } else {
       console.error("Unexpected error:", error);
