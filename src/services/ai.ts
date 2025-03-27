@@ -262,23 +262,66 @@ const callPerplexityAPI = async (message: string) => {
     const userId = "user123"; // Use a consistent user ID or pass this from the caller
     const conversationHistory = await getConversationHistory(userId);
     
-    // Create a more comprehensive system prompt
-    const systemPrompt = 'You are a helpful assistant with search capabilities. You can provide information from the internet and have the most up-to-date knowledge. When answering questions, try to be informative and cite sources when possible. You can also help with task management, but specialized task operations are handled separately by the system. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    // Check if Ultra Search is enabled
+    const useUltraSearch = localStorage.getItem('use_sonar_pro') === 'true';
     
-    // Create messages array with system prompt, history, and user message
-    const perplexityMessages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
-      { role: 'user', content: message }
-    ];
+    // Use the correct Perplexity model names
+    // sonar-deep-research is the Pro model with larger context
+    // sonar is the standard model
+    const modelName = useUltraSearch ? 'sonar-deep-research' : 'sonar';
+    
+    console.log(`Using Perplexity ${useUltraSearch ? 'ULTRA SEARCH' : 'Standard Search'} with model: ${modelName}`);
+    
+    // Create a more comprehensive system prompt
+    const systemPrompt = useUltraSearch 
+      ? 'You are a powerful search assistant with advanced capabilities, leveraging Perplexity Sonar Pro for deep research. You have access to a 200k token context window, allowing you to process and analyze extensive information. Provide detailed, comprehensive answers with multiple sources when available. Prioritize depth, accuracy, and thorough analysis in your responses. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.'
+      : 'You are a helpful assistant with search capabilities. You can provide information from the internet and have up-to-date knowledge. When answering questions, try to be informative and cite sources when possible. You can also help with task management, but specialized task operations are handled separately by the system. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    
+    // Format conversation history to ensure alternating user/assistant roles
+    // Perplexity API requires strict alternating roles after system message
+    const formattedMessages = [{ role: 'system', content: systemPrompt }];
+    
+    // Ensure history has proper alternating format
+    if (conversationHistory.length > 0) {
+      // Process history to ensure alternating roles
+      let lastRole = '';
+      
+      for (const msg of conversationHistory) {
+        // Skip consecutive messages with the same role
+        if (msg.role === lastRole) {
+          console.log(`Skipping consecutive ${msg.role} message for Perplexity API`);
+          continue;
+        }
+        
+        // Add message and update last role
+        formattedMessages.push({ role: msg.role, content: msg.content });
+        lastRole = msg.role;
+      }
+      
+      // If the last message was from assistant, we can't add a user message directly
+      // In this case, we'll skip the history and just use the system prompt + new user message
+      if (lastRole === 'assistant') {
+        console.log("Last message was from assistant, resetting history for Perplexity API");
+        formattedMessages.length = 1; // Keep only the system message
+      }
+    }
+    
+    // Add the current user message
+    formattedMessages.push({ role: 'user', content: message });
+    
+    console.log("Formatted messages for Perplexity:", 
+      formattedMessages.map(m => `${m.role}${m.role === 'system' ? '(system)' : ''}`).join(" → "));
+    
+    // Set token limits based on model - higher for Pro
+    const maxTokens = useUltraSearch ? 12000 : 4000;
     
     const response = await axios.post(
       'https://api.perplexity.ai/chat/completions',
       {
-        model: localStorage.getItem('use_sonar_pro') === 'true' ? 'sonar-pro' : 'sonar',
-        messages: perplexityMessages,
-        max_tokens: localStorage.getItem('use_sonar_pro') === 'true' ? 12000 : 4000, // Increased token limits for both Sonar versions
-        temperature: 0.7
+        model: modelName,
+        messages: formattedMessages,
+        max_tokens: maxTokens,
+        temperature: useUltraSearch ? 0.6 : 0.7 // Slightly lower temperature for Pro for more precision
       },
       {
         headers: {
@@ -291,18 +334,29 @@ const callPerplexityAPI = async (message: string) => {
     if (response.data && response.data.choices && response.data.choices.length > 0) {
       const responseContent = response.data.choices[0].message.content;
       
-      // Save the conversation for context in future interactions
-      await saveMessageToHistory(userId, 'user', message);
-      await saveMessageToHistory(userId, 'assistant', responseContent);
+      // Add a small prefix for Ultra Search to make it clear that it's being used
+      const finalResponse = useUltraSearch 
+        ? `[Using Ultra Search]\n\n${responseContent}`
+        : responseContent;
       
-      return responseContent;
+      // Save the conversation for context in future interactions
+      // Make sure we save both the user message and the assistant response
+      await saveMessageToHistory(userId, 'user', message);
+      await saveMessageToHistory(userId, 'assistant', finalResponse);
+      
+      return finalResponse;
     } else {
       return 'No response content received from Perplexity API. Please try again.';
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
       console.error("Perplexity API error:", error.response?.data || error.message);
-      return `Search error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
+      const errorMessage = error.response?.data?.error?.message || error.message;
+      
+      // Log more details about the error for debugging
+      console.log("Perplexity API error details:", JSON.stringify(error.response?.data || {}, null, 2));
+      
+      return `Search error: ${errorMessage}. Please check your API key in Settings.`;
     } else {
       console.error("Unexpected error:", error);
       return "An unexpected error occurred with the Search service. Please try again later.";
@@ -638,7 +692,7 @@ Extract the task management intent from the user's message. Focus on:
 2. Task Updates: "change priority", "move to tomorrow"
 3. Task Deletion: "delete task", "remove task"
 4. Task Completion: "mark done", "complete task"
-5. Task Queries: "show tasks", "list tasks"
+5. Task Queries: "show tasks", "list tasks" 
 6. Multi-task Selection: "tasks 1 and 2", "tasks 3,4,5"
 
 Return a JSON response with:

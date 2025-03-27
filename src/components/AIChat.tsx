@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover, ActionIcon } from '@mantine/core';
+import { Paper, TextInput, ScrollArea, Text, Stack, Group, Avatar, Loader, Box, Button, Textarea, Tooltip, useMantineColorScheme, SegmentedControl, Badge, Image, Popover, ActionIcon, Switch } from '@mantine/core';
 import { IconSend, IconRobot, IconUser, IconBrandOpenai, IconList, IconMessage, IconCheck, IconAlertCircle, IconBulb, IconMicrophone, IconSearch, IconArrowRight, IconEraser } from '@tabler/icons-react';
 import { AIModel, Message, Task } from '../types';
 import { useStore } from '../store';
@@ -25,8 +25,18 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { messages, addMessage, addTask, clearMessages } = useStore();
   
+  // Add state for Ultra Search toggle
+  const [ultraSearch, setUltraSearch] = useState(() => 
+    localStorage.getItem('use_sonar_pro') === 'true'
+  );
+  
   // Track previous model to detect changes
   const prevModelRef = useRef<AIModel | null>(null);
+
+  // Effect to update localStorage when Ultra Search toggle changes
+  useEffect(() => {
+    localStorage.setItem('use_sonar_pro', ultraSearch ? 'true' : 'false');
+  }, [ultraSearch]);
 
   // Initialize on component mount - make sure conversation context is properly set up
   useEffect(() => {
@@ -203,7 +213,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     switch(model) {
       case 'gpt4o': return 'GPT-4o';
       case 'perplexity-sonar': 
-        return localStorage.getItem('use_sonar_pro') === 'true' ? 'Sonar Pro' : 'Sonar';
+        return ultraSearch ? 'Sonar Pro' : 'Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT o3 mini';
       case 'deepseek-v3': return 'DeepSeek V3';
@@ -217,7 +227,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     switch(messageModel) {
       case 'gpt4o': return 'GPT-4o';
       case 'perplexity-sonar': 
-        return localStorage.getItem('use_sonar_pro') === 'true' ? 'Sonar Pro' : 'Sonar';
+        return ultraSearch ? 'Sonar Pro' : 'Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT o3 mini';
       case 'deepseek-v3': return 'DeepSeek V3';
@@ -264,13 +274,12 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     switch(model) {
       case 'gpt4o': return 'All-purpose AI assistant';
       case 'perplexity-sonar': 
-        return localStorage.getItem('use_sonar_pro') === 'true' 
-          ? 'Enhanced search with 200k context window'
-          : 'Search-focused AI assistant';
+        return ultraSearch
+          ? 'Sonar Deep Research model'
+          : 'Sonar Online search assistant';
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
       case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
       case 'deepseek-v3': return 'Advanced reasoning AI';
-      case 'gemini-2.5-pro-exp-03-25': return 'Advanced multimodal AI';
       default: return 'Intelligent Assistant';
     }
   };
@@ -317,13 +326,50 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                 >
                   {mode === 'agent' ? 'Agent' : 'Chat'}
                 </Badge>
+                {model === 'perplexity-sonar' && ultraSearch && (
+                  <Badge 
+                    size="xs" 
+                    variant="filled" 
+                    color="blue"
+                    style={{ 
+                      background: 'linear-gradient(45deg, #4C6EF5, #3D5BF5)',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    ULTRA
+                  </Badge>
+                )}
               </Group>
               <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>{getModelDescription()}</Text>
             </div>
           </Group>
           
-          {/* Add SegmentedControl for Chat/Agent mode toggle */}
           <Group>
+            {/* Add Ultra Search toggle when Perplexity Sonar is selected */}
+            {model === 'perplexity-sonar' && (
+              <Group mr="xs">
+                <Tooltip label="Enable Ultra Search to use Perplexity's Sonar Deep Research model for enhanced research capabilities">
+                  <Badge
+                    size="sm"
+                    variant={ultraSearch ? "filled" : "outline"}
+                    color="blue"
+                    style={{ 
+                      cursor: 'pointer', 
+                      transition: 'all 0.2s ease',
+                      opacity: ultraSearch ? 1 : 0.7,
+                      border: `1px solid ${isDark ? '#4C6EF5' : '#4C6EF5'}`,
+                    }}
+                    onClick={() => setUltraSearch(!ultraSearch)}
+                  >
+                    <Group gap={4}>
+                      <IconSearch size={12} />
+                      <Text size="xs">Ultra Search {ultraSearch ? 'ON' : 'OFF'}</Text>
+                    </Group>
+                  </Badge>
+                </Tooltip>
+              </Group>
+            )}
+
             <SegmentedControl
               data={[
                 { 
@@ -849,45 +895,50 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                   GPT o3 mini
                 </Button>
                 
-                <Button
-                  variant="subtle"
-                  color={isDark ? "gray.4" : "gray.7"}
-                  fullWidth
-                  justify="flex-start"
-                  leftSection={
-                    <div style={{ 
-                      width: 10, 
-                      height: 10, 
-                      borderRadius: '50%',
-                      backgroundColor: '#E30B5C', // Crimson/Ruby
-                      marginRight: 5
-                    }} />
-                  }
-                  onClick={() => onModelChange && onModelChange('gemini-2.5-pro-exp-03-25')}
-                  style={{ height: 44, borderRadius: 0 }}
-                >
-                  Gemini 2.5 Pro
-                </Button>
-                
-                <Button
-                  variant="subtle"
-                  color={isDark ? "gray.4" : "gray.7"}
-                  fullWidth
-                  justify="flex-start"
-                  leftSection={
-                    <div style={{ 
-                      width: 10, 
-                      height: 10, 
-                      borderRadius: '50%',
-                      backgroundColor: '#3B82F6', // Blue
-                      marginRight: 5
-                    }} />
-                  }
-                  onClick={() => onModelChange && onModelChange('perplexity-sonar')}
-                  style={{ height: 44, borderRadius: 0 }}
-                >
-                  Sonar
-                </Button>
+                <Box>
+                  <Button
+                    variant="subtle"
+                    color={isDark ? "gray.4" : "gray.7"}
+                    fullWidth
+                    justify="flex-start"
+                    leftSection={
+                      <div style={{ 
+                        width: 10, 
+                        height: 10, 
+                        borderRadius: '50%',
+                        backgroundColor: '#3B82F6', // Blue
+                        marginRight: 5
+                      }} />
+                    }
+                    rightSection={
+                      model === 'perplexity-sonar' && ultraSearch && (
+                        <Badge size="xs" color="blue" variant="filled">ULTRA</Badge>
+                      )
+                    }
+                    onClick={() => onModelChange && onModelChange('perplexity-sonar')}
+                    style={{ height: 44, borderRadius: 0 }}
+                  >
+                    Sonar
+                  </Button>
+                  
+                  {/* Show Ultra Search option when Sonar is selected */}
+                  {model === 'perplexity-sonar' && (
+                    <Box px={12} py={8} style={{ borderTop: '1px dotted rgba(0,0,0,0.05)' }}>
+                      <Group justify="space-between" align="center">
+                        <Text size="xs">Ultra Search</Text>
+                        <Switch 
+                          size="xs"
+                          checked={ultraSearch}
+                          onChange={() => setUltraSearch(!ultraSearch)}
+                          color="blue"
+                        />
+                      </Group>
+                      <Text size="xs" c="dimmed" mt={5} style={{ fontSize: '10px' }}>
+                        Enables Sonar Medium model (sonar-medium-online) for enhanced research capabilities
+                      </Text>
+                    </Box>
+                  )}
+                </Box>
                 
                 <Button
                   variant="subtle"
