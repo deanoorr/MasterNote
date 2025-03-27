@@ -415,116 +415,26 @@ function AppContent() {
                 }}
               >
                 <Group>
-                  <Tooltip label="Select AI model" position="bottom" withArrow>
-                    <Select
-                      placeholder="AI Model"
-                      data={[
-                        { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
-                        { value: 'gpt4o', label: 'GPT-4o' },
-                        { value: 'deepseek-v3', label: 'DeepSeek V3' },
-                      ]}
-                      value={selectedModel}
-                      onChange={(value) => value && setSelectedModel(value as AIModel)}
-                      style={{ width: 230 }}
-                      styles={(theme) => ({
-                        input: {
-                          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                          borderColor: '#DEE2E6',
-                          fontWeight: 'bold',
-                          borderRadius: '6px',
-                          color: '#495057',
-                          transition: 'all 0.2s ease',
-                          '&:focus': {
-                            borderColor: '#20C997',
-                            backgroundColor: '#FFFFFF',
-                            boxShadow: '0 0 0 2px rgba(32, 201, 151, 0.2)'
-                          },
-                          '&:hover': {
-                            borderColor: '#ADB5BD'
-                          }
-                        },
-                        dropdown: {
-                          border: '1px solid #DEE2E6',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                          borderRadius: '8px',
-                          transition: 'pop 200ms ease-out'
-                        },
-                        option: {
-                          '&[data-selected]': {
-                            backgroundColor: '#E6FCF5',
-                            color: '#087F5B',
-                            fontWeight: '600'
-                          },
-                          '&[data-hovered]': {
-                            backgroundColor: '#F8F9FA',
-                            transition: 'background-color 200ms ease-out'
-                          }
-                        }
-                      })}
-                    />
-                  </Tooltip>
+                  {/* Model selector moved to input area */}
                 </Group>
                 
                 <Group>
-                  <Tooltip label="Use search-focused AI (Perplexity Sonar) - still handles tasks">
+                  <Tooltip label="Clear conversation">
                     <ActionIcon
                       variant="subtle"
                       size="md"
                       radius="md"
-                      color={selectedModel === 'perplexity-sonar' ? "blue" : "gray"}
-                      className={selectedModel === 'perplexity-sonar' ? 'search-active' : ''}
-                      onClick={() => {
-                        // Toggle Perplexity Sonar model
-                        if (selectedModel === 'perplexity-sonar') {
-                          // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('search_previous_model') || 'gpt-o3-mini';
-                          setSelectedModel(previousModel as AIModel);
-                          localStorage.setItem('selected_model', previousModel);
-                          console.log(`Switched back to ${previousModel} model`);
-                        } else {
-                          // Save current model before switching to search mode
-                          localStorage.setItem('search_previous_model', selectedModel);
-                          setSelectedModel('perplexity-sonar');
-                          localStorage.setItem('selected_model', 'perplexity-sonar');
-                          console.log("Switched to Perplexity Sonar Search mode");
-                        }
-                      }}
+                      color="gray"
+                      onClick={handleClearChat}
+                      disabled={messages.length === 0}
                     >
-                      <IconSearch size={18} />
-                    </ActionIcon>
-                  </Tooltip>
-                   
-                  <Tooltip label="Use reasoning-focused AI (DeepSeek R1) - still handles tasks">
-                    <ActionIcon
-                      variant="subtle"
-                      size="md"
-                      radius="md"
-                      color={selectedModel === 'deepseek-r1' ? "red" : "gray"}
-                      className={selectedModel === 'deepseek-r1' ? 'reasoning-active' : ''}
-                      onClick={() => {
-                        // Toggle DeepSeek R1 model
-                        if (selectedModel === 'deepseek-r1') {
-                          // Store the previous model in localStorage
-                          const previousModel = localStorage.getItem('reasoning_previous_model') || 'gpt-o3-mini';
-                          setSelectedModel(previousModel as AIModel);
-                          localStorage.setItem('selected_model', previousModel);
-                          console.log(`Switched back to ${previousModel} model`);
-                        } else {
-                          // Save current model before switching to reasoning mode
-                          localStorage.setItem('reasoning_previous_model', selectedModel);
-                          setSelectedModel('deepseek-r1');
-                          localStorage.setItem('selected_model', 'deepseek-r1');
-                          console.log("Switched to DeepSeek R1 Reasoning mode");
-                        }
-                      }}
-                    >
-                      <IconBulb size={18} />
+                      <IconEraser size={18} />
                     </ActionIcon>
                   </Tooltip>
                 </Group>
               </Group>
               
-              <AIChat model={selectedModel} />
+              <AIChat model={selectedModel} onModelChange={setSelectedModel} />
             </div>
             
             {/* Right Panel - Task List */}

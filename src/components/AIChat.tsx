@@ -9,9 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface AIChatProps {
   model: AIModel;
+  onModelChange?: (model: AIModel) => void;
 }
 
-export default function AIChat({ model }: AIChatProps) {
+export default function AIChat({ model, onModelChange }: AIChatProps) {
   const { colorScheme } = useMantineColorScheme();
   const isDark = colorScheme === 'dark';
   const { user } = useAuth();
@@ -131,21 +132,27 @@ export default function AIChat({ model }: AIChatProps) {
       case 'perplexity-sonar': 
         return localStorage.getItem('use_sonar_pro') === 'true' ? 'Sonar Pro' : 'Sonar';
       case 'deepseek-r1': return 'DeepSeek R1';
-      case 'gpt-o3-mini': return 'GPT-o3 Mini';
+      case 'gpt-o3-mini': return 'GPT o3 mini';
       case 'deepseek-v3': return 'DeepSeek V3';
       default: return 'AI Assistant';
     }
   };
 
-  // Get model color for UI elements
+  // Get model color for UI elements and dot color
   const getModelColor = () => {
     switch(model) {
-      case 'perplexity-sonar': return '#5282FF';
-      case 'deepseek-r1': return '#FA5252';
-      case 'gpt-o3-mini': return '#FFA94D';
-      case 'deepseek-v3': return '#FF3366';
+      case 'gpt4o': return '#CCCCCC'; // Light grey for GPT-4o
+      case 'perplexity-sonar': return '#3B82F6'; // Blue for Sonar
+      case 'deepseek-r1': return '#7F56D9'; // Purple for DeepSeek R1
+      case 'gpt-o3-mini': return '#FFA94D'; // Orange for GPT o3 mini
+      case 'deepseek-v3': return '#10B981'; // Green for DeepSeek V3
       default: return '#20C997';
     }
+  };
+
+  // Check if model has a PRO badge
+  const hasProBadge = (modelName: AIModel) => {
+    return ['gpt4o'].includes(modelName);
   };
 
   // Get model description for UI
@@ -187,9 +194,9 @@ export default function AIChat({ model }: AIChatProps) {
           <Group>
             <Avatar size="sm" radius="xl" color={
               model === 'perplexity-sonar' ? 'blue' : 
-              model === 'deepseek-r1' ? 'red' : 
+              model === 'deepseek-r1' ? 'violet' : 
               model === 'gpt-o3-mini' ? 'orange' : 
-              model === 'deepseek-v3' ? 'grape' : 'teal'
+              model === 'deepseek-v3' ? 'teal' : 'gray'
             } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
               {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
             </Avatar>
@@ -199,9 +206,9 @@ export default function AIChat({ model }: AIChatProps) {
                 <Badge 
                   color={
                     model === 'perplexity-sonar' ? 'blue' : 
-                    model === 'deepseek-r1' ? 'red' : 
+                    model === 'deepseek-r1' ? 'violet' : 
                     model === 'gpt-o3-mini' ? 'orange' : 
-                    model === 'deepseek-v3' ? 'grape' : 'teal'
+                    model === 'deepseek-v3' ? 'teal' : 'gray'
                   }
                   variant="light"
                   size="xs"
@@ -213,24 +220,10 @@ export default function AIChat({ model }: AIChatProps) {
               <Text size="xs" c="dimmed">Powered by {
                 model === 'perplexity-sonar' ? 'Perplexity' : 
                 model === 'deepseek-r1' ? 'DeepSeek' : 
-                model === 'deepseek-v3' ? 'DeepSeek' : 
-                model.includes('claude') ? 'Anthropic' : 'OpenAI'
+                model === 'deepseek-v3' ? 'DeepSeek' : 'OpenAI'
               }</Text>
             </div>
           </Group>
-          
-          <Tooltip label="Clear conversation">
-            <ActionIcon
-              variant="subtle"
-              size="md"
-              radius="md"
-              color="gray"
-              onClick={() => useStore.getState().clearMessages()}
-              disabled={messages.length === 0}
-            >
-              <IconEraser size={18} />
-            </ActionIcon>
-          </Tooltip>
         </Group>
       </Box>
       
@@ -417,7 +410,10 @@ export default function AIChat({ model }: AIChatProps) {
                       size="sm" 
                       radius="xl" 
                       bg={msg.role === 'assistant' 
-                        ? (model === 'perplexity-sonar' ? 'blue.6' : model === 'deepseek-r1' ? 'red.6' : 'teal.6') 
+                        ? (model === 'perplexity-sonar' ? 'blue.6' : 
+                           model === 'deepseek-r1' ? 'violet.6' : 
+                           model === 'gpt-o3-mini' ? 'orange.6' :
+                           model === 'deepseek-v3' ? 'teal.6' : 'gray.6') 
                         : (isDark ? 'blue.7' : 'blue.5')}
                       style={{ 
                         boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
@@ -428,7 +424,10 @@ export default function AIChat({ model }: AIChatProps) {
                         : <IconUser size={14} />}
                     </Avatar>
                     <Text fw={600} size="sm" c={msg.role === 'assistant' 
-                      ? (model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5') 
+                      ? (model === 'perplexity-sonar' ? 'blue.5' : 
+                         model === 'deepseek-r1' ? 'violet.5' : 
+                         model === 'gpt-o3-mini' ? 'orange.5' :
+                         model === 'deepseek-v3' ? 'teal.5' : 'gray.5') 
                       : (isDark ? 'blue.4' : 'blue.6')}>
                       {msg.role === 'assistant' 
                         ? getModelDisplayName()
@@ -481,12 +480,18 @@ export default function AIChat({ model }: AIChatProps) {
                     <Avatar 
                       size="sm" 
                       radius="xl" 
-                      bg={model === 'perplexity-sonar' ? 'blue.6' : model === 'deepseek-r1' ? 'red.6' : 'teal.6'} 
+                      bg={model === 'perplexity-sonar' ? 'blue.6' : 
+                         model === 'deepseek-r1' ? 'violet.6' : 
+                         model === 'gpt-o3-mini' ? 'orange.6' :
+                         model === 'deepseek-v3' ? 'teal.6' : 'gray.6'} 
                       style={{ boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)' }}
                     >
                       {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
                     </Avatar>
-                    <Text fw={600} size="sm" c={model === 'perplexity-sonar' ? 'blue.5' : model === 'deepseek-r1' ? 'red.5' : 'teal.5'}>
+                    <Text fw={600} size="sm" c={model === 'perplexity-sonar' ? 'blue.5' : 
+                         model === 'deepseek-r1' ? 'violet.5' : 
+                         model === 'gpt-o3-mini' ? 'orange.5' :
+                         model === 'deepseek-v3' ? 'teal.5' : 'gray.5'}>
                       {getModelDisplayName()}
                     </Text>
                   </Group>
@@ -503,7 +508,10 @@ export default function AIChat({ model }: AIChatProps) {
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Loader color={model === 'perplexity-sonar' ? "blue" : model === 'deepseek-r1' ? 'red' : 'teal'} size="sm" />
+                      <Loader color={model === 'perplexity-sonar' ? "blue" : 
+                         model === 'deepseek-r1' ? 'violet' : 
+                         model === 'gpt-o3-mini' ? 'orange' :
+                         model === 'deepseek-v3' ? 'teal' : 'gray'} size="sm" />
                       <Text size="xs" c="dimmed" style={{ animation: 'pulse 2s infinite' }}>
                         {model === 'perplexity-sonar' ? 'Searching...' : model === 'deepseek-r1' ? 'Analyzing...' : 'Thinking...'}
                       </Text>
@@ -530,6 +538,150 @@ export default function AIChat({ model }: AIChatProps) {
         }}
       >
         <Group align="flex-end" gap="sm">
+          <Popover width={320} position="top" withArrow shadow="md">
+            <Popover.Target>
+              <Button 
+                variant="subtle" 
+                size="sm" 
+                color={isDark ? "gray.4" : "gray.7"}
+                leftSection={
+                  <div style={{ 
+                    width: 10, 
+                    height: 10, 
+                    borderRadius: '50%',
+                    backgroundColor: getModelColor(),
+                    marginRight: -5
+                  }} />
+                }
+                rightSection={<IconArrowRight size={14} style={{ transform: 'rotate(90deg)' }} />}
+                styles={{
+                  root: {
+                    padding: '8px 12px',
+                    border: `1px solid ${isDark ? 'rgba(44, 46, 51, 0.8)' : '#dee2e6'}`,
+                    backgroundColor: isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(255, 255, 255, 0.7)',
+                  },
+                  section: { marginRight: 6 }
+                }}
+              >
+                {getModelDisplayName()}
+              </Button>
+            </Popover.Target>
+            <Popover.Dropdown 
+              style={{ 
+                backgroundColor: isDark ? '#25262B' : '#fff',
+                border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+                padding: '8px 0'
+              }}
+            >
+              <Stack gap={0}>
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
+                      backgroundColor: '#CCCCCC', // Light grey
+                      marginRight: 5
+                    }} />
+                  }
+                  rightSection={
+                    hasProBadge('gpt4o') && (
+                      <Badge size="xs" color="blue" variant="filled">PRO</Badge>
+                    )
+                  }
+                  onClick={() => onModelChange && onModelChange('gpt4o')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  GPT-4o
+                </Button>
+                
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
+                      backgroundColor: '#FFA94D', // Orange
+                      marginRight: 5
+                    }} />
+                  }
+                  onClick={() => onModelChange && onModelChange('gpt-o3-mini')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  GPT o3 mini
+                </Button>
+                
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
+                      backgroundColor: '#3B82F6', // Blue
+                      marginRight: 5
+                    }} />
+                  }
+                  onClick={() => onModelChange && onModelChange('perplexity-sonar')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  Sonar
+                </Button>
+                
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
+                      backgroundColor: '#10B981', // Green
+                      marginRight: 5
+                    }} />
+                  }
+                  onClick={() => onModelChange && onModelChange('deepseek-v3')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  DeepSeek V3
+                </Button>
+                
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
+                      backgroundColor: '#7F56D9', // Purple
+                      marginRight: 5
+                    }} />
+                  }
+                  onClick={() => onModelChange && onModelChange('deepseek-r1')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  DeepSeek R1
+                </Button>
+              </Stack>
+            </Popover.Dropdown>
+          </Popover>
+          
           <Textarea
             key={`textarea-input-${isLoading ? 'loading' : 'ready'}`}
             ref={inputRef}
@@ -560,7 +712,10 @@ export default function AIChat({ model }: AIChatProps) {
             disabled={isLoading}
           />
           <Button
-            color={model === 'perplexity-sonar' ? "blue" : model === 'deepseek-r1' ? 'red' : 'teal'}
+            color={model === 'perplexity-sonar' ? "blue" : 
+                  model === 'deepseek-r1' ? 'violet' : 
+                  model === 'gpt-o3-mini' ? 'orange' :
+                  model === 'deepseek-v3' ? 'teal' : 'gray'}
             type="submit"
             style={{ 
               height: '44px', 
