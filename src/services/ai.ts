@@ -1739,8 +1739,8 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
  * This function intelligently determines if the query is task-related or a general question
  * and responds accordingly without requiring explicit mode switching
  */
-export async function getAIResponse(message: string, userId: string): Promise<string> {
-  console.log(`Processing AI response with message: ${message}`);
+export async function getAIResponse(message: string, userId: string, mode: 'chat' | 'agent' = 'chat'): Promise<string> {
+  console.log(`Processing AI response with message: ${message}, mode: ${mode}`);
   try {
     const taskStore = useStore.getState();
     console.log("taskStore available:", !!taskStore);
@@ -1752,59 +1752,63 @@ export async function getAIResponse(message: string, userId: string): Promise<st
     const normalizedMessage = message.toLowerCase().trim();
     console.log("Processing normalized message:", normalizedMessage);
     
-    // Use AI-based classification to determine if this is a task-related query
-    const openai = await getOpenAIClient();
-    
-    // Get comprehensive classification using AI understanding
-    const classificationResponse = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { 
-          role: 'system', 
-          content: `You are a classifier that determines if a message is related to task management or a general knowledge question.
-
-Task management queries are about:
-- Creating, updating, managing, or deleting user's personal tasks or to-dos
-- Checking, listing, viewing, or organizing a user's personal tasks
-- Setting deadlines, priorities, or modifying task attributes
-- Completing user's tasks or marking them as done
-- Any query that asks you to interact with the user's task management system
-
-General knowledge queries include:
-- Factual questions about the world, history, science, geography
-- Questions about concepts, ideas, places, or things
-- Requests for help that don't involve managing the user's tasks
-- Queries seeking information or explanations on any topic
-- Any question about facts, events, people, or knowledge not related to the user's personal tasks
-
-Based on true AI understanding of language, determine the user's intent.
-Respond with ONLY ONE WORD: "TASK" or "GENERAL"` 
-        },
-        { role: 'user', content: message }
-      ],
-      temperature: 0.1,
-      max_tokens: 10
-    });
-    
-    const classification = classificationResponse.choices[0].message.content?.trim().toUpperCase();
-    console.log("AI classification result:", classification);
-    
-    // Process based on classification
-    if (classification === 'TASK') {
-      // If classified as task-related, use task processing
-      console.log("AI classified as task-related, using task processing");
+    // In Agent mode, only allow task-related operations
+    if (mode === 'agent') {
+      console.log("Using Agent mode - only task operations allowed");
       return await processAITaskQuery(message, taskStore);
-    } else {
-      // If general knowledge question, use model-specific response
-      console.log("AI classified as general knowledge, using general response");
+    }
+    
+    // In Chat mode, allow discussion of tasks but not task execution
+    if (mode === 'chat') {
+      const openai = await getOpenAIClient();
       
+      // Check if this is an actual task management operation vs. just discussing tasks
+      const operationCheckResponse = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { 
+            role: 'system', 
+            content: `You classify user messages into two categories: TASK_OPERATION or TASK_DISCUSSION.
+
+TASK_OPERATION messages explicitly ask to:
+- Create, add, or set up a new task or to-do
+- Delete or remove a task
+- Update, change, or modify an existing task
+- Mark a task as done or complete
+- List all tasks or show tasks (when referring to the user's personal task list)
+- Any direct command to manipulate the user's task management system
+
+TASK_DISCUSSION messages include:
+- Questions about specific tasks without asking to modify them
+- Asking for advice, ideas, or help with completing tasks
+- Discussion about how to approach tasks
+- Informational questions about tasks
+- Any conversation about tasks that doesn't direct the system to change them
+
+Respond with ONLY ONE WORD: "TASK_OPERATION" or "TASK_DISCUSSION"` 
+          },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.1,
+        max_tokens: 15
+      });
+      
+      const operationType = operationCheckResponse.choices[0].message.content?.trim().toUpperCase();
+      console.log("Message classified as:", operationType);
+      
+      // If this is a task operation in Chat mode, respond with an informative message
+      if (operationType === 'TASK_OPERATION') {
+        console.log("Task operation detected in Chat mode - providing information message");
+        return "I can see you're trying to modify your tasks. Please switch to Agent mode to perform task operations. In Chat mode, I can discuss tasks and give advice, but cannot modify your task list.";
+      }
+      
+      // For task discussions or general questions, provide helpful information
       // Handle based on selected model
       if (currentModel === 'perplexity-sonar') {
         return await callPerplexityAPI(message);
       } else if (currentModel === 'deepseek-r1') {
         return await callDeepSeekAPI(message);
       } else if (currentModel === 'deepseek-v3') {
-        // For DeepSeek V3, use the same API implementation as R1 but with a flag
         return await callDeepSeekAPI(message, true); // Pass true to indicate V3
       } else {
         // For GPT-4o or GPT-o3 Mini models, use general conversation
@@ -1812,7 +1816,8 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         
         // Create messages array with system prompt and history
         const messages = [
-          { role: 'system' as const, content: "You are a helpful and friendly assistant. Be concise and to the point." },
+          // Include special system prompt for task discussions
+          { role: 'system' as const, content: "You are a helpful and friendly assistant. You can discuss tasks and offer advice about them, but you cannot create, modify or complete tasks directly. Be concise and to the point." },
           ...history,
           { role: 'user' as const, content: message }
         ];
@@ -1837,6 +1842,9 @@ Respond with ONLY ONE WORD: "TASK" or "GENERAL"`
         return responseContent;
       }
     }
+    
+    // Default return if we somehow get here (though with the current logic we won't)
+    return "I'm not sure how to respond in the current mode. Please try again.";
   } catch (error) {
     console.error("Error in getAIResponse:", error);
     return "I encountered an error. Please try again later.";
@@ -1853,7 +1861,32 @@ export async function processAITaskQuery(message: string, taskStore: TaskStoreTy
   console.log("taskStore methods:", Object.keys(taskStore || {}));
   
   try {
-    // First check for direct command patterns for bulk operations
+    // First check if this is actually a task-related query
+    const openai = await getOpenAIClient();
+    
+    // Check if this is actually a task query
+    const checkTaskIntent = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { 
+          role: 'system', 
+          content: `You are a classifier that determines if a message is related to task management or a general knowledge question.
+Return ONLY ONE WORD: "TASK" or "GENERAL"` 
+        },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.1,
+      max_tokens: 10
+    });
+    
+    const classification = checkTaskIntent.choices[0].message.content?.trim().toUpperCase();
+    
+    // If we're in Agent mode and this is not a task, return a helpful message
+    if (classification === 'GENERAL') {
+      return "I'm currently in Agent mode, which means I can only help with task management. Please ask me about your tasks, or switch to Chat mode if you want to ask general questions.";
+    }
+    
+    // The rest of the original function...
     const normalizedMessage = message.toLowerCase().trim();
     
     // Add special handler for "move task X and Y to date" pattern

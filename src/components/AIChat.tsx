@@ -20,12 +20,11 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingReasoning, setLoadingReasoning] = useState<string[]>([]);
+  const [mode, setMode] = useState<'agent' | 'chat'>('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { messages, addMessage, addTask } = useStore();
 
-  // Remove keyboard shortcut for mode switching since we no longer have modes
-  
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -63,6 +62,17 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     scrollToBottom();
   }, [messages, loadingReasoning]);
 
+  // Add effect to handle mode changes
+  useEffect(() => {
+    // This effect runs whenever the mode changes
+    console.log(`Mode changed to: ${mode}`);
+    
+    // Focus the input when mode changes
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [mode]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (isLoading || !input.trim()) return;
@@ -97,7 +107,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       // Use the user ID from auth context, or fall back to default
       const userID = userId || "user123";
       console.log(`Processing message with input: ${currentInput}`);
-      const response = await getAIResponse(currentInput, userID);
+      
+      // Pass the current mode to getAIResponse
+      const response = await getAIResponse(currentInput, userID, mode);
       console.log("AI response received:", response);
 
       // Add AI response to store
@@ -198,31 +210,63 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
               model === 'gpt-o3-mini' ? 'orange' : 
               model === 'deepseek-v3' ? 'teal' : 'gray'
             } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
-              {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
+              {model === 'perplexity-sonar' ? <IconSearch size={18} /> : <IconRobot size={18} />}
             </Avatar>
             <div>
-              <Group gap={8}>
-                <Text size="sm" fw={600} c={isDark ? undefined : "gray.7"}>{getModelDisplayName()}</Text>
+              <Group gap={4} align="center">
+                <Text fw={700} size="sm" style={{ lineHeight: 1.2 }}>{getModelDisplayName()}</Text>
                 <Badge 
-                  color={
-                    model === 'perplexity-sonar' ? 'blue' : 
-                    model === 'deepseek-r1' ? 'violet' : 
-                    model === 'gpt-o3-mini' ? 'orange' : 
-                    model === 'deepseek-v3' ? 'teal' : 'gray'
-                  }
-                  variant="light"
-                  size="xs"
-                  radius="sm"
+                  size="xs" 
+                  variant="light" 
+                  color={mode === 'agent' ? 'orange' : 'blue'}
                 >
-                  {getModelDescription()}
+                  {mode === 'agent' ? 'Agent' : 'Chat'}
                 </Badge>
               </Group>
-              <Text size="xs" c="dimmed">Powered by {
-                model === 'perplexity-sonar' ? 'Perplexity' : 
-                model === 'deepseek-r1' ? 'DeepSeek' : 
-                model === 'deepseek-v3' ? 'DeepSeek' : 'OpenAI'
-              }</Text>
+              <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>{getModelDescription()}</Text>
             </div>
+          </Group>
+          
+          {/* Add SegmentedControl for Chat/Agent mode toggle */}
+          <Group>
+            <SegmentedControl
+              data={[
+                { 
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <IconMessage size={16} />
+                      <Text size="xs">Chat</Text>
+                    </Group>
+                  ), 
+                  value: 'chat' 
+                },
+                { 
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <IconList size={16} />
+                      <Text size="xs">Agent</Text>
+                    </Group>
+                  ), 
+                  value: 'agent' 
+                }
+              ]}
+              value={mode}
+              onChange={(value) => setMode(value as 'chat' | 'agent')}
+              size="xs"
+              radius="xl"
+              styles={{
+                root: {
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                  backgroundColor: isDark ? 'rgba(37, 38, 43, 0.8)' : 'rgba(255, 255, 255, 0.7)',
+                },
+                indicator: {
+                  backgroundColor: isDark ? 'rgba(44, 46, 51, 0.9)' : 'white',
+                },
+                label: {
+                  padding: '4px 12px',
+                }
+              }}
+            />
           </Group>
         </Group>
       </Box>
@@ -275,6 +319,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                 
                 <Text size="sm" c={isDark ? "dimmed" : "gray.6"} ta="center" mb="sm" maw={450} style={{ lineHeight: 1.5 }}>
                   Type a message to start a conversation.
+                  Use the toggle above to switch between <b>Chat</b> mode for general questions and task discussions, or <b>Agent</b> mode for task management operations.
                 </Text>
                 
                 <Box mb="sm" w="100%">
@@ -283,74 +328,151 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                   </Group>
                   
                   <Stack gap="xs">
-                    <Button 
-                      variant="outline" 
-                      color="gray" 
-                      onClick={() => setInput("What's the best way to learn programming?")}
-                      fullWidth
-                      h={36}
-                      styles={{
-                        root: {
-                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                          color: isDark ? 'white' : 'black',
-                          '&:hover': {
-                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                          },
-                          marginBottom: '4px'
-                        },
-                        inner: {
-                          justifyContent: 'flex-start',
-                          fontSize: '13px'
-                        }
-                      }}
-                    >
-                      What's the best way to learn programming?
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      color="gray" 
-                      onClick={() => setInput("Create a task for buying groceries tomorrow")}
-                      fullWidth
-                      h={36}
-                      styles={{
-                        root: {
-                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                          color: isDark ? 'white' : 'black',
-                          '&:hover': {
-                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                          },
-                          marginBottom: '4px'
-                        },
-                        inner: {
-                          justifyContent: 'flex-start',
-                          fontSize: '13px'
-                        }
-                      }}
-                    >
-                      Create a task for buying groceries tomorrow
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      color="gray" 
-                      onClick={() => setInput("What tasks do I have this week?")}
-                      fullWidth
-                      h={36}
-                      styles={{
-                        root: {
-                          border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
-                          color: isDark ? 'white' : 'black',
-                          '&:hover': {
-                            backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
-                          }
-                        },
-                        inner: {
-                          justifyContent: 'flex-start',
-                          fontSize: '13px'
-                        }
-                      }}
-                    >
-                      What tasks do I have this week?
-                    </Button>
+                    {mode === 'agent' ? (
+                      // Agent mode examples
+                      <>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Create a task for buying groceries tomorrow")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              },
+                              marginBottom: '4px'
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          Create a task for buying groceries tomorrow
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("What tasks do I have this week?")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              },
+                              marginBottom: '4px'
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          What tasks do I have this week?
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Mark task 1 as completed")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          Mark task 1 as completed
+                        </Button>
+                      </>
+                    ) : (
+                      // Chat mode examples
+                      <>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("What's the best way to learn programming?")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              },
+                              marginBottom: '4px'
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          What's the best way to learn programming?
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Can you explain how blockchain works?")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              },
+                              marginBottom: '4px'
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          Can you explain how blockchain works?
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Give me some tips for effective note-taking")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              }
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          Give me some tips for effective note-taking
+                        </Button>
+                      </>
+                    )}
                   </Stack>
                 </Box>
                 
@@ -371,11 +493,11 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                   </Box>
                   <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
-                    <Text size="xs" c="dimmed">Creates and manages tasks</Text>
+                    <Text size="xs" c="dimmed">{mode === 'agent' ? 'Manages tasks & to-dos' : 'Can discuss tasks, but not modify them'}</Text>
                   </Box>
                   <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
-                    <Text size="xs" c="dimmed">Answers general questions</Text>
+                    <Text size="xs" c="dimmed">{mode === 'agent' ? 'Task operations only' : 'Answers general questions'}</Text>
                   </Box>
                   <Box style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                     <IconBulb size={14} stroke={1.5} color={isDark ? '#909296' : '#868e96'} style={{ marginTop: 2 }} />
@@ -685,7 +807,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
           <Textarea
             key={`textarea-input-${isLoading ? 'loading' : 'ready'}`}
             ref={inputRef}
-            placeholder="Ask me anything or tell me about your tasks..."
+            placeholder={mode === 'agent' 
+              ? "Tell me about your tasks or ask me to manage them..." 
+              : "Ask me anything, including questions about your tasks..."}
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
             onKeyDown={handleInputKeyDown}
@@ -704,18 +828,20 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                 boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
                 backdropFilter: 'blur(8px)',
                 '&:focus': {
-                  borderColor: getModelColor(),
-                  boxShadow: `0 0 0 1px ${getModelColor()}20`
+                  borderColor: mode === 'agent' ? '#fd7e14' : getModelColor(),
+                  boxShadow: `0 0 0 1px ${mode === 'agent' ? '#fd7e1420' : getModelColor() + '20'}`
                 }
               }
             }}
             disabled={isLoading}
           />
           <Button
-            color={model === 'perplexity-sonar' ? "blue" : 
-                  model === 'deepseek-r1' ? 'violet' : 
-                  model === 'gpt-o3-mini' ? 'orange' :
-                  model === 'deepseek-v3' ? 'teal' : 'gray'}
+            color={mode === 'agent' ? "orange" : (
+              model === 'perplexity-sonar' ? "blue" : 
+              model === 'deepseek-r1' ? 'violet' : 
+              model === 'gpt-o3-mini' ? 'orange' :
+              model === 'deepseek-v3' ? 'teal' : 'gray'
+            )}
             type="submit"
             style={{ 
               height: '44px', 
