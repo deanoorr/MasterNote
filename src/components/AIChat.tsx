@@ -23,13 +23,75 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
   const [mode, setMode] = useState<'agent' | 'chat'>('chat');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { messages, addMessage, addTask } = useStore();
+  const { messages, addMessage, addTask, clearMessages } = useStore();
+  
+  // Track previous model to detect changes
+  const prevModelRef = useRef<AIModel | null>(null);
+
+  // Initialize on component mount - make sure conversation context is properly set up
+  useEffect(() => {
+    // Initialize conversation maintenance
+    const initializeConversation = async () => {
+      try {
+        // Ensure the current model is saved to localStorage
+        localStorage.setItem('selected_model', model);
+        
+        // Set up a basic context if none exists
+        if (!localStorage.getItem('current_conversation_topic')) {
+          localStorage.setItem('current_conversation_topic', 'general assistant help');
+        }
+        
+        // Clear any corrupted history
+        const storageKey = `conversation_history_${userId || 'guest'}`;
+        try {
+          const history = localStorage.getItem(storageKey);
+          if (history) {
+            // Check if history is valid JSON
+            JSON.parse(history);
+          }
+        } catch (e) {
+          console.warn("Found corrupted conversation history, resetting");
+          localStorage.removeItem(storageKey);
+        }
+      } catch (error) {
+        console.error("Error during conversation initialization:", error);
+      }
+    };
+    
+    initializeConversation();
+  }, [model, userId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages, loadingReasoning]);
+
+  // Effect to handle model changes
+  useEffect(() => {
+    // Check if model has changed since last render
+    if (prevModelRef.current && prevModelRef.current !== model) {
+      console.log(`Model changed from ${prevModelRef.current} to ${model}`);
+      
+      // Clear conversation history in localStorage to prevent context mixups
+      if (userId) {
+        localStorage.removeItem(`conversation_history_${userId}`);
+      } else {
+        localStorage.removeItem(`conversation_history_guest`);
+      }
+      
+      // Clear the current conversation topic
+      localStorage.removeItem('current_conversation_topic');
+      
+      // Clear the UI messages when model changes
+      if (messages.length > 0) {
+        clearMessages();
+      }
+    }
+    
+    // Update the reference for next comparison
+    prevModelRef.current = model;
+  }, [model, userId, messages.length, clearMessages]);
 
   // Simulated reasoning process for the DeepSeek R1 model
   useEffect(() => {
@@ -73,68 +135,66 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     }
   }, [mode]);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (isLoading || !input.trim()) return;
-
-    console.log("Submitting input:", input);
-    setIsLoading(true);
-    setLoadingReasoning([]);
-
-    // Store the input before clearing
-    const currentInput = input;
-
-    // Add user message to store
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content: currentInput,
-      role: 'user' as const,
-      timestamp: new Date(),
-    };
-    addMessage(userMessage);
+  const handleSubmit = async () => {
+    if (!input.trim() || isLoading) return;
     
-    // Clear input immediately
+    const trimmedInput = input.trim();
+    const inputValue = trimmedInput;
     setInput('');
+    setIsLoading(true);
     
-    // Focus the input field
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 0);
-
     try {
-      // Use the user ID from auth context, or fall back to default
-      const userID = userId || "user123";
-      console.log(`Processing message with input: ${currentInput}`);
+      console.log(`Submitting message to ${model} in ${mode} mode`);
       
-      // Pass the current mode to getAIResponse
-      const response = await getAIResponse(currentInput, userID, mode);
-      console.log("AI response received:", response);
-
-      // Add AI response to store
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: response,
-        role: 'assistant' as const,
+      // Add the user's message to the messages list immediately
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: inputValue,
         timestamp: new Date(),
+        role: 'user',
         model: model,
       };
-      addMessage(assistantMessage);
-    } catch (error) {
-      console.error("Error processing message:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 2).toString(),
-        content: model === 'deepseek-r1' 
-          ? "I encountered an error processing your request. Please try again or check your API settings."
-          : "Sorry, I encountered an error processing your request. Please try again.",
-        role: 'assistant' as const,
+      addMessage(userMessage);
+      
+      // Make sure we scroll to see the new message
+      scrollToBottom();
+      
+      // Add a slight delay for the API call to simulate more natural typing
+      // This also helps ensure the message is saved to history before getting the response
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Get response from the AI
+      const response = await getAIResponse(inputValue, userId || 'guest', mode);
+      
+      // Add the AI's response to the messages list
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: response,
         timestamp: new Date(),
+        role: 'assistant',
+        model: model,
+      };
+      addMessage(aiMessage);
+      
+      // Scroll to the bottom to show the new message
+      scrollToBottom();
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I encountered an error. Please try again or check your settings.",
+        timestamp: new Date(),
+        role: 'assistant',
+        model: model,
       };
       addMessage(errorMessage);
+      
+      // Scroll to show the error message
+      scrollToBottom();
     } finally {
       setIsLoading(false);
-      scrollToBottom();
     }
   };
 

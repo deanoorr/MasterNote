@@ -186,10 +186,24 @@ function AppContent() {
   // Save the selected model to localStorage whenever it changes
   const saveModelToStorage = useCallback((model: AIModel) => {
     localStorage.setItem('selected_model', model);
+    
+    // Clear conversation history when model changes to prevent context mixups
+    try {
+      // Clear for guest user (used when not logged in)
+      localStorage.removeItem('conversation_history_guest');
+      
+      // Clear for logged in user if available
+      if (user?.id) {
+        localStorage.removeItem(`conversation_history_${user.id}`);
+      }
+    } catch (error) {
+      console.error("Error clearing conversation history during model change:", error);
+    }
+    
     if (process.env.NODE_ENV === 'development') {
       console.log('Saved model to localStorage:', model);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     saveModelToStorage(selectedModel);

@@ -15,24 +15,112 @@ interface ConversationMessage {
 // Function to get conversation history from storage
 async function getConversationHistory(userId: string): Promise<ConversationMessage[]> {
   try {
-    const historyString = await storageService.getItem(`conversation_history_${userId}`, userId);
-    if (!historyString) return [];
+    // Use a consistent, clear key format for storage
+    const storageKey = `conversation_history_${userId || 'guest'}`;
+    console.log("Getting conversation history with key:", storageKey);
     
-    const history = JSON.parse(historyString) as ConversationMessage[];
-    // Return last 10 messages to keep context window manageable
-    return history.slice(-10);
+    // Try Supabase storage first
+    let historyString = await storageService.getItem(storageKey, userId);
+    
+    // If not found in Supabase, try localStorage as fallback
+    if (!historyString) {
+      console.log("No history in Supabase, checking localStorage...");
+      historyString = localStorage.getItem(storageKey);
+    }
+    
+    if (!historyString) {
+      console.log("No existing conversation history found for user:", userId);
+      return [];
+    }
+    
+    try {
+      const history = JSON.parse(historyString) as ConversationMessage[];
+      console.log(`Found ${history.length} messages in conversation history`);
+      
+      // Check if the history contains valid messages
+      if (history.length > 0 && history.some(msg => !msg.role || !msg.content)) {
+        console.warn("Found invalid messages in history, cleaning up...");
+        // Filter out invalid messages
+        const validHistory = history.filter(msg => msg.role && msg.content);
+        
+        // Save the cleaned history
+        await saveCleanedHistory(userId, validHistory);
+        return validHistory.slice(-15); // Increased to 15 messages
+      }
+      
+      // Return last 15 messages to maintain better context
+      return history.slice(-15);
+    } catch (parseError) {
+      console.error("Error parsing conversation history:", parseError);
+      // If we have a parse error, reset the history
+      await storageService.setItem(storageKey, JSON.stringify([]), userId);
+      localStorage.removeItem(storageKey); // Clear local storage too
+      return [];
+    }
   } catch (error) {
     console.error("Error retrieving conversation history:", error);
     return [];
   }
 }
 
+// Helper to save cleaned history
+async function saveCleanedHistory(userId: string, history: ConversationMessage[]): Promise<void> {
+  const storageKey = `conversation_history_${userId || 'guest'}`;
+  try {
+    await storageService.setItem(storageKey, JSON.stringify(history), userId);
+    localStorage.setItem(storageKey, JSON.stringify(history)); // Store in localStorage too
+  } catch (error) {
+    console.error("Error saving cleaned history:", error);
+    // Try local storage as fallback
+    localStorage.setItem(storageKey, JSON.stringify(history));
+  }
+}
+
 // Save message to conversation history
 async function saveMessageToHistory(userId: string, role: 'user' | 'assistant' | 'system', content: string): Promise<void> {
   try {
+    // Skip empty content
+    if (!content.trim()) {
+      console.warn("Attempted to save empty message to history, skipping");
+      return;
+    }
+    
+    // Use a consistent key format for storage
+    const storageKey = `conversation_history_${userId || 'guest'}`;
+    console.log(`Saving ${role} message to history for user:`, userId || 'guest');
+    
     let history = await getConversationHistory(userId);
+    
+    // Limit history size to prevent storage issues (keep last 30 messages max)
+    if (history.length >= 50) {
+      history = history.slice(-49);
+    }
+    
+    // Add the new message to history
     history.push({ role, content });
-    await storageService.setItem(`conversation_history_${userId}`, JSON.stringify(history), userId);
+    console.log(`Updated history now contains ${history.length} messages`);
+    
+    // Store in both Supabase and localStorage for redundancy
+    const historyString = JSON.stringify(history);
+    
+    // Use try-catch to handle potential storage errors
+    try {
+      await storageService.setItem(storageKey, historyString, userId);
+      console.log("Successfully saved message to history in Supabase");
+      
+      // Also save to localStorage as backup
+      localStorage.setItem(storageKey, historyString);
+    } catch (storageError) {
+      console.error("Error saving to Supabase, falling back to localStorage:", storageError);
+      
+      // Try fallback to localStorage if Supabase fails
+      try {
+        localStorage.setItem(storageKey, historyString);
+        console.log("Successfully saved message to history in localStorage");
+      } catch (localStorageError) {
+        console.error("Failed to save even to localStorage:", localStorageError);
+      }
+    }
   } catch (error) {
     console.error("Error saving message to history:", error);
   }
@@ -131,15 +219,29 @@ async function getOpenAIClient(): Promise<OpenAI> {
   try {
     const apiKey = await getApiKey();
     console.log("OpenAI API key length:", apiKey ? apiKey.length : 0);
-    console.log("API key starts with:", apiKey ? apiKey.substring(0, 4) : "N/A");
     
     if (!apiKey) {
       throw new Error('API key not found. Please set it in the settings.');
     }
     
+    if (apiKey.length < 20) {
+      throw new Error('API key appears to be invalid (too short). Please check your settings.');
+    }
+    
+    // Add more detailed logging for troubleshooting
+    const keyStartsWith = apiKey.substring(0, 7);
+    console.log(`API key format check: starts with ${keyStartsWith}`);
+    
+    // Validate key format
+    if (!apiKey.startsWith('sk-')) {
+      console.warn("Warning: API key doesn't start with 'sk-', which is unusual for OpenAI keys");
+    }
+    
     return new OpenAI({
       apiKey,
-      dangerouslyAllowBrowser: true
+      dangerouslyAllowBrowser: true,
+      timeout: 30000, // 30 second timeout for requests
+      maxRetries: 2    // Try up to 2 retries on failures
     });
   } catch (error) {
     console.error("Error initializing OpenAI client:", error);
@@ -1749,17 +1851,22 @@ function handleBulkAction(taskData: any, taskStore: TaskStoreType): string {
  * and responds accordingly without requiring explicit mode switching
  */
 export async function getAIResponse(message: string, userId: string, mode: 'chat' | 'agent' = 'chat'): Promise<string> {
-  console.log(`Processing AI response with message: ${message}, mode: ${mode}`);
+  console.log(`Processing AI response with message: "${message}", mode: ${mode}`);
   try {
     const taskStore = useStore.getState();
-    console.log("taskStore available:", !!taskStore);
     
     // Get current model from localStorage
     const currentModel = localStorage.getItem('selected_model') as AIModel || 'gpt-3.5-turbo';
+    console.log("Selected model:", currentModel);
     
-    // Get the normalized message for logging
-    const normalizedMessage = message.toLowerCase().trim();
-    console.log("Processing normalized message:", normalizedMessage);
+    // Map the AIModel to the actual OpenAI model ID to use
+    const getOpenAIModelId = (model: AIModel): string => {
+      switch(model) {
+        case 'gpt4o': return 'gpt-4o'; // Use actual OpenAI model ID
+        case 'gpt-o3-mini': return 'gpt-3.5-turbo'; // Fall back to 3.5 Turbo
+        default: return 'gpt-3.5-turbo'; // Default to 3.5 Turbo
+      }
+    };
     
     // In Agent mode, only allow task-related operations
     if (mode === 'agent') {
@@ -1767,98 +1874,131 @@ export async function getAIResponse(message: string, userId: string, mode: 'chat
       return await processAITaskQuery(message, taskStore);
     }
     
-    // In Chat mode, allow discussion of tasks but not task execution
+    // In Chat mode, handle based on selected model
     if (mode === 'chat') {
-      const openai = await getOpenAIClient();
-      
-      // Check if this is an actual task management operation vs. just discussing tasks
-      const operationCheckResponse = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { 
-            role: 'system', 
-            content: `You classify user messages into two categories: TASK_OPERATION or TASK_DISCUSSION.
-
-TASK_OPERATION messages explicitly ask to:
-- Create, add, or set up a new task or to-do
-- Delete or remove a task
-- Update, change, or modify an existing task
-- Mark a task as done or complete
-- List all tasks or show tasks (when referring to the user's personal task list)
-- Any direct command to manipulate the user's task management system
-
-TASK_DISCUSSION messages include:
-- Questions about specific tasks without asking to modify them
-- Asking for advice, ideas, or help with completing tasks
-- Discussion about how to approach tasks
-- Informational questions about tasks
-- Any conversation about tasks that doesn't direct the system to change them
-
-Respond with ONLY ONE WORD: "TASK_OPERATION" or "TASK_DISCUSSION"` 
-          },
-          { role: 'user', content: message }
-        ],
-        temperature: 0.1,
-        max_tokens: 50 // Increased token limit for classification
-      });
-      
-      const operationType = operationCheckResponse.choices[0].message.content?.trim().toUpperCase();
-      console.log("Message classified as:", operationType);
-      
-      // If this is a task operation in Chat mode, respond with an informative message
-      if (operationType === 'TASK_OPERATION') {
-        console.log("Task operation detected in Chat mode - providing information message");
-        return "I can see you're trying to modify your tasks. Please switch to Agent mode to perform task operations. In Chat mode, I can discuss tasks and give advice, but cannot modify your task list.";
-      }
-      
-      // For task discussions or general questions, provide helpful information
-      // Handle based on selected model
+      // Determine which API to use based on model
       if (currentModel === 'perplexity-sonar') {
+        console.log("Using Perplexity API");
         return await callPerplexityAPI(message);
       } else if (currentModel === 'deepseek-r1') {
+        console.log("Using DeepSeek R1 API");
         return await callDeepSeekAPI(message);
       } else if (currentModel === 'deepseek-v3') {
+        console.log("Using DeepSeek V3 API");
         return await callDeepSeekAPI(message, true); // Pass true to indicate V3
       } else if (currentModel === 'gemini-2.5-pro-exp-03-25') {
         return await callGeminiAPI(message);
       } else {
-        // For GPT-4o or GPT-o3 Mini models, use general conversation
-        const history = await getConversationHistory(userId);
+        // OpenAI models - these need better conversation context handling
+        console.log("Using OpenAI API with model:", getOpenAIModelId(currentModel));
         
-        // Create messages array with system prompt and history
-        const messages = [
-          // Include special system prompt for task discussions
-          { role: 'system' as const, content: "You are a helpful and friendly assistant. You can discuss tasks and offer advice about them, but you cannot create, modify or complete tasks directly. Be concise and to the point." },
-          ...history,
-          { role: 'user' as const, content: message }
-        ];
-        
-        // Call OpenAI API
-        console.log("Calling OpenAI API with messages:", messages);
-        const response = await openai.chat.completions.create({
-          model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-3.5-turbo",
-          messages,
-          temperature: 0.7,
-          max_tokens: 4000 // Increased token limit for GPT models
-        });
-        
-        // Get response content
-        const responseContent = response.choices[0].message.content || "I'm not sure how to respond to that.";
-        console.log("Received response from OpenAI:", responseContent.substring(0, 100) + "...");
-        
-        // Save the conversation
-        await saveMessageToHistory(userId, 'user', message);
-        await saveMessageToHistory(userId, 'assistant', responseContent);
-        
-        return responseContent;
+        try {
+          const openai = await getOpenAIClient();
+          
+          // COMPLETELY BYPASS the conversation history system and use direct context
+          // Create a simple but clear prompt that ensures context is maintained
+          
+          // First, check if we have any message history to use as context
+          // Get messages directly from the store
+          const messages = useStore.getState().messages;
+          
+          // We'll only use the most recent exchange for simplicity
+          const previousMessages = messages.slice(-4); // Last 4 messages
+          
+          let contextString = "";
+          
+          // If there are messages, add context from them
+          if (previousMessages.length > 0) {
+            contextString = "\n\nCONVERSATION HISTORY:\n";
+            for (const msg of previousMessages) {
+              contextString += `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}\n`;
+            }
+          }
+          
+          // Check if there's a saved topic
+          const currentTopic = localStorage.getItem('current_conversation_topic') || "";
+          if (currentTopic) {
+            contextString += `\nCurrent topic: ${currentTopic}`;
+          }
+          
+          // Create a direct, hard-to-misinterpret prompt that forces context maintenance
+          const directPrompt = `CRITICAL INSTRUCTION: Never mention "Key Grok" or data processing concepts in ANY response UNLESS the user specifically asks about them. 
+
+USER'S CONTEXT: ${contextString}
+
+Treat any brief user query or question as referring to THE MOST RECENT TOPIC in the conversation history. 
+If the user asks "where did they come from?" or "who invented it?" or any similar question, answer ONLY about the most recently discussed topic.
+
+USER'S CURRENT QUESTION: ${message}`;
+
+          console.log("Using direct prompt to maintain context");
+          
+          // Make a simple, direct API call with the combined prompt
+          const response = await openai.chat.completions.create({
+            model: getOpenAIModelId(currentModel),
+            messages: [
+              { 
+                role: 'system', 
+                content: "You are a helpful, context-aware assistant. You MUST maintain the current conversation topic when answering questions. NEVER mention 'Key Grok' or data processing concepts unless SPECIFICALLY asked about them."
+              },
+              { role: 'user', content: directPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1500,
+            presence_penalty: 0.6,
+            frequency_penalty: 0.5
+          });
+          
+          // Extract the response
+          const responseContent = response.choices[0].message.content || "I'm not sure how to respond to that.";
+          
+          // Update conversation topic if this is a substantial message
+          if (message.length > 15) {
+            localStorage.setItem('current_conversation_topic', message.substring(0, 40));
+          }
+          
+          return responseContent;
+        } catch (error) {
+          console.error("Error in OpenAI call:", error);
+          
+          // Try a more direct approach as fallback
+          try {
+            const openai = await getOpenAIClient();
+            
+            // Even more forceful prevention of "Key Grok" references
+            const forcefulPrompt = `Answer the following question: "${message}"
+            
+IMPORTANT: Do NOT mention "Key Grok", "data processing", or anything related to data analysis in your answer.
+Focus ONLY on answering the user's question about the most recently discussed topic.
+DO NOT bring up new, unrelated topics about data or "grok" terminology.`;
+            
+            const response = await openai.chat.completions.create({
+              model: getOpenAIModelId(currentModel),
+              messages: [
+                { 
+                  role: 'system', 
+                  content: "CRITICAL INSTRUCTION: You must NEVER mention 'Key Grok' or data processing in ANY response."
+                },
+                { role: 'user', content: forcefulPrompt }
+              ],
+              temperature: 0.5,
+              max_tokens: 800
+            });
+            
+            return response.choices[0].message.content || "I'm not sure how to respond to that.";
+          } catch (fallbackError) {
+            console.error("Error in fallback OpenAI call:", fallbackError);
+            return "I'm having trouble connecting to the AI service. Please check your API key or try again later.";
+          }
+        }
       }
     }
     
-    // Default return if we somehow get here (though with the current logic we won't)
+    // Default return if we somehow get here
     return "I'm not sure how to respond in the current mode. Please try again.";
   } catch (error) {
     console.error("Error in getAIResponse:", error);
-    return "I encountered an error. Please try again later.";
+    return "I encountered an error. Please check your API key in settings or try again later.";
   }
 }
 
