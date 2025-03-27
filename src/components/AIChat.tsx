@@ -147,6 +147,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT o3 mini';
       case 'deepseek-v3': return 'DeepSeek V3';
+      case 'gemini-2.5-pro-exp-03-25': return 'Gemini 2.5 Pro';
       default: return 'AI Assistant';
     }
   };
@@ -160,6 +161,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       case 'deepseek-r1': return 'DeepSeek R1';
       case 'gpt-o3-mini': return 'GPT o3 mini';
       case 'deepseek-v3': return 'DeepSeek V3';
+      case 'gemini-2.5-pro-exp-03-25': return 'Gemini 2.5 Pro';
       default: return 'AI Assistant';
     }
   };
@@ -172,6 +174,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       case 'deepseek-r1': return '#7F56D9'; // Purple for DeepSeek R1
       case 'gpt-o3-mini': return '#FFA94D'; // Orange for GPT o3 mini
       case 'deepseek-v3': return '#10B981'; // Green for DeepSeek V3
+      case 'gemini-2.5-pro-exp-03-25': return '#E30B5C'; // Crimson/Ruby for Gemini
       default: return '#20C997';
     }
   };
@@ -186,6 +189,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       case 'deepseek-r1': return '#7F56D9'; // Purple for DeepSeek R1
       case 'gpt-o3-mini': return '#FFA94D'; // Orange for GPT o3 mini
       case 'deepseek-v3': return '#10B981'; // Green for DeepSeek V3
+      case 'gemini-2.5-pro-exp-03-25': return '#E30B5C'; // Crimson/Ruby for Gemini
       default: return '#20C997';
     }
   };
@@ -206,6 +210,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       case 'deepseek-r1': return 'Reasoning-focused AI assistant';
       case 'gpt-o3-mini': return 'Fast, efficient AI assistant';
       case 'deepseek-v3': return 'Advanced reasoning AI';
+      case 'gemini-2.5-pro-exp-03-25': return 'Advanced multimodal AI';
       default: return 'Intelligent Assistant';
     }
   };
@@ -236,7 +241,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
               model === 'perplexity-sonar' ? 'blue' : 
               model === 'deepseek-r1' ? 'violet' : 
               model === 'gpt-o3-mini' ? 'orange' : 
-              model === 'deepseek-v3' ? 'teal' : 'gray'
+              model === 'deepseek-v3' ? 'teal' : 
+              model === 'gemini-2.5-pro-exp-03-25' ? 'red' :
+              'gray'
             } style={{ boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
               {model === 'perplexity-sonar' ? <IconSearch size={18} /> : <IconRobot size={18} />}
             </Avatar>
@@ -633,7 +640,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                       bg={model === 'perplexity-sonar' ? 'blue.6' : 
                          model === 'deepseek-r1' ? 'violet.6' : 
                          model === 'gpt-o3-mini' ? 'orange.6' :
-                         model === 'deepseek-v3' ? 'teal.6' : 'gray.6'} 
+                         model === 'deepseek-v3' ? 'teal.6' : 
+                         model === 'gemini-2.5-pro-exp-03-25' ? 'red.6' :
+                         'gray.6'} 
                       style={{ boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)' }}
                     >
                       {model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />}
@@ -641,7 +650,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                     <Text fw={600} size="sm" c={model === 'perplexity-sonar' ? 'blue.5' : 
                          model === 'deepseek-r1' ? 'violet.5' : 
                          model === 'gpt-o3-mini' ? 'orange.5' :
-                         model === 'deepseek-v3' ? 'teal.5' : 'gray.5'}>
+                         model === 'deepseek-v3' ? 'teal.5' :
+                         model === 'gemini-2.5-pro-exp-03-25' ? 'red.5' :
+                         'gray.5'}>
                       {getModelDisplayName()}
                     </Text>
                   </Group>
@@ -661,9 +672,14 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                       <Loader color={model === 'perplexity-sonar' ? "blue" : 
                          model === 'deepseek-r1' ? 'violet' : 
                          model === 'gpt-o3-mini' ? 'orange' :
-                         model === 'deepseek-v3' ? 'teal' : 'gray'} size="sm" />
+                         model === 'deepseek-v3' ? 'teal' :
+                         model === 'gemini-2.5-pro-exp-03-25' ? 'red' :
+                         'gray'} size="sm" />
                       <Text size="xs" c="dimmed" style={{ animation: 'pulse 2s infinite' }}>
-                        {model === 'perplexity-sonar' ? 'Searching...' : model === 'deepseek-r1' ? 'Analyzing...' : 'Thinking...'}
+                        {model === 'perplexity-sonar' ? 'Searching...' : 
+                         model === 'deepseek-r1' ? 'Analyzing...' : 
+                         model === 'gemini-2.5-pro-exp-03-25' ? 'Processing...' :
+                         'Thinking...'}
                       </Text>
                     </div>
                   </Box>
@@ -783,6 +799,26 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                       width: 10, 
                       height: 10, 
                       borderRadius: '50%',
+                      backgroundColor: '#E30B5C', // Crimson/Ruby
+                      marginRight: 5
+                    }} />
+                  }
+                  onClick={() => onModelChange && onModelChange('gemini-2.5-pro-exp-03-25')}
+                  style={{ height: 44, borderRadius: 0 }}
+                >
+                  Gemini 2.5 Pro
+                </Button>
+                
+                <Button
+                  variant="subtle"
+                  color={isDark ? "gray.4" : "gray.7"}
+                  fullWidth
+                  justify="flex-start"
+                  leftSection={
+                    <div style={{ 
+                      width: 10, 
+                      height: 10, 
+                      borderRadius: '50%',
                       backgroundColor: '#3B82F6', // Blue
                       marginRight: 5
                     }} />
@@ -872,7 +908,9 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                 model === 'perplexity-sonar' ? "blue" : 
                 model === 'deepseek-r1' ? 'violet' : 
                 model === 'gpt-o3-mini' ? 'orange' :
-                model === 'deepseek-v3' ? 'teal' : 'gray'
+                model === 'deepseek-v3' ? 'teal' :
+                model === 'gemini-2.5-pro-exp-03-25' ? 'red' :
+                'gray'
               )}
               type="submit"
               style={{

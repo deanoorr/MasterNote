@@ -17,6 +17,7 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState('');
   const [perplexityApiKey, setPerplexityApiKey] = useState('');
   const [deepseekApiKey, setDeepseekApiKey] = useState('');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingApi, setTestingApi] = useState(false);
@@ -31,7 +32,7 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
     const loadApiKeys = async () => {
       setLoading(true);
       try {
-        let openaiKey, perplexityKey, deepseekKey;
+        let openaiKey, perplexityKey, deepseekKey, geminiKey;
         
         // If user is logged in, try to get keys from Supabase first
         if (userId) {
@@ -39,16 +40,19 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
           openaiKey = await storageService.getItem('openai_api_key', userId);
           perplexityKey = await storageService.getItem('perplexity_api_key', userId);
           deepseekKey = await storageService.getItem('deepseek_api_key', userId);
+          geminiKey = await storageService.getItem('gemini_api_key', userId);
         } 
         
         // Fall back to localStorage if not found in Supabase
         if (!openaiKey) openaiKey = localStorage.getItem('openai_api_key') || '';
         if (!perplexityKey) perplexityKey = localStorage.getItem('perplexity_api_key') || '';
         if (!deepseekKey) deepseekKey = localStorage.getItem('deepseek_api_key') || '';
+        if (!geminiKey) geminiKey = localStorage.getItem('gemini_api_key') || '';
         
         setApiKey(openaiKey);
         setPerplexityApiKey(perplexityKey);
         setDeepseekApiKey(deepseekKey);
+        setGeminiApiKey(geminiKey);
         
         // Load saved dark mode preference
         const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
@@ -64,6 +68,9 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
         
         const savedDeepseekApiKey = localStorage.getItem('deepseek_api_key') || '';
         setDeepseekApiKey(savedDeepseekApiKey);
+        
+        const savedGeminiApiKey = localStorage.getItem('gemini_api_key') || '';
+        setGeminiApiKey(savedGeminiApiKey);
         
         const savedDarkMode = localStorage.getItem('dark_mode') === 'true';
         setDarkMode(savedDarkMode);
@@ -85,6 +92,7 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
       localStorage.setItem('openai_api_key', apiKey);
       localStorage.setItem('perplexity_api_key', perplexityApiKey);
       localStorage.setItem('deepseek_api_key', deepseekApiKey);
+      localStorage.setItem('gemini_api_key', geminiApiKey);
       localStorage.setItem('dark_mode', darkMode.toString());
       
       // If user is logged in, also save to Supabase
@@ -92,6 +100,7 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
         await storageService.setItem('openai_api_key', apiKey, userId);
         await storageService.setItem('perplexity_api_key', perplexityApiKey, userId);
         await storageService.setItem('deepseek_api_key', deepseekApiKey, userId);
+        await storageService.setItem('gemini_api_key', geminiApiKey, userId);
         // Dark mode is only stored in localStorage
       }
       
@@ -376,6 +385,96 @@ export default function SettingsModal({ opened, onClose }: SettingsModalProps) {
             }}
           >
             Test DeepSeek API Key
+          </Button>
+        </Box>
+        
+        <Box
+          style={{
+            backgroundColor: isDark ? '#25262b' : '#f8f9fa',
+            padding: '16px',
+            borderRadius: '8px',
+            border: `1px solid ${isDark ? '#373A40' : '#e9ecef'}`,
+            marginTop: '16px'
+          }}
+        >
+          <Group mb="xs">
+            <IconBrandOpenai size={20} color="#E30B5C" />
+            <Text fw={600} size="sm" c={isDark ? undefined : 'gray.8'}>Gemini API Key (Optional)</Text>
+          </Group>
+          
+          <TextInput
+            placeholder="Enter your Gemini API key"
+            value={geminiApiKey}
+            onChange={(e) => setGeminiApiKey(e.currentTarget.value)}
+            styles={{
+              input: {
+                backgroundColor: isDark ? '#2C2E33' : '#ffffff',
+                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                color: isDark ? '#C1C2C5' : '#495057',
+                fontSize: '16px',
+                padding: '12px 16px',
+                transition: 'all 0.2s ease',
+                '&:focus': {
+                  borderColor: '#E30B5C',
+                  backgroundColor: isDark ? '#373A40' : '#f8f9fa',
+                }
+              }
+            }}
+          />
+          
+          <Text size="sm" c="dimmed" mt="xs">
+            Optional: Required only if you want to use the Gemini 2.5 Pro model.
+          </Text>
+          
+          <Button 
+            variant="light" 
+            color="red" 
+            mt="md" 
+            size="sm"
+            onClick={async () => {
+              if (!geminiApiKey.trim()) {
+                alert("Please enter a Gemini API key first");
+                return;
+              }
+              
+              // Save key temporarily for the test
+              localStorage.setItem('gemini_api_key', geminiApiKey);
+              
+              try {
+                // Simple fetch test to check if key is valid
+                const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent?key=' + geminiApiKey, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    contents: [{ 
+                      role: 'user',
+                      parts: [{ text: 'Hello! This is a test message to validate the API key.' }]
+                    }],
+                    generationConfig: {
+                      maxOutputTokens: 50,
+                      temperature: 0.1
+                    }
+                  })
+                });
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  console.log("Gemini API test successful:", data);
+                  alert("Gemini API key is valid!");
+                } else {
+                  const errorData = await response.json().catch(() => ({}));
+                  console.error("Gemini API test failed:", response.status, errorData);
+                  alert(`Gemini API key test failed: ${response.status} ${response.statusText}`);
+                }
+              } catch (error) {
+                console.error("Gemini API test error:", error);
+                alert(`Error testing Gemini API key: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }}
+          >
+            Test Gemini API Key
           </Button>
         </Box>
         

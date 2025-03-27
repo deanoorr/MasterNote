@@ -180,6 +180,7 @@ function AppContent() {
     { value: 'gpt-o3-mini', label: 'GPT-o3 Mini' },
     { value: 'gpt4o', label: 'GPT-4o' },
     { value: 'deepseek-v3', label: 'DeepSeek V3' },
+    { value: 'gemini-2.5-pro-exp-03-25', label: 'Gemini 2.5 Pro' },
   ], []);
 
   // Save the selected model to localStorage whenever it changes

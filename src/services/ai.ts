@@ -86,6 +86,15 @@ const getClaudeApiKey = () => {
   return envKey;
 };
 
+// Get Gemini API key
+const getGeminiApiKey = async (userId?: string) => {
+  const storageKey = await storageService.getItem('gemini_api_key', userId);
+  if (storageKey) return storageKey;
+  
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  return envKey;
+};
+
 // Helper function to convert month names to numbers
 const getMonthNumber = (monthName: string): number | undefined => {
   const months: Record<string, number> = {
@@ -1810,6 +1819,8 @@ Respond with ONLY ONE WORD: "TASK_OPERATION" or "TASK_DISCUSSION"`
         return await callDeepSeekAPI(message);
       } else if (currentModel === 'deepseek-v3') {
         return await callDeepSeekAPI(message, true); // Pass true to indicate V3
+      } else if (currentModel === 'gemini-2.5-pro-exp-03-25') {
+        return await callGeminiAPI(message);
       } else {
         // For GPT-4o or GPT-o3 Mini models, use general conversation
         const history = await getConversationHistory(userId);
@@ -2192,3 +2203,79 @@ function listTasksByDate(date: string, taskStore: TaskStoreType): string {
     .map((task, index) => formatTaskWithPosition(task, index + 1))
     .join("\n");
 }
+
+// Call Gemini API
+const callGeminiAPI = async (message: string) => {
+  console.log("Starting Gemini API call");
+  const apiKey = await getGeminiApiKey();
+  
+  if (!apiKey) {
+    console.log("Gemini: No API key found");
+    return `Gemini requires a Gemini API key. Please go to Settings and add your Gemini API key to use this feature.`;
+  }
+  
+  try {
+    // Get conversation history for context
+    const userId = "user123"; // Use a consistent user ID or pass this from the caller
+    const conversationHistory = await getConversationHistory(userId);
+    console.log("Gemini: Got conversation history with", conversationHistory.length, "messages");
+    
+    // Create a comprehensive system prompt
+    const systemPrompt = 'You are Gemini 2.5 Pro, a helpful multimodal AI assistant developed by Google. You excel at understanding context, generating creative content, and answering complex questions. You can also help with task management, but specialized task operations are handled separately by the system. CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.';
+    
+    // Create messages array with system prompt, history, and user message
+    const geminiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+    
+    const response = await axios.post(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent',
+      {
+        contents: geminiMessages.map(msg => ({
+          role: msg.role === 'system' ? 'user' : msg.role,
+          parts: [{ text: msg.content }]
+        })),
+        generationConfig: {
+          maxOutputTokens: 4000,
+          temperature: 0.7
+        }
+      },
+      {
+        headers: {
+          'x-goog-api-key': apiKey,
+          'Content-Type': 'application/json'
+        },
+        params: {
+          key: apiKey
+        }
+      }
+    );
+    
+    console.log("Gemini API response received:", response.status);
+    
+    if (response.data && response.data.candidates && response.data.candidates.length > 0) {
+      const candidate = response.data.candidates[0];
+      if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+        const responseContent = candidate.content.parts[0].text;
+        
+        // Save the conversation for context in future interactions
+        await saveMessageToHistory(userId, 'user', message);
+        await saveMessageToHistory(userId, 'assistant', responseContent);
+        
+        return responseContent;
+      }
+    }
+    
+    return 'No response content received from Gemini API. Please try again.';
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Gemini API error:", error.response?.data || error.message);
+      return `Gemini error: ${error.response?.data?.error?.message || error.message}. Please check your API key in Settings.`;
+    } else {
+      console.error("Unexpected error:", error);
+      return "An unexpected error occurred with the Gemini service. Please try again later.";
+    }
+  }
+};
