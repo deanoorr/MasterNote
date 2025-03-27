@@ -166,7 +166,7 @@ const callPerplexityAPI = async (message: string) => {
       {
         model: localStorage.getItem('use_sonar_pro') === 'true' ? 'sonar-pro' : 'sonar',
         messages: perplexityMessages,
-        max_tokens: localStorage.getItem('use_sonar_pro') === 'true' ? 8000 : 1000, // Sonar Pro has higher token limit
+        max_tokens: localStorage.getItem('use_sonar_pro') === 'true' ? 12000 : 4000, // Increased token limits for both Sonar versions
         temperature: 0.7
       },
       {
@@ -236,7 +236,7 @@ const callDeepSeekAPI = async (message: string, isV3?: boolean) => {
       {
         model: 'deepseek-chat',
         messages: deepseekMessages,
-        max_tokens: 1000,
+        max_tokens: 4000, // Increased token limit for DeepSeek
         temperature: 0.7
       },
       {
@@ -1790,7 +1790,7 @@ Respond with ONLY ONE WORD: "TASK_OPERATION" or "TASK_DISCUSSION"`
           { role: 'user', content: message }
         ],
         temperature: 0.1,
-        max_tokens: 15
+        max_tokens: 50 // Increased token limit for classification
       });
       
       const operationType = operationCheckResponse.choices[0].message.content?.trim().toUpperCase();
@@ -1828,7 +1828,7 @@ Respond with ONLY ONE WORD: "TASK_OPERATION" or "TASK_DISCUSSION"`
           model: currentModel === 'gpt-o3-mini' ? "gpt-3.5-turbo" : "gpt-3.5-turbo",
           messages,
           temperature: 0.7,
-          max_tokens: 1000
+          max_tokens: 4000 // Increased token limit for GPT models
         });
         
         // Get response content
@@ -1876,7 +1876,7 @@ Return ONLY ONE WORD: "TASK" or "GENERAL"`
         { role: 'user', content: message }
       ],
       temperature: 0.1,
-      max_tokens: 10
+      max_tokens: 50 // Increased token limit for classification
     });
     
     const classification = checkTaskIntent.choices[0].message.content?.trim().toUpperCase();
@@ -2066,7 +2066,8 @@ Only include fields that you can extract from the text. If a field is not mentio
         { role: "user", content: message }
       ],
       response_format: { type: "json_object" },
-      temperature: 0.3
+      temperature: 0.3,
+      max_tokens: 4000 // Increased token limit for multi-task extraction
     });
     
     // Extract and parse the JSON from the response

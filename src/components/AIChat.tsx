@@ -118,6 +118,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
         content: response,
         role: 'assistant' as const,
         timestamp: new Date(),
+        model: model,
       };
       addMessage(assistantMessage);
     } catch (error) {
@@ -150,9 +151,36 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     }
   };
 
+  // Get model name from saved model in message
+  const getModelDisplayNameFromModel = (messageModel: AIModel) => {
+    switch(messageModel) {
+      case 'gpt4o': return 'GPT-4o';
+      case 'perplexity-sonar': 
+        return localStorage.getItem('use_sonar_pro') === 'true' ? 'Sonar Pro' : 'Sonar';
+      case 'deepseek-r1': return 'DeepSeek R1';
+      case 'gpt-o3-mini': return 'GPT o3 mini';
+      case 'deepseek-v3': return 'DeepSeek V3';
+      default: return 'AI Assistant';
+    }
+  };
+
   // Get model color for UI elements and dot color
   const getModelColor = () => {
     switch(model) {
+      case 'gpt4o': return '#CCCCCC'; // Light grey for GPT-4o
+      case 'perplexity-sonar': return '#3B82F6'; // Blue for Sonar
+      case 'deepseek-r1': return '#7F56D9'; // Purple for DeepSeek R1
+      case 'gpt-o3-mini': return '#FFA94D'; // Orange for GPT o3 mini
+      case 'deepseek-v3': return '#10B981'; // Green for DeepSeek V3
+      default: return '#20C997';
+    }
+  };
+  
+  // Get model color for a specific message's model
+  const getModelColorFromModel = (messageModel?: AIModel) => {
+    if (!messageModel) return '#20C997'; // Default color
+    
+    switch(messageModel) {
       case 'gpt4o': return '#CCCCCC'; // Light grey for GPT-4o
       case 'perplexity-sonar': return '#3B82F6'; // Blue for Sonar
       case 'deepseek-r1': return '#7F56D9'; // Purple for DeepSeek R1
@@ -532,27 +560,27 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                       size="sm" 
                       radius="xl" 
                       bg={msg.role === 'assistant' 
-                        ? (model === 'perplexity-sonar' ? 'blue.6' : 
-                           model === 'deepseek-r1' ? 'violet.6' : 
-                           model === 'gpt-o3-mini' ? 'orange.6' :
-                           model === 'deepseek-v3' ? 'teal.6' : 'gray.6') 
+                        ? (msg.model === 'perplexity-sonar' ? 'blue.6' : 
+                           msg.model === 'deepseek-r1' ? 'violet.6' : 
+                           msg.model === 'gpt-o3-mini' ? 'orange.6' :
+                           msg.model === 'deepseek-v3' ? 'teal.6' : 'gray.6') 
                         : (isDark ? 'blue.7' : 'blue.5')}
                       style={{ 
                         boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)'
                       }}
                     >
                       {msg.role === 'assistant' 
-                        ? (model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />) 
+                        ? (msg.model === 'perplexity-sonar' ? <IconSearch size={14} /> : <IconRobot size={14} />) 
                         : <IconUser size={14} />}
                     </Avatar>
                     <Text fw={600} size="sm" c={msg.role === 'assistant' 
-                      ? (model === 'perplexity-sonar' ? 'blue.5' : 
-                         model === 'deepseek-r1' ? 'violet.5' : 
-                         model === 'gpt-o3-mini' ? 'orange.5' :
-                         model === 'deepseek-v3' ? 'teal.5' : 'gray.5') 
+                      ? (msg.model === 'perplexity-sonar' ? 'blue.5' : 
+                         msg.model === 'deepseek-r1' ? 'violet.5' : 
+                         msg.model === 'gpt-o3-mini' ? 'orange.5' :
+                         msg.model === 'deepseek-v3' ? 'teal.5' : 'gray.5') 
                       : (isDark ? 'blue.4' : 'blue.6')}>
                       {msg.role === 'assistant' 
-                        ? getModelDisplayName()
+                        ? (msg.model ? getModelDisplayNameFromModel(msg.model) : getModelDisplayName())
                         : 'You'}
                     </Text>
                   </Group>
@@ -651,7 +679,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
         onSubmit={handleSubmit}
         style={{
           borderTop: `1px solid ${isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(233, 236, 239, 0.8)'}`,
-          padding: '16px 18px',
+          padding: '12px 16px',
           backgroundColor: isDark ? 'rgba(33, 35, 38, 0.9)' : 'rgba(248, 249, 250, 0.9)',
           backdropFilter: 'blur(8px)',
           position: 'relative',
@@ -659,7 +687,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
           flexShrink: 0 // Prevent input from shrinking
         }}
       >
-        <Group align="flex-end" gap="sm">
+        <Group align="center" gap="sm" style={{ flexWrap: 'nowrap' }}>
           <Popover width={320} position="top" withArrow shadow="md">
             <Popover.Target>
               <Button 
@@ -678,9 +706,13 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                 rightSection={<IconArrowRight size={14} style={{ transform: 'rotate(90deg)' }} />}
                 styles={{
                   root: {
-                    padding: '8px 12px',
+                    padding: '6px 10px',
                     border: `1px solid ${isDark ? 'rgba(44, 46, 51, 0.8)' : '#dee2e6'}`,
                     backgroundColor: isDark ? 'rgba(37, 38, 43, 0.9)' : 'rgba(255, 255, 255, 0.7)',
+                    height: '38px',
+                    minWidth: '90px',
+                    flexShrink: 0,
+                    borderRadius: '10px',
                   },
                   section: { marginRight: 6 }
                 }}
@@ -804,65 +836,59 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
             </Popover.Dropdown>
           </Popover>
           
-          <Textarea
-            key={`textarea-input-${isLoading ? 'loading' : 'ready'}`}
-            ref={inputRef}
-            placeholder={mode === 'agent' 
-              ? "Tell me about your tasks or ask me to manage them..." 
-              : "Ask me anything, including questions about your tasks..."}
-            value={input}
-            onChange={(e) => setInput(e.currentTarget.value)}
-            onKeyDown={handleInputKeyDown}
-            autosize
-            minRows={1}
-            maxRows={4}
-            style={{ flex: 1 }}
-            styles={{
-              input: {
-                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(255, 255, 255, 0.9)',
-                border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
-                borderRadius: '12px',
-                padding: '14px 18px',
-                fontSize: '15px',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-                backdropFilter: 'blur(8px)',
-                '&:focus': {
-                  borderColor: mode === 'agent' ? '#fd7e14' : getModelColor(),
-                  boxShadow: `0 0 0 1px ${mode === 'agent' ? '#fd7e1420' : getModelColor() + '20'}`
-                }
-              }
-            }}
-            disabled={isLoading}
-          />
-          <Button
-            color={mode === 'agent' ? "orange" : (
-              model === 'perplexity-sonar' ? "blue" : 
-              model === 'deepseek-r1' ? 'violet' : 
-              model === 'gpt-o3-mini' ? 'orange' :
-              model === 'deepseek-v3' ? 'teal' : 'gray'
-            )}
-            type="submit"
-            style={{ 
-              height: '44px', 
-              width: '44px',
-              borderRadius: '12px',
-              padding: 0,
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+          <div
+            style={{
+              display: 'flex',
+              flex: '1 1 auto',
+              alignItems: 'center',
+              position: 'relative',
+              backgroundColor: isDark ? 'rgba(44, 46, 51, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+              border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+              borderRadius: '10px',
               transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+              width: '100%'
             }}
-            styles={{
-              root: {
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)'
-                }
-              }
-            }}
-            disabled={isLoading || !input.trim()}
+            className="ai-input-container"
           >
-            <IconSend size={18} />
-          </Button>
+            <Textarea
+              key={`textarea-input-${isLoading ? 'loading' : 'ready'}`}
+              ref={inputRef}
+              placeholder={mode === 'agent' 
+                ? "Tell me about your tasks or ask me to manage them..." 
+                : "Ask me anything, including questions about your tasks..."}
+              value={input}
+              onChange={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={handleInputKeyDown}
+              autosize
+              minRows={1}
+              maxRows={4}
+              classNames={{ root: 'ai-textarea-root' }}
+              disabled={isLoading}
+            />
+            
+            <Button
+              color={mode === 'agent' ? "orange" : (
+                model === 'perplexity-sonar' ? "blue" : 
+                model === 'deepseek-r1' ? 'violet' : 
+                model === 'gpt-o3-mini' ? 'orange' :
+                model === 'deepseek-v3' ? 'teal' : 'gray'
+              )}
+              type="submit"
+              style={{
+                height: '30px',
+                width: '30px',
+                minWidth: '30px', 
+                borderRadius: '8px',
+                padding: 0,
+                margin: '0 4px',
+                flexShrink: 0
+              }}
+              disabled={isLoading || !input.trim()}
+            >
+              <IconSend size={14} />
+            </Button>
+          </div>
         </Group>
       </Box>
       
@@ -893,6 +919,71 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
             padding: 16px;
             margin-bottom: 24px;
             animation: fadeIn 0.5s ease-out;
+          }
+          
+          .ai-input-container:focus-within {
+            border-color: ${mode === 'agent' ? '#fd7e14' : getModelColor()} !important;
+            box-shadow: 0 0 0 1px ${mode === 'agent' ? '#fd7e1420' : getModelColor() + '20'} !important;
+          }
+          
+          .ai-input-container:hover:not(:focus-within) {
+            border-color: ${isDark ? '#4d5154' : '#ced4da'} !important;
+          }
+          
+          .ai-textarea-root {
+            display: flex;
+            flex: 1;
+            width: 100%;
+          }
+          
+          .ai-textarea-root textarea, 
+          .ai-textarea-root .mantine-Textarea-input,
+          .ai-textarea-root .mantine-Textarea-wrapper,
+          .ai-textarea-root .mantine-InputWrapper-root {
+            width: 100% !important;
+            flex: 1 !important;
+          }
+          
+          .mantine-Textarea-root {
+            width: 100% !important;
+            flex: 1 !important;
+          }
+          
+          .ai-textarea-root textarea {
+            height: auto !important;
+            min-height: auto !important;
+            width: 100% !important;
+          }
+          
+          .ai-textarea-root .mantine-Textarea-input:focus {
+            outline: none !important;
+            box-shadow: none !important;
+            border: none !important;
+          }
+          
+          .ai-textarea-root .mantine-Textarea-input::placeholder {
+            color: ${isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)'} !important;
+          }
+          
+          .ai-textarea-root .mantine-Textarea-wrapper {
+            border: none !important;
+            width: 100% !important;
+          }
+          
+          .ai-textarea-root .mantine-Textarea-input {
+            min-height: 38px !important;
+            padding: 10px 16px !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          
+          .ai-textarea-root .mantine-Textarea-input:focus {
+            outline: none !important;
+            box-shadow: none !important;
+            border: none !important;
           }
         `}
       </style>

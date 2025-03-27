@@ -44,6 +44,7 @@ export interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  model?: AIModel;
 }
 
 export interface AIConfig {
