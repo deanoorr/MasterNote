@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Paper, Text, Stack, Badge, ActionIcon, Group, Box, TextInput, Button, Tooltip, Modal, Menu, Progress, Select, SimpleGrid, UnstyledButton, useMantineColorScheme, Textarea, Flex, Checkbox } from '@mantine/core';
 import { DatePickerInput, DatesProvider } from '@mantine/dates';
-import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes, IconEdit, IconDotsVertical, IconCheckbox } from '@tabler/icons-react';
+import { IconCheck, IconClock, IconTrash, IconListCheck, IconPlus, IconPencil, IconChevronDown, IconCalendar, IconFlag, IconSortAscending, IconCalendarEvent, IconNotes, IconEdit, IconDotsVertical, IconCheckbox, IconSubtask } from '@tabler/icons-react';
 import { useStore, SortOption } from '../store';
 import { Task } from '../types';
 
@@ -59,6 +59,9 @@ export default function TaskList() {
   const [taskWithNotes, setTaskWithNotes] = useState<string | null>(null);
   const [taskNotes, setTaskNotes] = useState('');
   const [viewingCompletedTasks, setViewingCompletedTasks] = useState(false);
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
+  const [subtaskInput, setSubtaskInput] = useState<{ [key: string]: string }>({});
+  const [addingSubtask, setAddingSubtask] = useState<string | null>(null);
   
   // Calendar styles for the date picker
   const calendarStyles = {
@@ -556,6 +559,161 @@ export default function TaskList() {
     return sortedGroups;
   };
 
+  const toggleSubtasks = (taskId: string) => {
+    setExpandedSubtasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleAddSubtask = (parentTaskId: string) => {
+    const subtaskTitle = subtaskInput[parentTaskId]?.trim();
+    if (subtaskTitle) {
+      const subtask: Task = {
+        id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        title: subtaskTitle,
+        priority: 'medium',
+        status: 'todo',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        aiGenerated: false
+      };
+
+      useStore.getState().addSubtask(parentTaskId, subtask);
+      setSubtaskInput(prev => ({ ...prev, [parentTaskId]: '' }));
+      setAddingSubtask(null);
+    }
+  };
+
+  const handleSubtaskStatusChange = (parentTaskId: string, subtaskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const parentTask = tasks.find(t => t.id === parentTaskId);
+    if (!parentTask) return;
+
+    const subtask = parentTask.subtasks?.find(st => st.id === subtaskId);
+    if (!subtask) return;
+
+    const newStatus = subtask.status === 'done' ? 'todo' : 'done';
+    useStore.getState().updateSubtask(parentTaskId, subtaskId, { status: newStatus });
+  };
+
+  const handleDeleteSubtask = (parentTaskId: string, subtaskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    useStore.getState().deleteSubtask(parentTaskId, subtaskId);
+  };
+
+  const renderSubtasks = (task: Task) => {
+    if (!task.subtasks?.length) return null;
+
+    const isExpanded = expandedSubtasks.has(task.id);
+
+    return (
+      <Box ml={20} mt={8}>
+        <Group justify="space-between" mb={8}>
+          <Text size="sm" c="dimmed" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <IconSubtask size={14} />
+            Subtasks ({task.subtasks.length})
+          </Text>
+          <ActionIcon 
+            size="sm" 
+            variant="subtle" 
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleSubtasks(task.id);
+            }}
+          >
+            <IconChevronDown 
+              size={16} 
+              style={{ 
+                transform: isExpanded ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s'
+              }} 
+            />
+          </ActionIcon>
+        </Group>
+
+        {isExpanded && (
+          <Stack gap={8}>
+            {task.subtasks.map(subtask => (
+              <Paper
+                key={subtask.id}
+                p={8}
+                radius="sm"
+                style={{
+                  backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(248, 249, 250, 0.5)',
+                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`
+                }}
+              >
+                <Group justify="space-between" wrap="nowrap">
+                  <Group gap={8}>
+                    <Checkbox
+                      checked={subtask.status === 'done'}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleSubtaskStatusChange(task.id, subtask.id, e as any);
+                      }}
+                    />
+                    <Text size="sm" style={{ textDecoration: subtask.status === 'done' ? 'line-through' : 'none' }}>
+                      {subtask.title}
+                    </Text>
+                  </Group>
+                  <ActionIcon
+                    size="sm"
+                    color="red"
+                    variant="subtle"
+                    onClick={(e) => handleDeleteSubtask(task.id, subtask.id, e)}
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Group>
+              </Paper>
+            ))}
+          </Stack>
+        )}
+
+        {addingSubtask === task.id && (
+          <Group mt={8} gap={8}>
+            <TextInput
+              size="xs"
+              placeholder="Add subtask..."
+              value={subtaskInput[task.id] || ''}
+              onChange={(e) => setSubtaskInput(prev => ({ ...prev, [task.id]: e.currentTarget.value }))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleAddSubtask(task.id);
+                }
+              }}
+            />
+            <ActionIcon
+              size="sm"
+              color="teal"
+              variant="light"
+              onClick={() => handleAddSubtask(task.id)}
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+            <ActionIcon
+              size="sm"
+              color="gray"
+              variant="subtle"
+              onClick={() => {
+                setAddingSubtask(null);
+                setSubtaskInput(prev => ({ ...prev, [task.id]: '' }));
+              }}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
+          </Group>
+        )}
+      </Box>
+    );
+  };
+
   const renderTasks = (tasksToRender: Task[]) => {
     if (tasksToRender.length === 0) {
       return (
@@ -599,233 +757,229 @@ export default function TaskList() {
             </Box>
             
             {/* Tasks for this date */}
-            <Stack gap="sm">
+            <Stack gap="xs">
               {tasks.map((task) => {
                 const currentTaskNumber = taskNumber++;
                 return (
-                <Paper
-                  key={task.id}
-                  p="sm"
-                  withBorder
-                  style={{
-                    position: 'relative',
-                    marginBottom: '4px',
-                    backgroundColor: isDark 
-                      ? (task.status === 'done' ? 'rgba(26, 27, 30, 0.4)' : '#1A1B1E')
-                      : (task.status === 'done' ? 'rgba(248, 249, 250, 0.4)' : '#ffffff'),
-                    opacity: task.status === 'done' ? 0.7 : 1,
-                    boxShadow: isDark 
-                      ? '0 1px 3px rgba(0, 0, 0, 0.15)' 
-                      : '0 1px 3px rgba(0, 0, 0, 0.05)',
-                    overflow: 'hidden',
-                    transition: 'all 0.15s ease-in-out',
-                    animation: `fadeIn 0.3s ease forwards`,
-                    animationDelay: `${currentTaskNumber * 0.05}s`,
-                    borderRadius: '6px',
-                    '&:hover': {
-                      boxShadow: isDark 
-                        ? '0 3px 6px rgba(0, 0, 0, 0.2)' 
-                        : '0 3px 6px rgba(0, 0, 0, 0.08)',
-                      transform: 'translateY(-1px)'
-                    }
-                  }}
-                >
-                  <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
-                    <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                      <Box style={{ 
-                        minWidth: '24px',
-                        height: '24px',
-                        display: 'flex', 
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        backgroundColor: isDark ? '#25262b' : '#f1f3f5',
-                        borderRadius: '50%',
-                        marginRight: '2px'
-                      }}>
-                        <Text 
-                          size="xs" 
-                          fw={600} 
-                          style={{ 
-                            color: isDark ? '#c1c2c5' : '#495057',
-                            lineHeight: 1,
-                            userSelect: 'none'
-                          }}
-                        >
-                          {currentTaskNumber}
-                        </Text>
-                      </Box>
-                      <Checkbox
-                        checked={task.status === 'done'}
-                        onChange={(e) => handleStatusChange(task.id, e as any)}
-                        styles={{
-                          input: {
-                            cursor: 'pointer',
-                            backgroundColor: isDark ? '#25262B' : '#ffffff',
-                            border: `1px solid ${isDark ? '#373A40' : '#ced4da'}`,
-                            borderRadius: '4px',
-                            '&:checked': {
-                              backgroundColor: '#20C997',
-                              borderColor: '#20C997'
-                            },
-                            transition: 'all 0.2s ease',
-                          },
-                          icon: {
-                            color: 'white'
-                          }
-                        }}
-                        size="sm"
-                      />
-                      <Box style={{ flex: 1, minWidth: 0, marginTop: '2px' }}>
-                        <Text 
-                          size="sm"
-                          fw={500}
-                          lineClamp={2}
-                          style={{ 
-                            textDecoration: task.status === 'done' ? 'line-through' : 'none',
-                            opacity: task.status === 'done' ? 0.7 : 1,
-                            fontSize: '14px',
-                            wordBreak: 'break-word',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          {task.title}
-                        </Text>
-                        
-                        <Group mt={6} gap="xs">
-                          {/* Remove the date badge since we're using date dividers */}
-                          <Badge 
-                            variant="filled"
-                            size="xs"
-                            style={{ 
-                              padding: '4px 10px',
-                              fontWeight: 500,
-                              borderRadius: '50px',
-                              textTransform: 'uppercase',
-                              fontSize: '10px',
-                              border: 'none',
-                              backgroundColor: 
-                                task.priority === 'high' ? '#862e2e' : 
-                                task.priority === 'medium' ? '#8c6d1f' : 
-                                '#1864ab',
-                              color: '#fff'
-                            }}
-                          >
-                            {task.priority}
-                          </Badge>
-                          
-                          {task.notes && (
-                            <Badge 
-                              color="teal" 
-                              variant="light"
-                              size="xs"
-                              leftSection={<IconNotes size={12} />}
+                  <Box key={task.id}>
+                    <Paper
+                      p="sm"
+                      radius="md"
+                      className="task-card"
+                      style={{
+                        backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(255, 255, 255, 0.5)',
+                        border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+                        }
+                      }}
+                      onClick={() => {
+                        if (task.subtasks?.length) {
+                          toggleSubtasks(task.id);
+                        }
+                      }}
+                    >
+                      <Group align="flex-start" justify="space-between" style={{ flexWrap: 'nowrap' }}>
+                        <Box style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                          <Box style={{ 
+                            minWidth: '24px',
+                            height: '24px',
+                            display: 'flex', 
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            backgroundColor: isDark ? '#25262b' : '#f1f3f5',
+                            borderRadius: '50%',
+                            marginRight: '2px'
+                          }}>
+                            <Text 
+                              size="xs" 
+                              fw={600} 
                               style={{ 
-                                padding: '3px 7px',
-                                fontWeight: 500,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                '&:hover': {
-                                  backgroundColor: isDark ? '#0CA678' : '#20C997',
-                                  color: 'white'
-                                }
+                                color: isDark ? '#c1c2c5' : '#495057',
+                                lineHeight: 1,
+                                userSelect: 'none'
                               }}
+                            >
+                              {currentTaskNumber}
+                            </Text>
+                          </Box>
+                          <Checkbox
+                            checked={task.status === 'done'}
+                            onChange={(e) => handleStatusChange(task.id, e as any)}
+                            styles={{
+                              input: {
+                                cursor: 'pointer',
+                                backgroundColor: isDark ? '#25262B' : '#ffffff',
+                                border: `1px solid ${isDark ? '#373A40' : '#ced4da'}`,
+                                borderRadius: '4px',
+                                '&:checked': {
+                                  backgroundColor: '#20C997',
+                                  borderColor: '#20C997'
+                                },
+                                transition: 'all 0.2s ease',
+                              },
+                              icon: {
+                                color: 'white'
+                              }
+                            }}
+                            size="sm"
+                          />
+                          <Box style={{ flex: 1, minWidth: 0, marginTop: '2px' }}>
+                            <Text 
+                              size="sm"
+                              fw={500}
+                              lineClamp={2}
+                              style={{ 
+                                textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                                opacity: task.status === 'done' ? 0.7 : 1,
+                                fontSize: '14px',
+                                wordBreak: 'break-word',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              {task.title}
+                            </Text>
+                            
+                            <Group mt={6} gap="xs">
+                              {/* Remove the date badge since we're using date dividers */}
+                              <Badge 
+                                variant="filled"
+                                size="xs"
+                                style={{ 
+                                  padding: '4px 10px',
+                                  fontWeight: 500,
+                                  borderRadius: '50px',
+                                  textTransform: 'uppercase',
+                                  fontSize: '10px',
+                                  border: 'none',
+                                  backgroundColor: 
+                                    task.priority === 'high' ? '#862e2e' : 
+                                    task.priority === 'medium' ? '#8c6d1f' : 
+                                    '#1864ab',
+                                  color: '#fff'
+                                }}
+                              >
+                                {task.priority}
+                              </Badge>
+                              
+                              {task.notes && (
+                                <Badge 
+                                  color="teal" 
+                                  variant="light"
+                                  size="xs"
+                                  leftSection={<IconNotes size={12} />}
+                                  style={{ 
+                                    padding: '3px 7px',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    '&:hover': {
+                                      backgroundColor: isDark ? '#0CA678' : '#20C997',
+                                      color: 'white'
+                                    }
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNotesOpen(task.id, task.notes, e);
+                                  }}
+                                >
+                                  Notes
+                                </Badge>
+                              )}
+                            </Group>
+                          </Box>
+                        </Box>
+                        
+                        <Menu position="bottom-end" shadow="md">
+                          <Menu.Target>
+                            <ActionIcon size="sm" variant="subtle" onClick={(e) => e.stopPropagation()}>
+                              <IconDotsVertical size={16} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Label>Status</Menu.Label>
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(task.id, e);
+                              }}
+                            >
+                              {task.status === 'done' ? 'Mark as Todo' : 'Mark as Done'}
+                            </Menu.Item>
+                            
+                            <Menu.Divider />
+                            <Menu.Label>Priority</Menu.Label>
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePriorityChange(task.id, 'high', e);
+                              }}
+                            >
+                              High Priority
+                            </Menu.Item>
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePriorityChange(task.id, 'medium', e);
+                              }}
+                            >
+                              Medium Priority
+                            </Menu.Item>
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePriorityChange(task.id, 'low', e);
+                              }}
+                            >
+                              Low Priority
+                            </Menu.Item>
+                            
+                            <Menu.Divider />
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditTask(task.id, e);
+                              }}
+                            >
+                              Edit Task
+                            </Menu.Item>
+                            <Menu.Item 
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleNotesOpen(task.id, task.notes, e);
                               }}
                             >
-                              Notes
-                            </Badge>
-                          )}
-                        </Group>
-                      </Box>
-                    </Box>
-                    
-                    <Menu position="bottom-end" shadow="md">
-                      <Menu.Target>
-                        <ActionIcon size="sm" variant="subtle" onClick={(e) => e.stopPropagation()}>
-                          <IconDotsVertical size={16} />
-                        </ActionIcon>
-                      </Menu.Target>
-                      <Menu.Dropdown>
-                        <Menu.Label>Status</Menu.Label>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStatusChange(task.id, e);
-                          }}
-                        >
-                          {task.status === 'done' ? 'Mark as Todo' : 'Mark as Done'}
-                        </Menu.Item>
-                        
-                        <Menu.Divider />
-                        <Menu.Label>Priority</Menu.Label>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePriorityChange(task.id, 'high', e);
-                          }}
-                        >
-                          High Priority
-                        </Menu.Item>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePriorityChange(task.id, 'medium', e);
-                          }}
-                        >
-                          Medium Priority
-                        </Menu.Item>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePriorityChange(task.id, 'low', e);
-                          }}
-                        >
-                          Low Priority
-                        </Menu.Item>
-                        
-                        <Menu.Divider />
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditTask(task.id, e);
-                          }}
-                        >
-                          Edit Task
-                        </Menu.Item>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNotesOpen(task.id, task.notes, e);
-                          }}
-                        >
-                          {task.notes ? 'Edit Notes' : 'Add Notes'}
-                        </Menu.Item>
-                        <Menu.Item 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTaskWithDueDateMenu(task.id);
-                            setDueDateMenuOpened(true);
-                          }}
-                        >
-                          {task.dueDate ? 'Change Due Date' : 'Add Due Date'}
-                        </Menu.Item>
-                        
-                        <Menu.Divider />
-                        <Menu.Item 
-                          color="red"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTask(task.id, e);
-                          }}
-                        >
-                          Delete Task
-                        </Menu.Item>
-                      </Menu.Dropdown>
-                    </Menu>
-                  </Group>
-                </Paper>
+                              {task.notes ? 'Edit Notes' : 'Add Notes'}
+                            </Menu.Item>
+                            <Menu.Item 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTaskWithDueDateMenu(task.id);
+                                setDueDateMenuOpened(true);
+                              }}
+                            >
+                              {task.dueDate ? 'Change Due Date' : 'Add Due Date'}
+                            </Menu.Item>
+                            
+                            <Menu.Divider />
+                            <Menu.Item 
+                              color="red"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteTask(task.id, e);
+                              }}
+                            >
+                              Delete Task
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
+                      </Group>
+                    </Paper>
+                    {renderSubtasks(task)}
+                  </Box>
                 );
               })}
             </Stack>

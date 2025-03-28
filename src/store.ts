@@ -35,6 +35,9 @@ interface StoreActions {
   getSortedTasks: () => Task[];
   getTasksByDate: (dateFilter: string) => Task[];
   syncWithSupabase: () => Promise<void>;
+  addSubtask: (parentTaskId: string, subtask: Task) => void;
+  updateSubtask: (parentTaskId: string, subtaskId: string, updates: Partial<Task>) => void;
+  deleteSubtask: (parentTaskId: string, subtaskId: string) => void;
 }
 
 type Store = StoreState & StoreActions;
@@ -552,6 +555,128 @@ export const useStore = create<Store>()(
           return {
             tasks: updatedTasks,
           };
+        }),
+
+      addSubtask: (parentTaskId: string, subtask: Task) =>
+        set((state: StoreState) => {
+          const tasks = state.tasks.map(task => {
+            if (task.id === parentTaskId) {
+              return {
+                ...task,
+                subtasks: [...(task.subtasks || []), subtask]
+              };
+            }
+            return task;
+          });
+
+          // Update Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId) {
+            const saveToSupabase = async (retries = 3) => {
+              try {
+                const parentTask = tasks.find(t => t.id === parentTaskId);
+                if (!parentTask) return;
+
+                const { error } = await supabase.from('tasks').upsert({
+                  id: parentTaskId,
+                  user_id: userId,
+                  subtasks: JSON.stringify(parentTask.subtasks || [])
+                });
+
+                if (error) throw error;
+              } catch (error) {
+                console.error('Error saving subtask to Supabase:', error);
+                if (retries > 0) {
+                  setTimeout(() => saveToSupabase(retries - 1), 1000);
+                }
+              }
+            };
+            saveToSupabase();
+          }
+
+          return { tasks };
+        }),
+
+      updateSubtask: (parentTaskId: string, subtaskId: string, updates: Partial<Task>) =>
+        set((state: StoreState) => {
+          const tasks = state.tasks.map(task => {
+            if (task.id === parentTaskId) {
+              return {
+                ...task,
+                subtasks: task.subtasks?.map(subtask => 
+                  subtask.id === subtaskId ? { ...subtask, ...updates, updatedAt: new Date() } : subtask
+                )
+              };
+            }
+            return task;
+          });
+
+          // Update Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId) {
+            const saveToSupabase = async (retries = 3) => {
+              try {
+                const parentTask = tasks.find(t => t.id === parentTaskId);
+                if (!parentTask) return;
+
+                const { error } = await supabase.from('tasks').upsert({
+                  id: parentTaskId,
+                  user_id: userId,
+                  subtasks: JSON.stringify(parentTask.subtasks || [])
+                });
+
+                if (error) throw error;
+              } catch (error) {
+                console.error('Error updating subtask in Supabase:', error);
+                if (retries > 0) {
+                  setTimeout(() => saveToSupabase(retries - 1), 1000);
+                }
+              }
+            };
+            saveToSupabase();
+          }
+
+          return { tasks };
+        }),
+
+      deleteSubtask: (parentTaskId: string, subtaskId: string) =>
+        set((state: StoreState) => {
+          const tasks = state.tasks.map(task => {
+            if (task.id === parentTaskId) {
+              return {
+                ...task,
+                subtasks: task.subtasks?.filter(subtask => subtask.id !== subtaskId)
+              };
+            }
+            return task;
+          });
+
+          // Update Supabase if configured
+          const userId = get().userId;
+          if (isSupabaseConfigured() && userId) {
+            const saveToSupabase = async (retries = 3) => {
+              try {
+                const parentTask = tasks.find(t => t.id === parentTaskId);
+                if (!parentTask) return;
+
+                const { error } = await supabase.from('tasks').upsert({
+                  id: parentTaskId,
+                  user_id: userId,
+                  subtasks: JSON.stringify(parentTask.subtasks || [])
+                });
+
+                if (error) throw error;
+              } catch (error) {
+                console.error('Error deleting subtask from Supabase:', error);
+                if (retries > 0) {
+                  setTimeout(() => saveToSupabase(retries - 1), 1000);
+                }
+              }
+            };
+            saveToSupabase();
+          }
+
+          return { tasks };
         }),
     }),
     {

@@ -13,6 +13,7 @@ export interface Task {
   dependencies?: string[];
   tags?: string[];
   notes?: string;
+  subtasks?: Task[];
   recurrence?: {
     pattern: 'daily' | 'weekly' | 'monthly' | 'yearly';
     interval: number;

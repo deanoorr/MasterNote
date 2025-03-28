@@ -498,7 +498,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                         <Button 
                           variant="outline" 
                           color="gray" 
-                          onClick={() => setInput("What tasks do I have this week?")}
+                          onClick={() => setInput("Break down task 1 into subtasks")}
                           fullWidth
                           h={36}
                           styles={{
@@ -516,12 +516,35 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                             }
                           }}
                         >
-                          What tasks do I have this week?
+                          Break down task 1 into subtasks
                         </Button>
                         <Button 
                           variant="outline" 
                           color="gray" 
-                          onClick={() => setInput("Mark task 1 as completed")}
+                          onClick={() => setInput("Add subtasks to task 2: research competitors, analyze market trends, create presentation")}
+                          fullWidth
+                          h={36}
+                          styles={{
+                            root: {
+                              border: `1px solid ${isDark ? 'rgba(70, 75, 90, 0.5)' : '#e9ecef'}`,
+                              color: isDark ? 'white' : 'black',
+                              '&:hover': {
+                                backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(241, 243, 245, 0.7)'
+                              },
+                              marginBottom: '4px'
+                            },
+                            inner: {
+                              justifyContent: 'flex-start',
+                              fontSize: '13px'
+                            }
+                          }}
+                        >
+                          Add subtasks to task 2: research competitors, analyze market trends, create presentation
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          color="gray" 
+                          onClick={() => setInput("Mark subtask 1.2 as completed")}
                           fullWidth
                           h={36}
                           styles={{
@@ -538,7 +561,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
                             }
                           }}
                         >
-                          Mark task 1 as completed
+                          Mark subtask 1.2 as completed
                         </Button>
                       </>
                     ) : (

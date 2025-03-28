@@ -667,6 +667,7 @@ interface TaskStoreType {
   getTasksByDate: (filter: string) => Task[];
   getSortedTasks?: () => Task[];
   bulkUpdateTasks: (filter: string, updates: Partial<Task>) => void;
+  addSubtask: (taskId: string, subtask: Task) => void;
 }
 
 type Priority = 'high' | 'medium' | 'low';
@@ -694,17 +695,19 @@ Extract the task management intent from the user's message. Focus on:
 4. Task Completion: "mark done", "complete task"
 5. Task Queries: "show tasks", "list tasks" 
 6. Multi-task Selection: "tasks 1 and 2", "tasks 3,4,5"
+7. Subtask Operations: "break down task X", "generate subtasks for task Y", "add subtasks to task Z"
 
 Return a JSON response with:
 {
-  "intent": "create|update|delete|complete|list",
+  "intent": "create|update|delete|complete|list|subtask",
   "taskTitle": "task title if creating",
   "taskNumber": number if referencing specific task,
   "date": "due date if specified",
   "priority": "high|medium|low if specified",
   "targetDate": "date to move to if moving task",
   "property": "what to update if modifying",
-  "value": "new value for update"
+  "value": "new value for update",
+  "subtaskOperation": "break_down|add_subtasks if doing subtask operations"
 }`;
 
     // Send the request to the OpenAI API
@@ -743,6 +746,11 @@ Return a JSON response with:
             return handleTaskListByPriority(taskData.priority, taskStore);
           }
           return handleTaskListRequest(taskData.date || "all", taskStore);
+        case "subtask":
+          if (taskData.subtaskOperation === "break_down") {
+            return handleAISubtaskCreation(taskData, taskStore);
+          }
+          return handleAISubtaskCreation(taskData, taskStore);
         default:
           return "I couldn't understand what you want to do with your tasks. Please try again with a clearer instruction.";
       }
@@ -1922,6 +1930,25 @@ export async function getAIResponse(message: string, userId: string, mode: 'chat
       }
     };
     
+    // If this is a system message for subtask generation in agent mode, handle it directly
+    if (mode === 'agent' && message.startsWith('Break down the following task')) {
+      const openai = await getOpenAIClient();
+      const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are a task breakdown assistant. Given a task, break it down into 3-5 clear, actionable subtasks. Format your response as a numbered list. Each subtask should be specific and contribute to completing the main task.' 
+          },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      });
+      
+      return response.choices[0].message.content || "I couldn't generate subtasks for this task.";
+    }
+    
     // In Agent mode, only allow task-related operations
     if (mode === 'agent') {
       console.log("Using Agent mode - only task operations allowed");
@@ -2494,3 +2521,64 @@ const callGeminiAPI = async (message: string) => {
     }
   }
 };
+
+async function handleAISubtaskCreation(taskData: any, taskStore: TaskStoreType): Promise<string> {
+  const taskNumber = taskData.taskNumber;
+  if (!taskNumber) {
+    return "I couldn't identify which task to break down. Please specify the task number.";
+  }
+
+  // Filter out completed tasks and get only active tasks
+  const activeTasks = taskStore.tasks.filter(task => task.status !== 'done');
+  const targetTask = activeTasks[taskNumber - 1];
+  
+  if (!targetTask) {
+    return `I couldn't find active task number ${taskNumber}. Please check the task number and make sure it's not completed.`;
+  }
+
+  // Generate AI prompt to break down the task
+  const prompt = `Break down the following task into 3-5 clear, actionable subtasks. Task: "${targetTask.title}"${
+    targetTask.description ? ` Description: ${targetTask.description}` : ''
+  }. Format each subtask as a numbered list.`;
+
+  try {
+    // Get AI response
+    const aiResponse = await getAIResponse(prompt, 'system', 'agent');
+    
+    // Extract subtasks from AI response using regex
+    const subtaskMatches = aiResponse.match(/\d+\.\s*([^\n]+)/g);
+    if (!subtaskMatches) {
+      return "I couldn't generate meaningful subtasks. Please try again or provide more task details.";
+    }
+
+    const subtasksToAdd = subtaskMatches.map(match => ({
+      title: match.replace(/^\d+\.\s*/, '').trim(),
+      priority: targetTask.priority
+    }));
+
+    const createdSubtasks: string[] = [];
+    for (const subtaskData of subtasksToAdd) {
+      const subtask: Task = {
+        id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        title: subtaskData.title,
+        description: "",
+        priority: subtaskData.priority,
+        status: "todo" as "todo" | "in_progress" | "done",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        aiGenerated: true
+      };
+
+      taskStore.addSubtask(targetTask.id, subtask);
+      createdSubtasks.push(subtaskData.title);
+    }
+
+    return `✅ Generated and added ${createdSubtasks.length} subtasks for "${targetTask.title}":\n${createdSubtasks.map((title, i) => `${i + 1}. ${title}`).join('\n')}`;
+  } catch (error) {
+    console.error('Error generating subtasks:', error);
+    return "Sorry, I encountered an error while generating subtasks. Please try again.";
+  }
+}
+
+// Export the function
+export { handleAISubtaskCreation };
