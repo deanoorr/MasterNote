@@ -266,7 +266,7 @@ const callPerplexityAPI = async (message: string) => {
     const useUltraSearch = localStorage.getItem('use_sonar_pro') === 'true';
     
     // Use the correct Perplexity model names
-    // sonar-deep-research is the Pro model with larger context
+    // sonar-deep-research is the Pro model with larger context window
     // sonar is the standard model
     const modelName = useUltraSearch ? 'sonar-deep-research' : 'sonar';
     
@@ -781,7 +781,7 @@ async function generateSubtasksWithAI(message: string, taskStore: TaskStoreType)
     const mainActivity = activityMatch ? activityMatch[1].trim() : message;
     
     const systemPrompt = `You are a task planning assistant. The user is asking for help breaking down a complex activity into subtasks.
-
+  
 CRITICAL INSTRUCTION: Never push to GitHub without explicit permission from the user.
 
 Extract the main activity from their message and generate a list of 4-6 specific subtasks that would help them complete it. 
@@ -2020,7 +2020,7 @@ USER'S CURRENT QUESTION: ${message}`;
             messages: [
               { 
                 role: 'system', 
-                content: "You are a helpful, context-aware assistant. You MUST maintain the current conversation topic when answering questions. NEVER mention 'Key Grok' or data processing concepts unless SPECIFICALLY asked about them."
+                content: "You are a helpful, context-aware assistant. You MUST maintain the current conversation topic when answering questions. NEVER mention 'Key Grok', 'data processing', or anything related to data analysis in your answer. Focus ONLY on answering the user's question about the most recently discussed topic. DO NOT bring up new, unrelated topics about data or 'grok' terminology."
               },
               { role: 'user', content: directPrompt }
             ],
@@ -2545,48 +2545,123 @@ async function handleAISubtaskCreation(taskData: any, taskStore: TaskStoreType):
 
   console.log(`Breaking down task ${taskNumber} (${targetTask.title}):`);
 
-  // Generate AI prompt to break down the task
-  const prompt = `Break down the following task into 3-5 clear, actionable subtasks. Task: "${targetTask.title}"${
-    targetTask.description ? ` Description: ${targetTask.description}` : ''
-  }. Format each subtask as a numbered list.`;
+  // Enhanced AI prompt for more creative and detailed subtasks
+  const prompt = `Break down the following task into 4-7 creative, detailed, and actionable subtasks:
+  
+Task: "${targetTask.title}"
+${targetTask.description ? `Description: ${targetTask.description}` : ''}
+
+For each subtask:
+1. Create a clear, specific title (DO NOT include priority in the title)
+2. Add a brief but helpful description that explains the purpose or method
+3. Assign a varied priority (don't make all subtasks the same priority)
+4. Consider the logical sequence and dependencies between subtasks
+
+The subtasks should represent a complete approach to accomplishing the main task.
+Be specific and creative - avoid generic subtasks like "Research" or "Plan".
+DO NOT include priority labels like "[HIGH PRIORITY]" in the subtask titles.
+
+Format each subtask as:
+1. Title: Brief description that explains what to do and why it matters
+`;
 
   try {
-    // Get AI response
-    const aiResponse = await getAIResponse(prompt, 'system', 'agent');
+    // Get AI response with enhanced temperature for creativity
+    const openai = await getOpenAIClient();
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a creative task breakdown assistant specializing in detailed project planning. Your subtasks should be specific, varied in priority, and include helpful context. DO NOT include priority labels in the subtask titles.' 
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.8, // Higher temperature for more creativity
+      max_tokens: 800
+    });
     
-    // Extract subtasks from AI response using regex
-    const subtaskMatches = aiResponse.match(/\d+\.\s*([^\n]+)/g);
-    if (!subtaskMatches) {
-      return "I couldn't generate meaningful subtasks. Please try again or provide more task details.";
-    }
-
-    const subtasksToAdd = subtaskMatches.map(match => ({
-      title: match.replace(/^\d+\.\s*/, '').trim(),
-      priority: targetTask.priority
-    }));
-
-    const createdSubtasks: string[] = [];
-    for (const subtaskData of subtasksToAdd) {
-      const subtask: Task = {
-        id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        title: subtaskData.title,
+    const aiResponse = response.choices[0].message.content || "";
+    
+    // Updated regex to extract subtasks without priority labels
+    const subtaskRegex = /\d+\.\s*([^:]+):\s*([^\n]+)/gi;
+    const subtaskMatches = Array.from(aiResponse.matchAll(subtaskRegex));
+    
+    if (!subtaskMatches || subtaskMatches.length === 0) {
+      // Fallback to simpler regex if the formatted version didn't work
+      const simplerMatches = aiResponse.match(/\d+\.\s*([^\n]+)/g);
+      if (!simplerMatches) {
+        return "I couldn't generate meaningful subtasks. Please try again or provide more task details.";
+      }
+      
+      const subtasksToAdd = simplerMatches.map(match => ({
+        title: match.replace(/^\d+\.\s*/, '').trim(),
         description: "",
-        priority: subtaskData.priority,
-        status: "todo" as "todo" | "in_progress" | "done",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        aiGenerated: true
-      };
+        priority: targetTask.priority
+      }));
 
-      taskStore.addSubtask(targetTask.id, subtask);
-      createdSubtasks.push(subtaskData.title);
+      return createAndAddSubtasks(subtasksToAdd, targetTask, taskStore);
     }
+    
+    // Process structured subtasks with descriptions but assign varied priorities
+    const priorities: Array<"high" | "medium" | "low"> = ["high", "medium", "low"];
+    const subtasksToAdd = subtaskMatches.map((match, index) => {
+      const title = match[1].trim();
+      const description = match[2].trim();
+      
+      // Assign varied priorities in sequence (high, medium, low, high, medium...)
+      const priority = priorities[index % priorities.length] as "high" | "medium" | "low";
+      
+      return {
+        title,
+        description,
+        priority
+      };
+    });
 
-    return `✅ Generated and added ${createdSubtasks.length} subtasks for "${targetTask.title}":\n${createdSubtasks.map((title, i) => `${i + 1}. ${title}`).join('\n')}`;
+    return createAndAddSubtasks(subtasksToAdd, targetTask, taskStore);
   } catch (error) {
     console.error('Error generating subtasks:', error);
     return "Sorry, I encountered an error while generating subtasks. Please try again.";
   }
+}
+
+// Helper function to create and add subtasks to the store
+function createAndAddSubtasks(
+  subtasksData: Array<{title: string, description: string, priority: "high" | "medium" | "low"}>, 
+  parentTask: Task, 
+  taskStore: TaskStoreType
+): string {
+  const createdSubtasks: Array<{title: string, priority: string, description: string}> = [];
+  
+  for (const subtaskData of subtasksData) {
+    const subtask: Task = {
+      id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      title: subtaskData.title,
+      description: subtaskData.description || "",
+      priority: subtaskData.priority,
+      status: "todo" as "todo" | "in_progress" | "done",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      aiGenerated: true
+    };
+
+    taskStore.addSubtask(parentTask.id, subtask);
+    createdSubtasks.push({
+      title: subtaskData.title,
+      priority: subtaskData.priority,
+      description: subtaskData.description || ""
+    });
+  }
+
+  // Create a more readable response without priority labels
+  const subtaskList = createdSubtasks.map((subtask, i) => 
+    `${i + 1}. ${subtask.title}${
+      subtask.description ? `\n   ${subtask.description}` : ''
+    }`
+  ).join('\n');
+
+  return `✅ Generated and added ${createdSubtasks.length} subtasks for "${parentTask.title}":\n\n${subtaskList}`;
 }
 
 // Export the function
