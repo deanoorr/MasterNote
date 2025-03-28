@@ -2528,13 +2528,22 @@ async function handleAISubtaskCreation(taskData: any, taskStore: TaskStoreType):
     return "I couldn't identify which task to break down. Please specify the task number.";
   }
 
-  // Filter out completed tasks and get only active tasks
-  const activeTasks = taskStore.tasks.filter(task => task.status !== 'done');
+  // Get tasks in the current sort order and filter completed ones
+  let activeTasks;
+  if (taskStore.getSortedTasks) {
+    activeTasks = taskStore.getSortedTasks().filter(task => task.status !== "done");
+  } else {
+    activeTasks = taskStore.tasks.filter(task => task.status !== "done");
+  }
+
+  // Find the task by its displayed number based on the current UI view
   const targetTask = activeTasks[taskNumber - 1];
   
   if (!targetTask) {
     return `I couldn't find active task number ${taskNumber}. Please check the task number and make sure it's not completed.`;
   }
+
+  console.log(`Breaking down task ${taskNumber} (${targetTask.title}):`);
 
   // Generate AI prompt to break down the task
   const prompt = `Break down the following task into 3-5 clear, actionable subtasks. Task: "${targetTask.title}"${
