@@ -51,6 +51,7 @@ export interface Database {
           updated_at: string;
           ai_generated: boolean;
           notes: string | null;
+          subtasks: string | null;
         };
         Insert: {
           id: string;
@@ -64,6 +65,7 @@ export interface Database {
           updated_at: string;
           ai_generated?: boolean;
           notes?: string | null;
+          subtasks?: string | null;
         };
         Update: {
           id?: string;
@@ -77,6 +79,7 @@ export interface Database {
           updated_at?: string;
           ai_generated?: boolean;
           notes?: string | null;
+          subtasks?: string | null;
         };
       };
       user_preferences: {

@@ -105,26 +105,20 @@ export const useStore = create<Store>()(
                   updated_at: new Date(cleanedTask.updatedAt).toISOString(),
                   ai_generated: cleanedTask.aiGenerated || false,
                   notes: cleanedTask.notes || '',
-                  dependencies: cleanedTask.dependencies || [],
-                  tags: cleanedTask.tags || [],
-                  recurrence: cleanedTask.recurrence ? JSON.stringify(cleanedTask.recurrence) : null,
-                  attachments: cleanedTask.attachments ? JSON.stringify(cleanedTask.attachments) : null,
-                  time_tracking: cleanedTask.timeTracking ? JSON.stringify(cleanedTask.timeTracking) : null,
-                  progress: cleanedTask.progress || 0,
-                  category: cleanedTask.category || null
+                  subtasks: cleanedTask.subtasks ? JSON.stringify(cleanedTask.subtasks) : '[]'
                 });
                 
                 if (error) {
-                  console.error("Error storing task in Supabase:", error);
+                  console.error("Error creating task in Supabase:", error);
                   if (retries > 0) {
-                    console.log(`Retrying Supabase add, ${retries} attempts left`);
+                    console.log(`Retrying Supabase task creation, ${retries} attempts left`);
                     setTimeout(() => saveToSupabase(retries - 1), 1000);
                   }
                 } else {
-                  console.log("Task successfully added to Supabase:", data);
+                  console.log("Task created successfully in Supabase:", data);
                 }
               } catch (err) {
-                console.error("Exception during Supabase add:", err);
+                console.error("Exception creating task:", err);
                 if (retries > 0) {
                   console.log(`Retrying after exception, ${retries} attempts left`);
                   setTimeout(() => saveToSupabase(retries - 1), 1000);
@@ -179,7 +173,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date().toISOString(),
                   created_at: updatedTask.createdAt ? new Date(updatedTask.createdAt).toISOString() : new Date().toISOString(),
                   ai_generated: updatedTask.aiGenerated || false,
-                  notes: updatedTask.notes || ''
+                  notes: updatedTask.notes || '',
+                  subtasks: updatedTask.subtasks ? JSON.stringify(updatedTask.subtasks) : '[]'
                 });
                 
                 if (error) {
@@ -381,6 +376,7 @@ export const useStore = create<Store>()(
             updated_at: string;
             ai_generated: boolean;
             notes: string | null;
+            subtasks: string | null;
           };
           console.log("Syncing with Supabase for user:", userId);
           // Get current local tasks
@@ -412,7 +408,8 @@ export const useStore = create<Store>()(
               createdAt: new Date(task.created_at),
               updatedAt: new Date(task.updated_at),
               aiGenerated: task.ai_generated || false,
-              notes: task.notes || ''
+              notes: task.notes || '',
+              subtasks: task.subtasks ? JSON.parse(task.subtasks) : []
             }));
             
             // STEP 1: Check for recently modified local tasks (within the last 5 minutes)
@@ -440,7 +437,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date(localTask.updatedAt).toISOString(),
                   created_at: new Date(localTask.createdAt).toISOString(),
                   ai_generated: localTask.aiGenerated || false,
-                  notes: localTask.notes || ''
+                  notes: localTask.notes || '',
+                  subtasks: localTask.subtasks ? JSON.stringify(localTask.subtasks) : '[]'
                 });
               }
             }
@@ -468,8 +466,24 @@ export const useStore = create<Store>()(
                   console.log(`Task "${localTask.title}" more recent locally, keeping local version`);
                   mergedTasks.push(localTask);
                 } else {
-                  console.log(`Task "${remoteTask.title}" more recent in Supabase, using remote version`);
-                  mergedTasks.push(remoteTask);
+                  // If remote is more recent, but local has subtasks, merge the subtasks
+                  if (localTask.subtasks?.length && (!remoteTask.subtasks || remoteTask.subtasks.length === 0)) {
+                    console.log(`Task "${remoteTask.title}" more recent in Supabase, but preserving local subtasks`);
+                    mergedTasks.push({
+                      ...remoteTask,
+                      subtasks: localTask.subtasks
+                    });
+                    
+                    // Also update Supabase with the subtasks
+                    await supabase.from('tasks').upsert({
+                      id: localTask.id,
+                      user_id: userId,
+                      subtasks: JSON.stringify(localTask.subtasks)
+                    });
+                  } else {
+                    console.log(`Task "${remoteTask.title}" more recent in Supabase, using remote version`);
+                    mergedTasks.push(remoteTask);
+                  }
                 }
               }
             }
@@ -492,7 +506,8 @@ export const useStore = create<Store>()(
                   updated_at: new Date(localTask.updatedAt).toISOString(),
                   created_at: new Date(localTask.createdAt).toISOString(),
                   ai_generated: localTask.aiGenerated || false,
-                  notes: localTask.notes || ''
+                  notes: localTask.notes || '',
+                  subtasks: localTask.subtasks ? JSON.stringify(localTask.subtasks) : '[]'
                 });
               }
             }

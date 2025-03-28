@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
   ai_generated BOOLEAN DEFAULT FALSE,
-  notes TEXT
+  notes TEXT,
+  subtasks JSONB DEFAULT '[]'::jsonb
 );
 
 -- RLS for Tasks
