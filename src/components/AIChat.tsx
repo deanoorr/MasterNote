@@ -20,7 +20,7 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingReasoning, setLoadingReasoning] = useState<string[]>([]);
-  const [mode, setMode] = useState<'agent' | 'chat'>('chat');
+  const [mode, setMode] = useState<'chat' | 'agent'>('agent');
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { messages, addMessage, addTask, clearMessages } = useStore();
