@@ -12,6 +12,7 @@ import AuthModal from './components/Auth/AuthModal';
 import UserProfile from './components/Auth/UserProfile';
 import { isSupabaseConfigured } from './lib/supabase';
 import { storageService } from './services/storage';
+import { API_BACKEND_URL } from './constants';
 
 // Add CSS for animations
 const cssStyles = `
