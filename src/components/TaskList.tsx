@@ -62,6 +62,8 @@ export default function TaskList() {
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(new Set());
   const [subtaskInput, setSubtaskInput] = useState<{ [key: string]: string }>({});
   const [addingSubtask, setAddingSubtask] = useState<string | null>(null);
+  const [editingSubtask, setEditingSubtask] = useState<{ parentId: string; subtaskId: string } | null>(null);
+  const [editedSubtaskTitle, setEditedSubtaskTitle] = useState('');
   
   // Calendar styles for the date picker
   const calendarStyles = {
@@ -572,21 +574,38 @@ export default function TaskList() {
   };
 
   const handleAddSubtask = (parentTaskId: string) => {
-    const subtaskTitle = subtaskInput[parentTaskId]?.trim();
-    if (subtaskTitle) {
+    if (!parentTaskId) {
+      console.log("No parent task ID provided");
+      return;
+    }
+    
+    const inputText = subtaskInput[parentTaskId];
+    if (!inputText || !inputText.trim()) {
+      console.log("Empty subtask title");
+      return;
+    }
+    
+    try {
       const subtask: Task = {
-        id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        title: subtaskTitle,
+        id: `subtask-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        title: inputText.trim(),
         priority: 'medium',
         status: 'todo',
         createdAt: new Date(),
         updatedAt: new Date(),
         aiGenerated: false
       };
-
+      
+      console.log("Adding subtask:", subtask);
       useStore.getState().addSubtask(parentTaskId, subtask);
-      setSubtaskInput(prev => ({ ...prev, [parentTaskId]: '' }));
-      setAddingSubtask(null);
+      
+      // Reset input after successful addition
+      setSubtaskInput(prev => ({
+        ...prev,
+        [parentTaskId]: ''
+      }));
+    } catch (error) {
+      console.error("Failed to add subtask:", error);
     }
   };
 
@@ -602,18 +621,54 @@ export default function TaskList() {
     useStore.getState().updateSubtask(parentTaskId, subtaskId, { status: newStatus });
   };
 
+  const handleEditSubtask = (parentTaskId: string, subtaskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const parentTask = tasks.find(t => t.id === parentTaskId);
+    if (!parentTask) return;
+
+    const subtask = parentTask.subtasks?.find(st => st.id === subtaskId);
+    if (!subtask) return;
+
+    setEditingSubtask({ parentId: parentTaskId, subtaskId });
+    setEditedSubtaskTitle(subtask.title);
+  };
+
+  const handleSaveSubtaskEdit = () => {
+    if (!editingSubtask) return;
+    
+    const { parentId, subtaskId } = editingSubtask;
+    if (editedSubtaskTitle.trim()) {
+      useStore.getState().updateSubtask(parentId, subtaskId, { 
+        title: editedSubtaskTitle.trim() 
+      });
+    }
+    setEditingSubtask(null);
+    setEditedSubtaskTitle('');
+  };
+
+  const handleCancelSubtaskEdit = () => {
+    setEditingSubtask(null);
+    setEditedSubtaskTitle('');
+  };
+
   const handleDeleteSubtask = (parentTaskId: string, subtaskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     useStore.getState().deleteSubtask(parentTaskId, subtaskId);
   };
 
   const renderSubtasks = (task: Task) => {
-    if (!task.subtasks?.length) return null;
+    // Show subtasks section if task has subtasks OR if we're currently adding a subtask to this task
+    if ((!task || !task.subtasks || !Array.isArray(task.subtasks) || task.subtasks.length === 0) && addingSubtask !== task.id) {
+      return null;
+    }
 
     const isExpanded = expandedSubtasks.has(task.id);
+    const hasSubtasks = task.subtasks && Array.isArray(task.subtasks) && task.subtasks.length > 0;
+    const subtasksCount = hasSubtasks && task.subtasks ? task.subtasks.length : 0;
     
     // Debug log to see what's in the subtasks data
     console.log("Rendering subtasks for task:", task.title);
+    console.log("Is adding subtask:", addingSubtask === task.id);
     console.log("Subtasks data:", task.subtasks);
 
     return (
@@ -621,33 +676,53 @@ export default function TaskList() {
         <Group justify="space-between" mb={8}>
           <Text size="sm" c="dimmed" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <IconSubtask size={14} />
-            Subtasks ({task.subtasks.length})
+            Subtasks ({subtasksCount})
           </Text>
-          <ActionIcon 
-            size="sm" 
-            variant="subtle" 
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleSubtasks(task.id);
-            }}
-          >
-            <IconChevronDown 
-              size={16} 
-              style={{ 
-                transform: isExpanded ? 'rotate(180deg)' : 'none',
-                transition: 'transform 0.2s'
-              }} 
-            />
-          </ActionIcon>
+          <Group gap={8}>
+            <ActionIcon 
+              size="sm" 
+              variant="subtle"
+              color="teal"
+              onClick={(e) => {
+                e.stopPropagation();
+                setAddingSubtask(task.id);
+                setSubtaskInput(prev => ({
+                  ...prev,
+                  [task.id]: prev[task.id] || ''
+                }));
+              }}
+              title="Add Subtask"
+            >
+              <IconPlus size={14} />
+            </ActionIcon>
+            <ActionIcon 
+              size="sm" 
+              variant="subtle" 
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSubtasks(task.id);
+              }}
+            >
+              <IconChevronDown 
+                size={16} 
+                style={{ 
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s'
+                }} 
+              />
+            </ActionIcon>
+          </Group>
         </Group>
 
-        {isExpanded && (
+        {isExpanded && hasSubtasks && task.subtasks && (
           <Stack gap={8}>
             {task.subtasks.map(subtask => {
+              if (!subtask) return null;
+              
               console.log("Rendering subtask:", subtask);
               return (
                 <Paper
-                  key={subtask.id}
+                  key={subtask.id || `temp-${Math.random()}`}
                   p={8}
                   radius="sm"
                   style={{
@@ -655,31 +730,78 @@ export default function TaskList() {
                     border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`
                   }}
                 >
-                  <Group justify="space-between" wrap="nowrap">
-                    <Group gap={8}>
-                      <Checkbox
-                        checked={subtask.status === 'done'}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleSubtaskStatusChange(task.id, subtask.id, e as any);
+                  {editingSubtask && editingSubtask.subtaskId === subtask.id ? (
+                    <Group justify="space-between">
+                      <TextInput
+                        size="xs"
+                        value={editedSubtaskTitle}
+                        onChange={(e) => setEditedSubtaskTitle(e.currentTarget.value)}
+                        style={{ flex: 1 }}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveSubtaskEdit();
+                          } else if (e.key === 'Escape') {
+                            handleCancelSubtaskEdit();
+                          }
                         }}
                       />
-                      <Text size="sm" style={{ textDecoration: subtask.status === 'done' ? 'line-through' : 'none' }}>
-                        {/* Fix for subtasks showing "Title" placeholder */}
-                        {subtask.title === "Title" 
-                          ? (subtask.description || "Subtask") 
-                          : (subtask.title || 'Untitled Subtask')}
-                      </Text>
+                      <Group gap={4}>
+                        <ActionIcon 
+                          size="xs" 
+                          color="teal" 
+                          variant="filled" 
+                          onClick={handleSaveSubtaskEdit}
+                        >
+                          <IconCheck size={12} />
+                        </ActionIcon>
+                        <ActionIcon 
+                          size="xs" 
+                          color="gray" 
+                          variant="subtle" 
+                          onClick={handleCancelSubtaskEdit}
+                        >
+                          <IconTrash size={12} />
+                        </ActionIcon>
+                      </Group>
                     </Group>
-                    <ActionIcon
-                      size="sm"
-                      color="red"
-                      variant="subtle"
-                      onClick={(e) => handleDeleteSubtask(task.id, subtask.id, e)}
-                    >
-                      <IconTrash size={14} />
-                    </ActionIcon>
-                  </Group>
+                  ) : (
+                    <Group justify="space-between" wrap="nowrap">
+                      <Group gap={8}>
+                        <Checkbox
+                          checked={!!subtask.status && subtask.status === 'done'}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleSubtaskStatusChange(task.id, subtask.id, e as any);
+                          }}
+                        />
+                        <Text size="sm" style={{ textDecoration: subtask.status === 'done' ? 'line-through' : 'none' }}>
+                          {/* Fix for subtasks showing "Title" placeholder with additional null checks */}
+                          {subtask.title === "Title" 
+                            ? (subtask.description || "Subtask") 
+                            : (subtask.title || 'Untitled Subtask')}
+                        </Text>
+                      </Group>
+                      <Group gap={4}>
+                        <ActionIcon
+                          size="sm"
+                          color="blue"
+                          variant="subtle"
+                          onClick={(e) => handleEditSubtask(task.id, subtask.id, e)}
+                        >
+                          <IconEdit size={14} />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="sm"
+                          color="red"
+                          variant="subtle"
+                          onClick={(e) => handleDeleteSubtask(task.id, subtask.id, e)}
+                        >
+                          <IconTrash size={14} />
+                        </ActionIcon>
+                      </Group>
+                    </Group>
+                  )}
                 </Paper>
               );
             })}
@@ -692,18 +814,36 @@ export default function TaskList() {
               size="xs"
               placeholder="Add subtask..."
               value={subtaskInput[task.id] || ''}
-              onChange={(e) => setSubtaskInput(prev => ({ ...prev, [task.id]: e.currentTarget.value }))}
+              onChange={(e) => {
+                // Completely rewrite this handler to be bulletproof
+                if (e && e.currentTarget && task && task.id) {
+                  const val = e.currentTarget.value || '';
+                  setSubtaskInput((prevState) => {
+                    const newState = { ...prevState };
+                    newState[task.id] = val;
+                    return newState;
+                  });
+                }
+              }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && task && task.id) {
+                  e.preventDefault();
+                  e.stopPropagation();
                   handleAddSubtask(task.id);
                 }
               }}
+              autoFocus
+              style={{ flex: 1 }}
             />
             <ActionIcon
               size="sm"
               color="teal"
               variant="light"
-              onClick={() => handleAddSubtask(task.id)}
+              onClick={() => {
+                if (task && task.id) {
+                  handleAddSubtask(task.id);
+                }
+              }}
             >
               <IconPlus size={14} />
             </ActionIcon>
@@ -713,7 +853,13 @@ export default function TaskList() {
               variant="subtle"
               onClick={() => {
                 setAddingSubtask(null);
-                setSubtaskInput(prev => ({ ...prev, [task.id]: '' }));
+                if (task && task.id) {
+                  setSubtaskInput(prev => {
+                    const newState = { ...prev };
+                    newState[task.id] = '';
+                    return newState;
+                  });
+                }
               }}
             >
               <IconTrash size={14} />
@@ -972,6 +1118,29 @@ export default function TaskList() {
                               }}
                             >
                               {task.dueDate ? 'Change Due Date' : 'Add Due Date'}
+                            </Menu.Item>
+                            
+                            <Menu.Item
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Initialize subtaskInput if it doesn't exist for this task
+                                setSubtaskInput(prev => ({
+                                  ...prev,
+                                  [task.id]: prev[task.id] || ''
+                                }));
+                                // Set the state to show the input field
+                                setAddingSubtask(task.id);
+                                // Ensure subtasks are expanded
+                                setExpandedSubtasks(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.add(task.id);
+                                  return newSet;
+                                });
+                                console.log("Add Subtask clicked for task ID:", task.id);
+                              }}
+                              leftSection={<IconSubtask size={14} />}
+                            >
+                              Add Subtask
                             </Menu.Item>
                             
                             <Menu.Divider />
