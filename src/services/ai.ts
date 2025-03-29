@@ -2562,7 +2562,8 @@ Be specific and creative - avoid generic subtasks like "Research" or "Plan".
 DO NOT include priority labels like "[HIGH PRIORITY]" in the subtask titles.
 
 Format each subtask as:
-1. Title: Brief description that explains what to do and why it matters
+1. [Title of first subtask]: [Description of first subtask]
+2. [Title of second subtask]: [Description of second subtask]
 `;
 
   try {
@@ -2573,7 +2574,7 @@ Format each subtask as:
       messages: [
         { 
           role: 'system', 
-          content: 'You are a creative task breakdown assistant specializing in detailed project planning. Your subtasks should be specific, varied in priority, and include helpful context. DO NOT include priority labels in the subtask titles.' 
+          content: 'You are a creative task breakdown assistant specializing in detailed project planning. Your subtasks should be specific, varied in priority, and include helpful context. DO NOT include priority labels in the subtask titles. Format each subtask as NUMBER. TITLE: DESCRIPTION' 
         },
         { role: 'user', content: prompt }
       ],
@@ -2582,23 +2583,34 @@ Format each subtask as:
     });
     
     const aiResponse = response.choices[0].message.content || "";
+    console.log("AI Response for subtasks:", aiResponse);
     
     // Updated regex to extract subtasks without priority labels
     const subtaskRegex = /\d+\.\s*([^:]+):\s*([^\n]+)/gi;
     const subtaskMatches = Array.from(aiResponse.matchAll(subtaskRegex));
     
+    console.log("Subtask matches:", subtaskMatches);
+    
     if (!subtaskMatches || subtaskMatches.length === 0) {
       // Fallback to simpler regex if the formatted version didn't work
+      console.log("No structured subtasks found, trying simpler regex");
       const simplerMatches = aiResponse.match(/\d+\.\s*([^\n]+)/g);
+      console.log("Simpler matches:", simplerMatches);
+      
       if (!simplerMatches) {
         return "I couldn't generate meaningful subtasks. Please try again or provide more task details.";
       }
       
-      const subtasksToAdd = simplerMatches.map(match => ({
-        title: match.replace(/^\d+\.\s*/, '').trim(),
-        description: "",
-        priority: targetTask.priority
-      }));
+      const subtasksToAdd = simplerMatches.map(match => {
+        const title = match.replace(/^\d+\.\s*/, '').trim();
+        console.log("Extracted subtask title:", title);
+        
+        return {
+          title: title,
+          description: "",
+          priority: targetTask.priority
+        };
+      });
 
       return createAndAddSubtasks(subtasksToAdd, targetTask, taskStore);
     }
@@ -2608,6 +2620,8 @@ Format each subtask as:
     const subtasksToAdd = subtaskMatches.map((match, index) => {
       const title = match[1].trim();
       const description = match[2].trim();
+      
+      console.log(`Extracted subtask ${index+1}:`, { title, description });
       
       // Assign varied priorities in sequence (high, medium, low, high, medium...)
       const priority = priorities[index % priorities.length] as "high" | "medium" | "low";
@@ -2632,9 +2646,20 @@ function createAndAddSubtasks(
   parentTask: Task, 
   taskStore: TaskStoreType
 ): string {
+  console.log(`Creating ${subtasksData.length} subtasks for task "${parentTask.title}"`);
+  console.log("Subtasks data:", subtasksData);
+  
   const createdSubtasks: Array<{title: string, priority: string, description: string}> = [];
   
   for (const subtaskData of subtasksData) {
+    // Ensure the title is not empty
+    if (!subtaskData.title || subtaskData.title.trim() === '') {
+      console.error("Empty subtask title detected, skipping this subtask");
+      continue;
+    }
+    
+    console.log(`Creating subtask: "${subtaskData.title}" (${subtaskData.priority})`);
+    
     const subtask: Task = {
       id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       title: subtaskData.title,
@@ -2646,6 +2671,7 @@ function createAndAddSubtasks(
       aiGenerated: true
     };
 
+    console.log("Final subtask object:", subtask);
     taskStore.addSubtask(parentTask.id, subtask);
     createdSubtasks.push({
       title: subtaskData.title,

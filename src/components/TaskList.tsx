@@ -611,6 +611,10 @@ export default function TaskList() {
     if (!task.subtasks?.length) return null;
 
     const isExpanded = expandedSubtasks.has(task.id);
+    
+    // Debug log to see what's in the subtasks data
+    console.log("Rendering subtasks for task:", task.title);
+    console.log("Subtasks data:", task.subtasks);
 
     return (
       <Box ml={20} mt={8}>
@@ -639,40 +643,46 @@ export default function TaskList() {
 
         {isExpanded && (
           <Stack gap={8}>
-            {task.subtasks.map(subtask => (
-              <Paper
-                key={subtask.id}
-                p={8}
-                radius="sm"
-                style={{
-                  backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(248, 249, 250, 0.5)',
-                  border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`
-                }}
-              >
-                <Group justify="space-between" wrap="nowrap">
-                  <Group gap={8}>
-                    <Checkbox
-                      checked={subtask.status === 'done'}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        handleSubtaskStatusChange(task.id, subtask.id, e as any);
-                      }}
-                    />
-                    <Text size="sm" style={{ textDecoration: subtask.status === 'done' ? 'line-through' : 'none' }}>
-                      {subtask.title}
-                    </Text>
+            {task.subtasks.map(subtask => {
+              console.log("Rendering subtask:", subtask);
+              return (
+                <Paper
+                  key={subtask.id}
+                  p={8}
+                  radius="sm"
+                  style={{
+                    backgroundColor: isDark ? 'rgba(44, 46, 51, 0.5)' : 'rgba(248, 249, 250, 0.5)',
+                    border: `1px solid ${isDark ? '#373A40' : '#dee2e6'}`
+                  }}
+                >
+                  <Group justify="space-between" wrap="nowrap">
+                    <Group gap={8}>
+                      <Checkbox
+                        checked={subtask.status === 'done'}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSubtaskStatusChange(task.id, subtask.id, e as any);
+                        }}
+                      />
+                      <Text size="sm" style={{ textDecoration: subtask.status === 'done' ? 'line-through' : 'none' }}>
+                        {/* Fix for subtasks showing "Title" placeholder */}
+                        {subtask.title === "Title" 
+                          ? (subtask.description || "Subtask") 
+                          : (subtask.title || 'Untitled Subtask')}
+                      </Text>
+                    </Group>
+                    <ActionIcon
+                      size="sm"
+                      color="red"
+                      variant="subtle"
+                      onClick={(e) => handleDeleteSubtask(task.id, subtask.id, e)}
+                    >
+                      <IconTrash size={14} />
+                    </ActionIcon>
                   </Group>
-                  <ActionIcon
-                    size="sm"
-                    color="red"
-                    variant="subtle"
-                    onClick={(e) => handleDeleteSubtask(task.id, subtask.id, e)}
-                  >
-                    <IconTrash size={14} />
-                  </ActionIcon>
-                </Group>
-              </Paper>
-            ))}
+                </Paper>
+              );
+            })}
           </Stack>
         )}
 

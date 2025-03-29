@@ -176,6 +176,11 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
       // Get response from the AI
       const response = await getAIResponse(inputValue, userId || 'guest', mode);
       
+      // Additional logging for subtask-related messages
+      if (response.includes("subtask") || response.includes("Subtask")) {
+        console.log("AI Response contains subtask information:", response);
+      }
+      
       // Add the AI's response to the messages list
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -288,6 +293,14 @@ export default function AIChat({ model, onModelChange }: AIChatProps) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    }
+  };
+
+  // Or if there's a function that handles AI responses, add logging there:
+  const handleAIMessage = (message: string) => {
+    // Add subtask debugging
+    if (message.includes("subtask") || message.includes("Subtask")) {
+      console.log("AI Message contains subtask information:", message);
     }
   };
 

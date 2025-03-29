@@ -398,19 +398,34 @@ export const useStore = create<Store>()(
             console.log("Received tasks from Supabase:", tasksData.length);
             
             // Convert from Supabase format to app format
-            const formattedTasks: Task[] = tasksData.map(task => ({
-              id: task.id,
-              title: task.title,
-              description: task.description || '',
-              priority: task.priority as 'low' | 'medium' | 'high',
-              status: task.status as 'todo' | 'in_progress' | 'done',
-              dueDate: task.due_date ? new Date(task.due_date) : undefined,
-              createdAt: new Date(task.created_at),
-              updatedAt: new Date(task.updated_at),
-              aiGenerated: task.ai_generated || false,
-              notes: task.notes || '',
-              subtasks: task.subtasks ? JSON.parse(task.subtasks) : []
-            }));
+            const formattedTasks: Task[] = tasksData.map(task => {
+              // Add debugging for subtasks JSON parsing
+              let parsedSubtasks = [];
+              if (task.subtasks) {
+                try {
+                  console.log(`Parsing subtasks JSON for task "${task.title}":`, task.subtasks);
+                  parsedSubtasks = JSON.parse(task.subtasks);
+                  console.log(`Parsed subtasks:`, parsedSubtasks);
+                } catch (e) {
+                  console.error(`Error parsing subtasks for task "${task.title}":`, e);
+                  parsedSubtasks = [];
+                }
+              }
+
+              return {
+                id: task.id,
+                title: task.title,
+                description: task.description || '',
+                priority: task.priority as 'low' | 'medium' | 'high',
+                status: task.status as 'todo' | 'in_progress' | 'done',
+                dueDate: task.due_date ? new Date(task.due_date) : undefined,
+                createdAt: new Date(task.created_at),
+                updatedAt: new Date(task.updated_at),
+                aiGenerated: task.ai_generated || false,
+                notes: task.notes || '',
+                subtasks: parsedSubtasks
+              };
+            });
             
             // STEP 1: Check for recently modified local tasks (within the last 5 minutes)
             // and push them to Supabase to ensure they're available to other browsers
