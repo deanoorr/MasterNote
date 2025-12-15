@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles } from 'lucide-react';
+import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
@@ -139,7 +139,9 @@ export default function UnifiedAssistant() {
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [input, setInput] = useState('');
+
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
 
     // Lazy init clients
     const clientsRef = useRef(initializeClients());
@@ -245,7 +247,7 @@ export default function UnifiedAssistant() {
                 const baseSystemPrompt = `You are MasterNote AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.`;
                 const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
 
-                const systemPrompt = selectedModel.thinking
+                const systemPrompt = (isThinkingEnabled && selectedModel.provider !== 'anthropic')
                     ? baseSystemPrompt + thinkingPrompt
                     : baseSystemPrompt;
 
@@ -328,15 +330,28 @@ export default function UnifiedAssistant() {
 
                     const stream = await clientsRef.current.anthropic.messages.create({
                         model: selectedModel.id,
-                        max_tokens: 4096,
+                        max_tokens: 40000,
                         system: systemPrompt,
                         messages: historyForModel,
                         stream: true,
+                        thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
                     });
 
                     let textAccumulator = "";
+                    let inThinkingBlock = false;
                     for await (const chunk of stream) {
-                        if (chunk.type === 'content_block_delta') {
+                        if (chunk.type === 'content_block_start' && chunk.content_block.type === 'thinking') {
+                            inThinkingBlock = true;
+                            textAccumulator += "<think>";
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'thinking_delta') {
+                            textAccumulator += chunk.delta.thinking;
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        } else if (chunk.type === 'content_block_stop' && inThinkingBlock) {
+                            inThinkingBlock = false;
+                            textAccumulator += "</think>";
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
                             textAccumulator += chunk.delta.text;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
@@ -564,6 +579,9 @@ export default function UnifiedAssistant() {
                                 Agent
                             </button>
                         </div>
+
+
+
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -629,8 +647,19 @@ export default function UnifiedAssistant() {
                     <div className="max-w-3xl mx-auto relative group">
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/0 via-zinc-900/0 to-zinc-900/0 pointer-events-none" />
                         <div className="bg-zinc-900/50 border border-zinc-800 focus-within:border-zinc-600 rounded-xl flex items-end p-2 transition-colors">
-                            <div className="pl-2 pb-2">
+                            <div className="pl-2 pb-2 flex items-center">
                                 <ModelSelector />
+                                <div className="h-4 w-[1px] bg-zinc-800 mx-2"></div>
+                                <button
+                                    onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
+                                    className={`p-1.5 rounded-md transition-colors ${isThinkingEnabled
+                                        ? 'bg-purple-500/10 text-purple-300'
+                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                                        }`}
+                                    title="Toggle Extended Thinking"
+                                >
+                                    <BrainCircuit size={16} className={isThinkingEnabled ? "text-purple-400" : "text-zinc-500"} />
+                                </button>
                             </div>
                             <textarea
                                 value={input}
