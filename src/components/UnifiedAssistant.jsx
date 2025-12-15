@@ -7,7 +7,54 @@ import { useTasks } from '../context/TaskContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
-import ReactMarkdown from 'react-markdown';
+// Custom FormattedMessage Component to avoid ReactMarkdown crashes
+const FormattedMessage = ({ content }) => {
+    if (!content) return null;
+
+    // Split into lines to handle block elements (headers, lists)
+    const lines = content.split('\n');
+
+    return (
+        <div className="space-y-1">
+            {lines.map((line, i) => {
+                // 1. Headers
+                if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2">{parseInline(line.replace('### ', ''))}</h3>;
+                if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3">{parseInline(line.replace('## ', ''))}</h2>;
+                if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1">{parseInline(line.replace('# ', ''))}</h1>;
+
+                // 2. Lists
+                if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                    return (
+                        <div key={i} className="flex gap-2 ml-1">
+                            <span className="text-zinc-500">•</span>
+                            <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
+                        </div>
+                    );
+                }
+
+                // 3. Code Blocks (simple fallback)
+                if (line.includes('```')) return <code key={i} className="block bg-black/50 p-2 rounded text-xs font-mono my-2">{line.replace(/```/g, '')}</code>;
+
+                // 4. Regular Text (empty lines as spacers)
+                if (!line.trim()) return <div key={i} className="h-2" />;
+
+                return <p key={i} className="whitespace-pre-wrap">{parseInline(line)}</p>;
+            })}
+        </div>
+    );
+};
+
+// Helper for inline formatting (Bold)
+const parseInline = (text) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={index} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+    });
+};
+
 
 // Initialize clients helper
 
@@ -346,7 +393,11 @@ export default function UnifiedAssistant() {
                                             ? 'font-mono text-xs text-zinc-500 py-2'
                                             : 'text-zinc-300'
                                         }`}>
-                                        <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+                                        {msg.content ? (
+                                            <FormattedMessage content={msg.content} />
+                                        ) : (
+                                            <div className="animate-pulse h-4 w-4 bg-zinc-700 rounded-full" />
+                                        )}
 
                                     </div>
                                     {msg.role === 'user' && <div className="text-[10px] text-zinc-600 text-right pr-1">{msg.timestamp}</div>}
