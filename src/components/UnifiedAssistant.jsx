@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// import ReactMarkdown from 'react-markdown';
-// import remarkGfm from 'remark-gfm';
 import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
@@ -10,6 +8,9 @@ import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import ThinkingProcess from './ThinkingProcess';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
     if (!content) return null;
@@ -21,11 +22,7 @@ const FormattedMessage = ({ content }) => {
         <div className="space-y-2 text-sm leading-6">
             {parts.map((part, index) => {
                 // Formatting for Code Blocks (odd indices in split result)
-                if (index % 3 === 1) { // language
-                    // skip, handled in next iteration or merged?
-                    // actually split with capturing groups returns: [text, lang, code, text, lang, code...]
-                    return null;
-                }
+                if (index % 3 === 1) return null; // language
                 if (index % 3 === 2) { // code content
                     const language = parts[index - 1] || 'text';
                     return (
@@ -47,60 +44,60 @@ const FormattedMessage = ({ content }) => {
                 }
 
                 // Formatting for Regular Text (even indices)
-                // Split by newlines to handle headers and lists
                 const textPart = part;
 
-                // 1. Check for Thinking Blocks (<think> ... </think>)
-                // Improved Regex to handle unclosed tags for streaming
-                // It matches (<think> ... </think>) OR (<think> ... end_of_string)
+                // 2. Check for Thinking Blocks (<think> ... </think>)
                 const thinkParts = textPart.split(/(<think>[\s\S]*?<\/think>|<think>[\s\S]*?$)/g);
 
                 return (
                     <div key={index} className="whitespace-pre-wrap">
                         {thinkParts.map((tPart, tIndex) => {
-                            // Check if this part is a thinking block
                             if (tPart.startsWith('<think>')) {
-                                // Remove tags for display
                                 const content = tPart.replace(/<\/?think>/g, '');
                                 return <ThinkingProcess key={tIndex} content={content} defaultExpanded={true} />;
                             }
 
-                            // Even indices are regular markdown
-                            const lines = tPart.split('\n');
+                            // Use ReactMarkdown for the rest (Tables, Lists, Bold, etc.)
                             return (
-                                <span key={tIndex}>
-                                    {lines.map((line, i) => {
-                                        // Empty lines
-                                        if (!line.trim()) return <div key={i} className="h-2" />;
+                                <ReactMarkdown
+                                    key={tIndex}
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        // Text
+                                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                        strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
+                                        em: ({ children }) => <em className="italic text-zinc-400">{children}</em>,
+                                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">{children}</a>,
 
                                         // Headers
-                                        if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2 mb-1">{parseInline(line.replace('### ', ''))}</h3>;
-                                        if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-2">{parseInline(line.replace('## ', ''))}</h2>;
-                                        if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1 mb-2">{parseInline(line.replace('# ', ''))}</h1>;
+                                        h1: ({ children }) => <h1 className="text-xl font-bold text-white mt-4 mb-2 pb-1 border-b border-zinc-700">{children}</h1>,
+                                        h2: ({ children }) => <h2 className="text-lg font-bold text-white mt-3 mb-2">{children}</h2>,
+                                        h3: ({ children }) => <h3 className="text-base font-bold text-zinc-100 mt-2 mb-1">{children}</h3>,
 
                                         // Lists
-                                        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-                                            return (
-                                                <div key={i} className="flex gap-2 ml-1 mb-1">
-                                                    <span className="text-zinc-500 mt-1.5 text-[6px]">•</span>
-                                                    <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
-                                                </div>
-                                            );
-                                        }
+                                        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ul>,
+                                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ol>,
+                                        li: ({ children }) => <li className="text-zinc-300">{children}</li>,
 
                                         // Blockquotes
-                                        if (line.trim().startsWith('> ')) {
-                                            return (
-                                                <div key={i} className="border-l-2 border-zinc-600 pl-3 italic text-zinc-400 my-1">
-                                                    {parseInline(line.replace(/^>\s/, ''))}
-                                                </div>
-                                            );
-                                        }
+                                        blockquote: ({ children }) => <blockquote className="border-l-4 border-zinc-600 pl-4 italic text-zinc-400 my-2">{children}</blockquote>,
 
-                                        // Regular paragraph line
-                                        return <div key={i}>{parseInline(line)}</div>;
-                                    })}
-                                </span>
+                                        // Tables (The request!)
+                                        table: ({ children }) => <div className="overflow-x-auto my-4 border border-zinc-700 rounded-lg"><table className="min-w-full text-left text-sm">{children}</table></div>,
+                                        thead: ({ children }) => <thead className="bg-zinc-800 text-zinc-200 font-semibold">{children}</thead>,
+                                        tbody: ({ children }) => <tbody className="divide-y divide-zinc-700 bg-zinc-900/50">{children}</tbody>,
+                                        tr: ({ children }) => <tr className="hover:bg-zinc-800/50 transition-colors">{children}</tr>,
+                                        th: ({ children }) => <th className="px-4 py-3 whitespace-nowrap">{children}</th>,
+                                        td: ({ children }) => <td className="px-4 py-2 text-zinc-300">{children}</td>,
+
+                                        // Code
+                                        code: ({ inline, className, children, ...props }) => {
+                                            return <code className="bg-zinc-800 text-red-200 px-1 py-0.5 rounded text-xs mx-0.5 border border-zinc-700/50" {...props}>{children}</code>;
+                                        }
+                                    }}
+                                >
+                                    {tPart}
+                                </ReactMarkdown>
                             );
                         })}
                     </div>
@@ -108,41 +105,6 @@ const FormattedMessage = ({ content }) => {
             })}
         </div>
     );
-};
-
-// Inline Parser (Bold, Italic, Link, Inline Code)
-const parseInline = (text) => {
-    // 1. Links: [text](url)
-    const linkRegex = /(\[[^\]]+\]\([^)]+\))/g;
-    const parts = text.split(linkRegex);
-
-    return parts.map((part, i) => {
-        const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (linkMatch) {
-            return (
-                <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
-                    {linkMatch[1]}
-                </a>
-            );
-        }
-
-        // 2. Inline Code: `text`
-        const codeParts = part.split(/(`[^`]+`)/g);
-        return codeParts.map((subPart, j) => {
-            if (subPart.startsWith('`') && subPart.endsWith('`')) {
-                return <code key={`${i}-${j}`} className="bg-zinc-800 text-red-200 px-1 py-0.5 rounded text-xs mx-0.5 border border-zinc-700/50">{subPart.slice(1, -1)}</code>;
-            }
-
-            // 3. Bold: **text**
-            const boldParts = subPart.split(/(\*\*.*?\*\*)/g);
-            return boldParts.map((bPart, k) => {
-                if (bPart.startsWith('**') && bPart.endsWith('**')) {
-                    return <strong key={`${i}-${j}-${k}`} className="font-bold text-white">{bPart.slice(2, -2)}</strong>;
-                }
-                return bPart;
-            });
-        });
-    });
 };
 
 
@@ -379,20 +341,23 @@ export default function UnifiedAssistant() {
           You are an intelligent task manager agent. Analyze the User Request and extract the intent.
           
           Object Mapping:
-          - Match "delete task X" to a specific ID from Existing Tasks.
+          - Match "delete task X" or "complete task X" to a specific ID from Existing Tasks.
           - If the user refers to a task by name (e.g. "wash winnie"), find the corresponding ID.
           
           Rules:
           1. EXTRACT the core task title. Remove conversational fillers.
-          2. EXTRACT metadata (date, priority, tags).
+          2. EXTRACT metadata (date, priority, tags, status).
           3. ACTION determination: "create", "update", "delete", "clear".
+          4. INTENT MAPPING:
+             - "Complete", "finish", "check off", "done" -> action: "update", taskData: { status: "completed" }
+             - "Uncheck", "restart", "todo" -> action: "update", taskData: { status: "pending" }
           
           IMPORTANT: For "update" or "delete", you MUST return the exact 'id' found in Existing Tasks as 'targetId'. If you cannot match it to an ID, leave it null.
           
           Return JSON ONLY: 
           { 
             "action": "create"|"update"|"delete"|"clear"|"invalid", 
-            "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...] }, 
+            "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...], "status": "pending"|"completed" }, 
             "targetId": "ID" (from list) or "all", 
             "reason": "explanation" 
           }
@@ -435,7 +400,9 @@ export default function UnifiedAssistant() {
                         const realId = findTaskId(actionData.targetId);
                         if (realId) {
                             updateTask(realId, actionData.taskData);
-                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated task.`, isSuccess: true });
+                            const taskTitle = tasks.find(t => t.id === realId)?.title || 'task';
+                            const actionVerb = actionData.taskData.status === 'completed' ? 'Completed' : 'Updated';
+                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `${actionVerb} "${taskTitle}".`, isSuccess: true });
                         } else {
                             addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Could not find task to update: "${actionData.targetId || 'unknown'}"`, isSuccess: false });
                         }
