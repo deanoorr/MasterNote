@@ -45,13 +45,36 @@ const FormattedMessage = ({ content }) => {
 };
 
 // Helper for inline formatting (Bold)
+// Helper for inline formatting (Bold + Links)
 const parseInline = (text) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, index) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-            return <strong key={index} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
+    // 1. Split by Link: [text](url)
+    const linkParts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+
+    return linkParts.map((part, i) => {
+        // Handle Link
+        const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (linkMatch) {
+            return (
+                <a
+                    key={i}
+                    href={linkMatch[2]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
+                >
+                    {linkMatch[1]}
+                </a>
+            );
         }
-        return part;
+
+        // Handle Bold (within non-link text)
+        const boldParts = part.split(/(\*\*.*?\*\*)/g);
+        return boldParts.map((subPart, j) => {
+            if (subPart.startsWith('**') && subPart.endsWith('**')) {
+                return <strong key={`${i}-${j}`} className="text-white font-semibold">{subPart.slice(2, -2)}</strong>;
+            }
+            return subPart;
+        });
     });
 };
 
@@ -140,8 +163,21 @@ export default function UnifiedAssistant() {
                     const response = await result.response;
                     responseContent = response.text();
 
-                    if (response.candidates?.[0]?.groundingMetadata?.searchEntryPoint?.renderedContent) {
-                        responseContent += "\n\n**Sources Found**";
+                    const metadata = response.candidates?.[0]?.groundingMetadata;
+                    if (metadata?.groundingChunks?.length > 0) {
+                        const uniqueSources = new Map();
+                        metadata.groundingChunks.forEach(chunk => {
+                            if (chunk.web?.uri && chunk.web?.title) {
+                                uniqueSources.set(chunk.web.uri, chunk.web.title);
+                            }
+                        });
+
+                        if (uniqueSources.size > 0) {
+                            responseContent += "\n\n**Sources Found**\n";
+                            uniqueSources.forEach((title, uri) => {
+                                responseContent += `- [${title}](${uri})\n`;
+                            });
+                        }
                     }
 
                 } else if (selectedModel.provider === 'openai') {
