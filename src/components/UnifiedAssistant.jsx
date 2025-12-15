@@ -55,7 +55,8 @@ const FormattedMessage = ({ content }) => {
                         {thinkParts.map((tPart, tIndex) => {
                             if (tPart.startsWith('<think>')) {
                                 const content = tPart.replace(/<\/?think>/g, '');
-                                return <ThinkingProcess key={tIndex} content={content} defaultExpanded={true} />;
+                                const isComplete = tPart.includes('</think>');
+                                return <ThinkingProcess key={tIndex} content={content} defaultExpanded={true} isComplete={isComplete} />;
                             }
 
                             // Use ReactMarkdown for the rest (Tables, Lists, Bold, etc.)
@@ -137,6 +138,7 @@ export default function UnifiedAssistant() {
         localStorage.setItem('masternote_assistant_mode', mode);
     }, [mode]);
 
+    const { selectedModel } = useModel();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [input, setInput] = useState('');
 
@@ -146,11 +148,18 @@ export default function UnifiedAssistant() {
     // Lazy init clients
     const clientsRef = useRef(initializeClients());
 
+    // Auto-enable Thinking for reasoning models
+    useEffect(() => {
+        if (selectedModel.thinking) {
+            setIsThinkingEnabled(true);
+        }
+    }, [selectedModel.id]);
+
     // Auto-scroll ref
     const scrollRef = useRef(null);
 
     // Contexts
-    const { selectedModel } = useModel();
+
     const { addTask, tasks, updateTask, deleteTask, clearTasks } = useTasks();
     const {
         sessions,

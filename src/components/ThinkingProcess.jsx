@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrainCircuit, ChevronDown, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ThinkingProcess({ content, defaultExpanded = false }) {
+export default function ThinkingProcess({ content, defaultExpanded = false, isComplete = false }) {
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+    // Auto-collapse when complete (only if it was open)
+    useEffect(() => {
+        if (isComplete) {
+            setIsExpanded(false);
+        }
+    }, [isComplete]);
 
     if (!content) return null;
 
@@ -25,7 +32,7 @@ export default function ThinkingProcess({ content, defaultExpanded = false }) {
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
                     >
-                        <div className="px-3 pb-3 pt-0 text-xs text-zinc-500 font-mono whitespace-pre-wrap border-t border-zinc-800/50 bg-black/20">
+                        <div className="px-3 pb-3 pt-0 text-xs text-zinc-500 font-mono whitespace-pre-wrap border-t border-zinc-800/50 bg-black/20 italic">
                             <div className="pt-2">
                                 {content}
                             </div>
