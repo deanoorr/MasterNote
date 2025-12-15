@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft } from 'lucide-react';
+import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
@@ -332,9 +332,18 @@ export default function UnifiedAssistant() {
             try {
                 if (!clientsRef.current.genAI) throw new Error("Google API Key missing for Agent mode");
                 const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-                const taskContextJSON = JSON.stringify(tasks.map(t => ({ id: t.id, title: t.title })));
+
+                // Enhanced context with dates and status
+                const taskContextJSON = JSON.stringify(tasks.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    date: t.date,
+                    priority: t.priority,
+                    status: t.status
+                })));
+
                 const prompt = `
-          Current Date: ${new Date().toLocaleDateString()}
+          Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           Existing Tasks: ${taskContextJSON}
           User Request: "${userText}"
           
@@ -347,18 +356,22 @@ export default function UnifiedAssistant() {
           Rules:
           1. EXTRACT the core task title. Remove conversational fillers.
           2. EXTRACT metadata (date, priority, tags, status).
-          3. ACTION determination: "create", "update", "delete", "clear".
+          3. ACTION determination: "create", "update", "delete", "clear", "query".
           4. INTENT MAPPING:
              - "Complete", "finish", "check off", "done" -> action: "update", taskData: { status: "completed" }
              - "Uncheck", "restart", "todo" -> action: "update", taskData: { status: "pending" }
+             - "What tasks...", "Show me...", "List..." -> action: "query"
           
-          IMPORTANT: For "update" or "delete", you MUST return the exact 'id' found in Existing Tasks as 'targetId'. If you cannot match it to an ID, leave it null.
-          
+          IMPORTANT: 
+          - For "update" or "delete", you MUST return the exact 'id' found in Existing Tasks as 'targetId'.
+          - For "query", provide a helpful, natural language summary in the 'response' field. Use Markdown formatting (bolding, lists).
+
           Return JSON ONLY: 
           { 
-            "action": "create"|"update"|"delete"|"clear"|"invalid", 
+            "action": "create"|"update"|"delete"|"clear"|"query"|"invalid", 
             "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...], "status": "pending"|"completed" }, 
             "targetId": "ID" (from list) or "all", 
+            "response": "Natural language answer for queries",
             "reason": "explanation" 
           }
         `;
@@ -383,7 +396,14 @@ export default function UnifiedAssistant() {
                     return null;
                 };
 
-                if (actionData.action === 'create') {
+                if (actionData.action === 'query') {
+                    addMessageToSession(currentSessionId, {
+                        id: Date.now() + 1,
+                        role: 'ai', // Use AI role for rich text rendering
+                        content: actionData.response || "Here are your tasks.",
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                } else if (actionData.action === 'create') {
                     const newTask = {
                         title: actionData.taskData.title || userText,
                         tags: actionData.taskData.tags?.length ? actionData.taskData.tags : ['New'],
@@ -544,8 +564,8 @@ export default function UnifiedAssistant() {
                     <div className="max-w-3xl mx-auto space-y-8 pb-4">
                         {currentSession.messages.length === 0 && (
                             <div className="flex flex-col items-center justify-center mt-20 opacity-50">
-                                <div className="w-12 h-12 bg-zinc-900 rounded-xl flex items-center justify-center mb-4 text-zinc-500">
-                                    <Bot size={24} />
+                                <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mb-4 text-zinc-500 border border-zinc-800 shadow-sm">
+                                    <Sparkles size={32} className="text-zinc-400" />
                                 </div>
                                 <p className="text-zinc-500 text-sm">Start a conversation using {selectedModel.name}</p>
                             </div>
@@ -554,8 +574,8 @@ export default function UnifiedAssistant() {
                         {currentSession.messages.map((msg) => (
                             <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 {msg.role !== 'user' && (
-                                    <div className="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-700">
-                                        {msg.role === 'system' ? <Command size={14} className="text-zinc-400" /> : <Bot size={16} className="text-white" />}
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-700/50">
+                                        {msg.role === 'system' ? <Command size={14} className="text-zinc-400" /> : <Sparkles size={16} className="text-white" />}
                                     </div>
                                 )}
 
