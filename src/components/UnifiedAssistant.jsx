@@ -157,7 +157,8 @@ export default function UnifiedAssistant() {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
-                        tools: [{ googleSearch: {} }] // Keep internet access
+                        systemInstruction: "Use Google Search ONLY for real-time information (e.g. news, weather, stocks) or obscure facts you do not know. For general knowledge, coding, or logic, use your internal knowledge without searching.",
+                        tools: [{ googleSearch: {} }] // Internet access (dynamic)
                     });
                     const result = await model.generateContent(userText);
                     const response = await result.response;
