@@ -13,11 +13,11 @@ export default function ModelSelector() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full glass-panel hover:bg-white/5 transition-colors border border-white/10"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors border border-zinc-700/50 hover:border-zinc-700"
             >
-                <selectedModel.icon size={16} className={selectedModel.color} />
-                <span className="text-sm font-medium text-slate-200">{selectedModel.name}</span>
-                <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <selectedModel.icon size={14} className={selectedModel.color} />
+                <span className="text-xs font-medium text-zinc-200">{selectedModel.name}</span>
+                <ChevronDown size={12} className={`text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </motion.button>
 
             <AnimatePresence>
@@ -26,10 +26,10 @@ export default function ModelSelector() {
                         initial={{ opacity: 0, y: 8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute left-0 bottom-full mb-2 w-56 rounded-xl glass-panel overflow-hidden shadow-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10"
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-zinc-800 bg-zinc-900 shadow-xl overflow-hidden"
                     >
-                        <div className="p-1">
+                        <div className="p-1.5 space-y-0.5">
                             {models.map((model) => (
                                 <button
                                     key={model.id}
@@ -37,15 +37,15 @@ export default function ModelSelector() {
                                         setSelectedModel(model);
                                         setIsOpen(false);
                                     }}
-                                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-all ${selectedModel.id === model.id
-                                        ? 'bg-primary-500/20 text-white'
-                                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                                    className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition-colors ${selectedModel.id === model.id
+                                        ? 'bg-zinc-800 text-white'
+                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                                         }`}
                                 >
-                                    <model.icon size={16} className={model.color} />
+                                    <model.icon size={14} className={model.color} />
                                     <span className="font-medium">{model.name}</span>
                                     {selectedModel.id === model.id && (
-                                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                                        <div className="ml-auto w-1.5 h-1.5 rounded-full bg-zinc-400" />
                                     )}
                                 </button>
                             ))}
