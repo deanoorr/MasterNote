@@ -128,13 +128,16 @@ const parseInline = (text) => {
 const initializeClients = () => {
     const googleKey = import.meta.env.VITE_GOOGLE_API_KEY;
     const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const xaiKey = import.meta.env.VITE_XAI_API_KEY;
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
         openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
+        xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
         missingKeys: {
             google: !googleKey,
-            openai: !openaiKey
+            openai: !openaiKey,
+            xai: !xaiKey
         }
     };
 };
@@ -227,6 +230,13 @@ export default function UnifiedAssistant() {
                     if (!clientsRef.current.openai) throw new Error("OpenAI API Key missing");
                     const completion = await clientsRef.current.openai.chat.completions.create({
                         messages: [{ role: "system", content: "You are MasterNote AI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
+                        model: selectedModel.id,
+                    });
+                    responseContent = completion.choices[0].message.content;
+                } else if (selectedModel.provider === 'xai') {
+                    if (!clientsRef.current.xai) throw new Error("xAI API Key missing");
+                    const completion = await clientsRef.current.xai.chat.completions.create({
+                        messages: [{ role: "system", content: "You are Grok, an AI assistant by xAI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
                         model: selectedModel.id,
                     });
                     responseContent = completion.choices[0].message.content;
