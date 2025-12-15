@@ -1,10 +1,11 @@
 import React from 'react';
-import { LayoutGrid, Settings, LogOut, Sparkles } from 'lucide-react';
+import { LayoutGrid, Settings, LogOut, Sparkles, StickyNote } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Logo } from './Logo';
 
 const navItems = [
     { id: 'workspace', label: 'My Tasks', icon: LayoutGrid },
+    { id: 'notes', label: 'Notes', icon: StickyNote },
     { id: 'assistant', label: 'AI Assistant', icon: Sparkles },
     { id: 'settings', label: 'Settings', icon: Settings },
 ];

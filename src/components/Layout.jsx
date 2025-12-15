@@ -5,7 +5,9 @@ import AssistantView from '../pages/AssistantView';
 import { ModelProvider } from '../context/ModelContext';
 import { TaskProvider } from '../context/TaskContext';
 import { ChatProvider } from '../context/ChatContext';
+import { NotesProvider } from '../context/NotesContext';
 import { Logo } from './Logo';
+import NotesPage from '../pages/NotesPage';
 
 // Placeholder for Settings
 const Settings = () => (
@@ -30,8 +32,10 @@ function LayoutContent() {
                 {/* Helper Header - Transparent */}
                 <header className="h-20 flex items-center justify-between px-8 shrink-0 z-30">
                     <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 flex items-center gap-2">
-                        {activeTab === 'workspace' ? 'My Tasks' :
-                            activeTab === 'assistant' ? 'AI Assistant' : 'Settings'}
+                        {activeTab === 'workspace' && 'My Tasks'}
+                        {activeTab === 'assistant' && 'AI Assistant'}
+                        {activeTab === 'notes' && 'Sticky Notes'}
+                        {activeTab === 'settings' && 'Settings'}
                     </h1>
                 </header>
 
@@ -39,6 +43,7 @@ function LayoutContent() {
                 <div className="flex-1 overflow-hidden relative">
                     {activeTab === 'workspace' && <Workspace />}
                     {activeTab === 'assistant' && <AssistantView />}
+                    {activeTab === 'notes' && <NotesPage />}
                     {activeTab === 'settings' && <Settings />}
                 </div>
             </main>
@@ -51,7 +56,9 @@ export default function Layout() {
         <ModelProvider>
             <TaskProvider>
                 <ChatProvider>
-                    <LayoutContent />
+                    <NotesProvider>
+                        <LayoutContent />
+                    </NotesProvider>
                 </ChatProvider>
             </TaskProvider>
         </ModelProvider>
