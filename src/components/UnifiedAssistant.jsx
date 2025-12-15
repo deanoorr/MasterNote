@@ -9,6 +9,7 @@ import { useTasks } from '../context/TaskContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import ThinkingProcess from './ThinkingProcess';
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
     if (!content) return null;
@@ -47,39 +48,60 @@ const FormattedMessage = ({ content }) => {
 
                 // Formatting for Regular Text (even indices)
                 // Split by newlines to handle headers and lists
-                const lines = part.split('\n');
+                const textPart = part;
+
+                // 1. Check for Thinking Blocks (<think> ... </think>)
+                // Improved Regex to handle unclosed tags for streaming
+                // It matches (<think> ... </think>) OR (<think> ... end_of_string)
+                const thinkParts = textPart.split(/(<think>[\s\S]*?<\/think>|<think>[\s\S]*?$)/g);
+
                 return (
                     <div key={index} className="whitespace-pre-wrap">
-                        {lines.map((line, i) => {
-                            // Empty lines
-                            if (!line.trim()) return <div key={i} className="h-2" />;
-
-                            // Headers
-                            if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2 mb-1">{parseInline(line.replace('### ', ''))}</h3>;
-                            if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-2">{parseInline(line.replace('## ', ''))}</h2>;
-                            if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1 mb-2">{parseInline(line.replace('# ', ''))}</h1>;
-
-                            // Lists
-                            if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-                                return (
-                                    <div key={i} className="flex gap-2 ml-1 mb-1">
-                                        <span className="text-zinc-500 mt-1.5 text-[6px]">•</span>
-                                        <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
-                                    </div>
-                                );
+                        {thinkParts.map((tPart, tIndex) => {
+                            // Check if this part is a thinking block
+                            if (tPart.startsWith('<think>')) {
+                                // Remove tags for display
+                                const content = tPart.replace(/<\/?think>/g, '');
+                                return <ThinkingProcess key={tIndex} content={content} defaultExpanded={true} />;
                             }
 
-                            // Blockquotes
-                            if (line.trim().startsWith('> ')) {
-                                return (
-                                    <div key={i} className="border-l-2 border-zinc-600 pl-3 italic text-zinc-400 my-1">
-                                        {parseInline(line.replace(/^>\s/, ''))}
-                                    </div>
-                                );
-                            }
+                            // Even indices are regular markdown
+                            const lines = tPart.split('\n');
+                            return (
+                                <span key={tIndex}>
+                                    {lines.map((line, i) => {
+                                        // Empty lines
+                                        if (!line.trim()) return <div key={i} className="h-2" />;
 
-                            // Regular paragraph line
-                            return <div key={i}>{parseInline(line)}</div>;
+                                        // Headers
+                                        if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2 mb-1">{parseInline(line.replace('### ', ''))}</h3>;
+                                        if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-2">{parseInline(line.replace('## ', ''))}</h2>;
+                                        if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1 mb-2">{parseInline(line.replace('# ', ''))}</h1>;
+
+                                        // Lists
+                                        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                                            return (
+                                                <div key={i} className="flex gap-2 ml-1 mb-1">
+                                                    <span className="text-zinc-500 mt-1.5 text-[6px]">•</span>
+                                                    <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
+                                                </div>
+                                            );
+                                        }
+
+                                        // Blockquotes
+                                        if (line.trim().startsWith('> ')) {
+                                            return (
+                                                <div key={i} className="border-l-2 border-zinc-600 pl-3 italic text-zinc-400 my-1">
+                                                    {parseInline(line.replace(/^>\s/, ''))}
+                                                </div>
+                                            );
+                                        }
+
+                                        // Regular paragraph line
+                                        return <div key={i}>{parseInline(line)}</div>;
+                                    })}
+                                </span>
+                            );
                         })}
                     </div>
                 );
@@ -170,7 +192,8 @@ export default function UnifiedAssistant() {
         switchSession,
         deleteSession,
         clearSession,
-        addMessageToSession
+        addMessageToSession,
+        updateMessage
     } = useChat();
 
     // Scroll to bottom effect
@@ -184,6 +207,34 @@ export default function UnifiedAssistant() {
         return <div className="flex h-full w-full items-center justify-center text-zinc-500">Loading...</div>;
     }
 
+    // --- Hybrid Search Helper ---
+    // Uses Gemini Flash to fetch real-time web context 
+    const getWebContext = async (query) => {
+        try {
+            if (!clientsRef.current.genAI) return null;
+            const model = clientsRef.current.genAI.getGenerativeModel({
+                model: "gemini-2.5-flash",
+                tools: [{ googleSearch: {} }] // Enable Google Search
+            });
+
+            const prompt = `
+            User Query: "${query}"
+            Task: Search Google for this query. 
+            If it requests real-time info (news, weather, sports, facts), return a comprehensive text summary of the search results.
+            If it is a general knowledge question (e.g. "what is a cat") or creative writing, return exactly "NO_SEARCH".
+            `;
+
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+
+            if (text.includes("NO_SEARCH")) return null;
+            return text;
+        } catch (e) {
+            console.warn("Web Context Fetch Failed:", e);
+            return null;
+        }
+    };
+
     const handleSend = async () => {
         if (!input.trim()) return;
 
@@ -196,61 +247,120 @@ export default function UnifiedAssistant() {
             const userMsg = { id: Date.now(), role: 'user', content: userText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
             addMessageToSession(currentSessionId, userMsg);
 
-            let responseContent = "";
+            // Create placeholder message ID
+            const msgId = Date.now() + 1;
+            addMessageToSession(currentSessionId, {
+                id: msgId,
+                role: 'ai',
+                content: '', // Start empty
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+            // ! CRITICAL: we need valid streaming support. 
+            // I'll implement the stream consumption first, and assumes `currentSession` updates cause re-renders.
+            // I will use a local variable to track `fullContent`.
+            // And use `updateMessage` if I can access it? I don't see it in imports.
+            // I will implement a `updateLastMessage` in ChatContext in a separate tool call if needed.
+            // For now, let's write the streaming logic, and momentarily, I will just "simulate" streaming by batching or 
+            // I will just use `addMessageToSession` but that appends. 
+            // I'll check ChatContext.jsx in a second. 
+            // Let's assume for this step that I'll add `updateMessage` to the context. 
+            // Implementation below assumes `updateLastMessage` is available from useChat().
+
             try {
+                // Construct fresh history including the new user message
+                const historyForModel = [
+                    ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
+                    { role: 'user', content: userText }
+                ];
+
+                const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+                const baseSystemPrompt = `You are MasterNote AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.`;
+                const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
+
+                const systemPrompt = selectedModel.thinking
+                    ? baseSystemPrompt + thinkingPrompt
+                    : baseSystemPrompt;
+
                 if (selectedModel.provider === 'google') {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
-                        systemInstruction: "You are MasterNote AI. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting (bold, italics, code blocks) to make your responses engaging and clear.",
-                        tools: [{ googleSearch: {} }] // Internet access (dynamic)
+                        systemInstruction: systemPrompt,
                     });
-                    const result = await model.generateContent(userText);
-                    const response = await result.response;
-                    responseContent = response.text();
 
-                    const metadata = response.candidates?.[0]?.groundingMetadata;
-                    if (metadata?.groundingChunks?.length > 0) {
-                        const uniqueSources = new Map();
-                        metadata.groundingChunks.forEach(chunk => {
-                            if (chunk.web?.uri && chunk.web?.title) {
-                                uniqueSources.set(chunk.web.uri, chunk.web.title);
-                            }
-                        });
+                    // Sanitize history for Gemini: Must start with User, and alternate User/Model
+                    const rawHistory = currentSession.messages.map(m => ({
+                        role: m.role === 'ai' ? 'model' : 'user',
+                        parts: [{ text: m.content }],
+                    }));
 
-                        if (uniqueSources.size > 0) {
-                            responseContent += "\n\n**Sources Found**\n";
-                            uniqueSources.forEach((title, uri) => {
-                                responseContent += `- [${title}](${uri})\n`;
-                            });
-                        }
+                    // Find first user message index
+                    const firstUserIndex = rawHistory.findIndex(m => m.role === 'user');
+
+                    // If no user message found in history (e.g. only AI greeting), use empty history
+                    // If found, slice from there to ensure it starts with User
+                    const validHistory = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
+
+                    const chatSession = model.startChat({
+                        history: validHistory,
+                    });
+
+                    const result = await chatSession.sendMessageStream(userText);
+
+                    let textAccumulator = "";
+                    for await (const chunk of result.stream) {
+                        const chunkText = chunk.text();
+                        textAccumulator += chunkText;
+                        updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
-                } else if (selectedModel.provider === 'openai') {
-                    if (!clientsRef.current.openai) throw new Error("OpenAI API Key missing");
-                    const completion = await clientsRef.current.openai.chat.completions.create({
-                        messages: [{ role: "system", content: "You are MasterNote AI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
+                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai') {
+                    const client = selectedModel.provider === 'openai' ? clientsRef.current.openai : clientsRef.current.xai;
+                    if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
+
+                    // --- Hybrid Search Injection ---
+                    let finalSystemPrompt = systemPrompt;
+                    try {
+                        // Only search if the model is Grok or specifically requested (can be expanded)
+                        // For now, enable for all xAI/OpenAI to give them "Superpowers"
+                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+
+                        const webContext = await getWebContext(userText);
+                        if (webContext) {
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nUse this context to answer the user's question accurately.`;
+                            updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+                        } else {
+                            updateMessage(currentSessionId, msgId, ""); // Clear status
+                        }
+                    } catch (err) {
+                        console.error("Hybrid search error", err);
+                        // Continue without web context
+                        updateMessage(currentSessionId, msgId, "");
+                    }
+
+                    const stream = await client.chat.completions.create({
+                        messages: [
+                            { role: "system", content: finalSystemPrompt },
+                            ...historyForModel
+                        ],
                         model: selectedModel.id,
+                        stream: true,
                     });
-                    responseContent = completion.choices[0].message.content;
-                } else if (selectedModel.provider === 'xai') {
-                    if (!clientsRef.current.xai) throw new Error("xAI API Key missing");
-                    const completion = await clientsRef.current.xai.chat.completions.create({
-                        messages: [{ role: "system", content: "You are Grok, an AI assistant by xAI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
-                        model: selectedModel.id,
-                    });
-                    responseContent = completion.choices[0].message.content;
+
+                    let textAccumulator = "";
+                    for await (const chunk of stream) {
+                        const content = chunk.choices[0]?.delta?.content || "";
+                        if (content) {
+                            textAccumulator += content;
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        }
+                    }
                 }
             } catch (error) {
-                responseContent = `Error: ${error.message}`;
+                updateMessage(currentSessionId, msgId, `Error: ${error.message}`);
             }
-
-            addMessageToSession(currentSessionId, {
-                id: Date.now() + 1,
-                role: 'ai',
-                content: responseContent,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            });
         }
 
         // --- 2. Agent Mode ---
@@ -448,7 +558,14 @@ export default function UnifiedAssistant() {
                     </div>
 
                     <div className="flex items-center gap-4">
-
+                        <button
+                            onClick={() => createSession()}
+                            className="text-zinc-500 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                            title="New Chat"
+                        >
+                            <Plus size={16} /> New
+                        </button>
+                        <div className="h-4 w-[1px] bg-zinc-800"></div>
                         <button onClick={() => clearSession(currentSessionId)} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1">
                             <Trash2 size={14} /> Clear
                         </button>
@@ -494,13 +611,7 @@ export default function UnifiedAssistant() {
                             </div>
                         ))}
 
-                        {isProcessing && (
-                            <div className="flex gap-4">
-                                <div className="w-8 h-8 rounded bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                                    <div className="w-2 h-2 bg-zinc-500 rounded-full animate-pulse" />
-                                </div>
-                            </div>
-                        )}
+                        {/* Processing indicator removed as per user request */}
                     </div>
                 </div>
 

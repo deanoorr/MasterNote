@@ -90,6 +90,24 @@ export function ChatProvider({ children }) {
         }));
     };
 
+    // Updates an existing message in a session (for streaming)
+    const updateMessage = (sessionId, messageId, newContent, isSuccess = undefined) => {
+        setSessions(prev => prev.map(s => {
+            if (s.id === sessionId) {
+                return {
+                    ...s,
+                    messages: s.messages.map(m =>
+                        m.id === messageId
+                            ? { ...m, content: newContent, ...(isSuccess !== undefined && { isSuccess }) }
+                            : m
+                    ),
+                    lastUpdated: Date.now()
+                };
+            }
+            return s;
+        }));
+    };
+
     return (
         <ChatContext.Provider value={{
             sessions,
@@ -99,7 +117,8 @@ export function ChatProvider({ children }) {
             switchSession,
             deleteSession,
             clearSession,
-            addMessageToSession
+            addMessageToSession,
+            updateMessage
         }}>
             {children}
         </ChatContext.Provider>

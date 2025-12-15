@@ -1,0 +1,38 @@
+import React, { useState } from 'react';
+import { BrainCircuit, ChevronDown, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+export default function ThinkingProcess({ content, defaultExpanded = false }) {
+    const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+
+    if (!content) return null;
+
+    return (
+        <div className="my-2 border border-zinc-800 rounded-lg overflow-hidden bg-zinc-900/30">
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 transition-colors"
+            >
+                <BrainCircuit size={14} className="text-purple-400" />
+                <span>Thinking Process</span>
+                {isExpanded ? <ChevronDown size={14} className="ml-auto" /> : <ChevronRight size={14} className="ml-auto" />}
+            </button>
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <div className="px-3 pb-3 pt-0 text-xs text-zinc-500 font-mono whitespace-pre-wrap border-t border-zinc-800/50 bg-black/20">
+                            <div className="pt-2">
+                                {content}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
