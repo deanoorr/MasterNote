@@ -10,7 +10,14 @@ const INITIAL_TASKS = [
 ];
 
 export function TaskProvider({ children }) {
-    const [tasks, setTasks] = useState(INITIAL_TASKS);
+    const [tasks, setTasks] = useState(() => {
+        const saved = localStorage.getItem('masternote_tasks');
+        return saved ? JSON.parse(saved) : INITIAL_TASKS;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('masternote_tasks', JSON.stringify(tasks));
+    }, [tasks]);
 
     const addTask = (task) => {
         setTasks(prev => [{ ...task, id: Date.now(), status: 'pending' }, ...prev]);
