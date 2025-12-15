@@ -120,7 +120,7 @@ export default function UnifiedAssistant() {
           Current Date: ${new Date().toLocaleDateString()}
           Tasks: ${taskContextJSON}
           User Request: "${userText}"
-          Analyze and return JSON: { "action": "create"|"update"|"delete"|"clear"|"invalid", "taskData": {...}, "targetId": ..., "reason": "..." }
+          Analyze and return JSON: { "action": "create"|"update"|"delete"|"clear"|"invalid", "taskData": {...}, "targetId": "ID" or "all", "reason": "..." }
         `;
 
                 const result = await model.generateContent(prompt);
@@ -130,14 +130,33 @@ export default function UnifiedAssistant() {
                 if (actionData.action === 'create') {
                     addTask({ title: actionData.taskData.title || userText, tags: ['New'], date: 'Upcoming', priority: 'Medium' });
                     addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${actionData.taskData.title}`, isSuccess: true });
+                } else if (actionData.action === 'update') {
+                    if (actionData.targetId === 'all') {
+                        tasks.forEach(t => updateTask(t.id, actionData.taskData));
+                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated all tasks.`, isSuccess: true });
+                    } else {
+                        updateTask(actionData.targetId, actionData.taskData);
+                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated task.`, isSuccess: true });
+                    }
+                } else if (actionData.action === 'delete') {
+                    if (actionData.targetId === 'all') {
+                        clearTasks();
+                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted all tasks.`, isSuccess: true });
+                    } else {
+                        deleteTask(actionData.targetId);
+                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted task.`, isSuccess: true });
+                    }
+                } else if (actionData.action === 'clear') {
+                    clearTasks();
+                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Cleared all tasks.`, isSuccess: true });
                 } else if (actionData.action === 'invalid') {
                     addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Please switch to Chat Mode.` });
                 } else {
-                    // Handle update/delete/clear simplified
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Action ${actionData.action} processed.`, isSuccess: true });
+                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Unknown action: ${actionData.action}`, isSuccess: false });
                 }
             } catch (error) {
-                addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Error: ${error.message}` });
+                console.error("AI Action Error:", error);
+                addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Error executing command: ${error.message}` });
             }
         }
         setIsProcessing(false);
