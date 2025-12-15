@@ -7,6 +7,7 @@ import { useTasks } from '../context/TaskContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import ThinkingProcess from './ThinkingProcess';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -113,15 +114,18 @@ const initializeClients = () => {
     const googleKey = import.meta.env.VITE_GOOGLE_API_KEY;
     const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
     const xaiKey = import.meta.env.VITE_XAI_API_KEY;
+    const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
         openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
+        anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
         missingKeys: {
             google: !googleKey,
             openai: !openaiKey,
-            xai: !xaiKey
+            xai: !xaiKey,
+            anthropic: !anthropicKey
         }
     };
 };
@@ -316,6 +320,24 @@ export default function UnifiedAssistant() {
                         const content = chunk.choices[0]?.delta?.content || "";
                         if (content) {
                             textAccumulator += content;
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        }
+                    }
+                } else if (selectedModel.provider === 'anthropic') {
+                    if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
+
+                    const stream = await clientsRef.current.anthropic.messages.create({
+                        model: selectedModel.id,
+                        max_tokens: 4096,
+                        system: systemPrompt,
+                        messages: historyForModel,
+                        stream: true,
+                    });
+
+                    let textAccumulator = "";
+                    for await (const chunk of stream) {
+                        if (chunk.type === 'content_block_delta') {
+                            textAccumulator += chunk.delta.text;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
                     }
