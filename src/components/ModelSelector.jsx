@@ -27,7 +27,7 @@ export default function ModelSelector() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute right-0 top-full mt-2 w-56 rounded-xl glass-panel overflow-hidden shadow-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10"
+                        className="absolute left-0 bottom-full mb-2 w-56 rounded-xl glass-panel overflow-hidden shadow-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10"
                     >
                         <div className="p-1">
                             {models.map((model) => (

@@ -6,7 +6,6 @@ const ModelContext = createContext();
 export const models = [
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', icon: Zap, color: 'text-yellow-400', provider: 'google' },
     { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', icon: Sparkles, color: 'text-blue-400', provider: 'google' },
-    { id: 'gpt-4o', name: 'GPT-5 (Preview)', icon: BrainCircuit, color: 'text-purple-400', provider: 'openai' },
 ];
 
 export function ModelProvider({ children }) {

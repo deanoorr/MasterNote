@@ -21,6 +21,11 @@ export function ChatProvider({ children }) {
     useEffect(() => {
         localStorage.setItem('nexus_sessions', JSON.stringify(sessions));
         localStorage.setItem('nexus_current_session_id', currentSessionId);
+
+        // Safety check: specific session ID might be stale
+        if (!sessions.find(s => s.id === currentSessionId)) {
+            setCurrentSessionId(sessions[0].id);
+        }
     }, [sessions, currentSessionId]);
 
     const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];

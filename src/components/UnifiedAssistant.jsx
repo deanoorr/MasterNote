@@ -7,6 +7,10 @@ import { useTasks } from '../context/TaskContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
+import ReactMarkdown from 'react-markdown';
+
+// Initialize clients helper
+
 
 // Initialize clients helper
 const initializeClients = () => {
@@ -24,7 +28,12 @@ const initializeClients = () => {
 };
 
 export default function UnifiedAssistant() {
-    const [mode, setMode] = useState('chat');
+    const [mode, setMode] = useState(() => localStorage.getItem('masternote_assistant_mode') || 'chat');
+
+    useEffect(() => {
+        localStorage.setItem('masternote_assistant_mode', mode);
+    }, [mode]);
+
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [input, setInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -118,39 +127,91 @@ export default function UnifiedAssistant() {
                 const taskContextJSON = JSON.stringify(tasks.map(t => ({ id: t.id, title: t.title })));
                 const prompt = `
           Current Date: ${new Date().toLocaleDateString()}
-          Tasks: ${taskContextJSON}
+          Existing Tasks: ${taskContextJSON}
           User Request: "${userText}"
-          Analyze and return JSON: { "action": "create"|"update"|"delete"|"clear"|"invalid", "taskData": {...}, "targetId": "ID" or "all", "reason": "..." }
+          
+          You are an intelligent task manager agent. Analyze the User Request and extract the intent.
+          
+          Object Mapping:
+          - Match "delete task X" to a specific ID from Existing Tasks.
+          - If the user refers to a task by name (e.g. "wash winnie"), find the corresponding ID.
+          
+          Rules:
+          1. EXTRACT the core task title. Remove conversational fillers.
+          2. EXTRACT metadata (date, priority, tags).
+          3. ACTION determination: "create", "update", "delete", "clear".
+          
+          IMPORTANT: For "update" or "delete", you MUST return the exact 'id' found in Existing Tasks as 'targetId'. If you cannot match it to an ID, leave it null.
+          
+          Return JSON ONLY: 
+          { 
+            "action": "create"|"update"|"delete"|"clear"|"invalid", 
+            "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...] }, 
+            "targetId": "ID" (from list) or "all", 
+            "reason": "explanation" 
+          }
         `;
 
                 const result = await model.generateContent(prompt);
                 const text = (await result.response).text().replace(/```json|```/g, '').trim();
                 const actionData = JSON.parse(text);
 
+                // --- Helper: Smart Task Finding ---
+                const findTaskId = (target) => {
+                    if (!target) return null;
+                    // 1. Exact ID match (string or number)
+                    const exact = tasks.find(t => t.id == target);
+                    if (exact) return exact.id;
+
+                    // 2. Fuzzy Title Match (if target is a string name)
+                    if (typeof target === 'string') {
+                        const lowerTarget = target.toLowerCase();
+                        const match = tasks.find(t => t.title.toLowerCase().includes(lowerTarget));
+                        if (match) return match.id;
+                    }
+                    return null;
+                };
+
                 if (actionData.action === 'create') {
-                    addTask({ title: actionData.taskData.title || userText, tags: ['New'], date: 'Upcoming', priority: 'Medium' });
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${actionData.taskData.title}`, isSuccess: true });
+                    const newTask = {
+                        title: actionData.taskData.title || userText,
+                        tags: actionData.taskData.tags?.length ? actionData.taskData.tags : ['New'],
+                        date: actionData.taskData.date || 'Upcoming',
+                        priority: actionData.taskData.priority || 'Medium'
+                    };
+                    addTask(newTask);
+                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${newTask.title}`, isSuccess: true });
                 } else if (actionData.action === 'update') {
                     if (actionData.targetId === 'all') {
                         tasks.forEach(t => updateTask(t.id, actionData.taskData));
                         addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated all tasks.`, isSuccess: true });
                     } else {
-                        updateTask(actionData.targetId, actionData.taskData);
-                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated task.`, isSuccess: true });
+                        const realId = findTaskId(actionData.targetId);
+                        if (realId) {
+                            updateTask(realId, actionData.taskData);
+                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated task.`, isSuccess: true });
+                        } else {
+                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Could not find task to update: "${actionData.targetId || 'unknown'}"`, isSuccess: false });
+                        }
                     }
                 } else if (actionData.action === 'delete') {
                     if (actionData.targetId === 'all') {
                         clearTasks();
                         addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted all tasks.`, isSuccess: true });
                     } else {
-                        deleteTask(actionData.targetId);
-                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted task.`, isSuccess: true });
+                        const realId = findTaskId(actionData.targetId);
+                        if (realId) {
+                            deleteTask(realId);
+                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted task.`, isSuccess: true });
+                        } else {
+                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Could not find task to delete: "${actionData.targetId || 'unknown'}"`, isSuccess: false });
+                        }
                     }
                 } else if (actionData.action === 'clear') {
                     clearTasks();
                     addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Cleared all tasks.`, isSuccess: true });
                 } else if (actionData.action === 'invalid') {
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Please switch to Chat Mode.` });
+                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `I'm not sure how to help with that. Try asking me to create or manage tasks.` });
                 } else {
                     addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Unknown action: ${actionData.action}`, isSuccess: false });
                 }
@@ -251,7 +312,7 @@ export default function UnifiedAssistant() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <ModelSelector />
+
                         <button onClick={() => clearSession(currentSessionId)} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1">
                             <Trash2 size={14} /> Clear
                         </button>
@@ -286,6 +347,7 @@ export default function UnifiedAssistant() {
                                             : 'text-zinc-300'
                                         }`}>
                                         <pre className="whitespace-pre-wrap font-sans">{msg.content}</pre>
+
                                     </div>
                                     {msg.role === 'user' && <div className="text-[10px] text-zinc-600 text-right pr-1">{msg.timestamp}</div>}
                                 </div>
@@ -306,7 +368,10 @@ export default function UnifiedAssistant() {
                 <div className="p-6 pt-2">
                     <div className="max-w-3xl mx-auto relative group">
                         <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/0 via-zinc-900/0 to-zinc-900/0 pointer-events-none" />
-                        <div className="bg-zinc-900/50 border border-zinc-800 focus-within:border-zinc-600 rounded-xl flex items-end p-2 transition-colors overflow-hidden">
+                        <div className="bg-zinc-900/50 border border-zinc-800 focus-within:border-zinc-600 rounded-xl flex items-end p-2 transition-colors">
+                            <div className="pl-2 pb-2">
+                                <ModelSelector />
+                            </div>
                             <textarea
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
