@@ -227,7 +227,7 @@ export default function UnifiedAssistant() {
                     if (!clientsRef.current.openai) throw new Error("OpenAI API Key missing");
                     const completion = await clientsRef.current.openai.chat.completions.create({
                         messages: [{ role: "system", content: "You are MasterNote AI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
-                        model: "gpt-4o",
+                        model: selectedModel.id,
                     });
                     responseContent = completion.choices[0].message.content;
                 }
