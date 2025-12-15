@@ -327,12 +327,38 @@ export default function UnifiedAssistant() {
                     });
 
                     let textAccumulator = "";
+                    let isThinking = false;
+
                     for await (const chunk of stream) {
-                        const content = chunk.choices[0]?.delta?.content || "";
-                        if (content) {
-                            textAccumulator += content;
+                        const delta = chunk.choices[0]?.delta;
+
+                        // Check for native reasoning fields (OpenAI/xAI/Deepseek conventions)
+                        const reasoningChunk = delta?.reasoning_content || delta?.reasoning;
+                        const contentChunk = delta?.content;
+
+                        if (reasoningChunk) {
+                            if (!isThinking) {
+                                isThinking = true;
+                                textAccumulator += "<think>";
+                            }
+                            textAccumulator += reasoningChunk;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
+
+                        if (contentChunk) {
+                            if (isThinking) {
+                                isThinking = false;
+                                textAccumulator += "</think>";
+                            }
+                            textAccumulator += contentChunk;
+                            updateMessage(currentSessionId, msgId, textAccumulator);
+                        }
+                    }
+
+                    // Ensure think block is closed if stream ends while thinking
+                    if (isThinking) {
+                        textAccumulator += "</think>";
+                        updateMessage(currentSessionId, msgId, textAccumulator);
                     }
                 } else if (selectedModel.provider === 'anthropic') {
                     if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
