@@ -56,7 +56,16 @@ const FormattedMessage = ({ content }) => {
                             if (tPart.startsWith('<think>')) {
                                 const content = tPart.replace(/<\/?think>/g, '');
                                 const isComplete = tPart.includes('</think>');
-                                return <ThinkingProcess key={tIndex} content={content} defaultExpanded={true} isComplete={isComplete} />;
+                                return (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                        key={tIndex}
+                                    >
+                                        <ThinkingProcess content={content} defaultExpanded={true} isComplete={isComplete} />
+                                    </motion.div>
+                                );
                             }
 
                             // Use ReactMarkdown for the rest (Tables, Lists, Bold, etc.)
@@ -536,7 +545,10 @@ export default function UnifiedAssistant() {
     };
 
     return (
-        <div className="flex h-full w-full bg-background font-sans text-white">
+        <div className="flex h-full w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-black font-sans text-white relative overflow-hidden">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+
 
             {/* --- Left Sidebar: History --- */}
             <AnimatePresence mode="wait">
@@ -546,10 +558,10 @@ export default function UnifiedAssistant() {
                         animate={{ width: 256, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-zinc-900 bg-[#09090b] flex flex-col shrink-0 overflow-hidden"
+                        className="border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden"
                     >
-                        <div className="p-4 border-b border-zinc-900 flex items-center justify-between">
-                            <span className="text-sm font-semibold text-zinc-400">History</span>
+                        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
+                            <span className="text-xs font-semibold text-zinc-500 tracking-wider">HISTORY</span>
                             <button
                                 onClick={() => createSession()}
                                 className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
@@ -564,9 +576,9 @@ export default function UnifiedAssistant() {
                                 <button
                                     key={session.id}
                                     onClick={() => switchSession(session.id)}
-                                    className={`w-full text-left px-3 py-2 text-sm rounded-md transition-all truncate flex items-center justify-between group ${currentSessionId === session.id
-                                        ? 'bg-zinc-800 text-white'
-                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900'
+                                    className={`w-full text-left px-3 py-3 text-sm transition-all truncate flex items-center justify-between group border-l-2 ${currentSessionId === session.id
+                                        ? 'border-purple-500 bg-white/5 text-white'
+                                        : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
                                         }`}
                                 >
                                     <span className="truncate">{session.title}</span>
@@ -590,7 +602,7 @@ export default function UnifiedAssistant() {
             <main className="flex-1 flex flex-col relative bg-background">
 
                 {/* Header: Mode & Model */}
-                <header className="h-14 border-b border-zinc-900 flex items-center justify-between px-6 shrink-0">
+                <header className="h-14 border-b border-white/5 bg-zinc-900/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -637,16 +649,45 @@ export default function UnifiedAssistant() {
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6" ref={scrollRef}>
                     <div className="max-w-3xl mx-auto space-y-8 pb-4">
-                        {currentSession.messages.length === 0 && (
-                            <div className="flex flex-col items-center justify-center mt-20 opacity-50">
-                                <div className="w-16 h-16 bg-zinc-900 rounded-2xl flex items-center justify-center mb-4 text-zinc-500 border border-zinc-800 shadow-sm">
-                                    <Sparkles size={32} className="text-zinc-400" />
-                                </div>
-                                <p className="text-zinc-500 text-sm">Start a conversation using {selectedModel.name}</p>
+                        {/* Show Hero/Empty State ONLY if we just have the initial AI greeting */}
+                        {currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && (
+                            <div className="flex flex-col items-center justify-center mt-20">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5 }}
+                                    className="text-center space-y-6"
+                                >
+                                    <div className="inline-flex items-center justify-center p-4 rounded-3xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 mb-2 shadow-xl shadow-black/20">
+                                        <Sparkles size={40} className="text-zinc-400" />
+                                    </div>
+                                    <h2 className="text-2xl font-semibold text-zinc-200 tracking-tight">
+                                        How can I help you, Master?
+                                    </h2>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg mx-auto pt-4">
+                                        {[
+                                            { icon: <MessageSquare size={18} />, label: "Draft an email", query: "Draft a professional email about..." },
+                                            { icon: <Zap size={18} />, label: "Analyze code", query: "Review this code for bugs..." },
+                                            { icon: <BrainCircuit size={18} />, label: "Brainstorm ideas", query: "Give me 5 creative ideas for..." },
+                                            { icon: <Bot size={18} />, label: "Task planning", query: "Create a plan to launch..." },
+                                        ].map((item, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setInput(item.query)}
+                                                className="flex items-center gap-3 p-3 text-sm text-zinc-400 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl transition-all hover:scale-[1.02] text-left group"
+                                            >
+                                                <span className="p-2 rounded-lg bg-zinc-900/50 text-zinc-500 group-hover:text-zinc-300 transition-colors">{item.icon}</span>
+                                                <span className="group-hover:text-zinc-200 transition-colors">{item.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </motion.div>
                             </div>
                         )}
 
-                        {currentSession.messages.map((msg) => (
+                        {/* Show Message List if we have real interaction (more than 1 msg OR first msg is not generic AI greeting) */}
+                        {(!((currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai'))) && currentSession.messages.map((msg) => (
                             <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 {msg.role !== 'user' && (
                                     <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-700/50">
@@ -679,9 +720,9 @@ export default function UnifiedAssistant() {
 
                 {/* Input Area */}
                 <div className="p-6 pt-2">
-                    <div className="max-w-3xl mx-auto relative group">
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/0 via-zinc-900/0 to-zinc-900/0 pointer-events-none" />
-                        <div className="bg-zinc-900/50 border border-zinc-800 focus-within:border-zinc-600 rounded-xl flex items-end p-2 transition-colors">
+                    <div className="max-w-3xl mx-auto relative group z-20">
+                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent pointer-events-none -top-20" />
+                        <div className="bg-zinc-900/80 backdrop-blur-xl border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10 focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)] rounded-2xl flex items-end p-2 transition-all duration-300">
                             <div className="pl-2 pb-2 flex items-center">
                                 <ModelSelector />
                                 <div className="h-4 w-[1px] bg-zinc-800 mx-2"></div>
