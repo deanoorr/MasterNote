@@ -8,18 +8,29 @@ import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 
-// Initialize clients
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_API_KEY);
-const openai = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true
-});
+// Initialize clients helper
+const initializeClients = () => {
+    const googleKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+    return {
+        genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
+        openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
+        missingKeys: {
+            google: !googleKey,
+            openai: !openaiKey
+        }
+    };
+};
 
 export default function UnifiedAssistant() {
     const [mode, setMode] = useState('chat');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [input, setInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Lazy init clients
+    const clientsRef = useRef(initializeClients());
 
     // Auto-scroll ref
     const scrollRef = useRef(null);
@@ -64,7 +75,8 @@ export default function UnifiedAssistant() {
             let responseContent = "";
             try {
                 if (selectedModel.provider === 'google') {
-                    const model = genAI.getGenerativeModel({
+                    if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
+                    const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
                         tools: [{ googleSearch: {} }] // Keep internet access
                     });
@@ -77,7 +89,8 @@ export default function UnifiedAssistant() {
                     }
 
                 } else if (selectedModel.provider === 'openai') {
-                    const completion = await openai.chat.completions.create({
+                    if (!clientsRef.current.openai) throw new Error("OpenAI API Key missing");
+                    const completion = await clientsRef.current.openai.chat.completions.create({
                         messages: [{ role: "system", content: "You are MasterNote AI." }, ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })), { role: "user", content: userText }],
                         model: "gpt-4o",
                     });
@@ -100,7 +113,8 @@ export default function UnifiedAssistant() {
             addMessageToSession(currentSessionId, { id: Date.now(), role: 'system', content: `Command: "${userText}"`, timestamp: 'System' });
 
             try {
-                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                if (!clientsRef.current.genAI) throw new Error("Google API Key missing for Agent mode");
+                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                 const taskContextJSON = JSON.stringify(tasks.map(t => ({ id: t.id, title: t.title })));
                 const prompt = `
           Current Date: ${new Date().toLocaleDateString()}
