@@ -50,7 +50,7 @@ const FormattedMessage = ({ content }) => {
                 const thinkParts = textPart.split(/(<think>[\s\S]*?<\/think>|<think>[\s\S]*?$)/g);
 
                 return (
-                    <div key={index} className="whitespace-pre-wrap">
+                    <div key={index} className="w-full">
                         {thinkParts.map((tPart, tIndex) => {
                             if (tPart.startsWith('<think>')) {
                                 const content = tPart.replace(/<\/?think>/g, '');
@@ -77,7 +77,7 @@ const FormattedMessage = ({ content }) => {
                                         // Lists
                                         ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ul>,
                                         ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ol>,
-                                        li: ({ children }) => <li className="text-zinc-300">{children}</li>,
+                                        li: ({ children }) => <li className="text-zinc-300 [&>p]:mb-1">{children}</li>,
 
                                         // Blockquotes
                                         blockquote: ({ children }) => <blockquote className="border-l-4 border-zinc-600 pl-4 italic text-zinc-400 my-2">{children}</blockquote>,
