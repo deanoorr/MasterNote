@@ -9,7 +9,7 @@ export const models = [
 ];
 
 export function ModelProvider({ children }) {
-    const [selectedModel, setSelectedModel] = useState(models[1]); // Default to Gemini 3.0
+    const [selectedModel, setSelectedModel] = useState(models[0]); // Default to Gemini 2.5 Flash
 
     return (
         <ModelContext.Provider value={{ selectedModel, setSelectedModel, models }}>

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+// import ReactMarkdown from 'react-markdown';
+// import remarkGfm from 'remark-gfm';
 import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
@@ -7,79 +9,119 @@ import { useTasks } from '../context/TaskContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
-// Custom FormattedMessage Component to avoid ReactMarkdown crashes
+// Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
     if (!content) return null;
 
-    // Split into lines to handle block elements (headers, lists)
-    const lines = content.split('\n');
+    // 1. Split by Code Blocks (```language ... ```)
+    const parts = content.split(/```(\w*)\n([\s\S]*?)```/g);
 
     return (
-        <div className="space-y-1">
-            {lines.map((line, i) => {
-                // 1. Headers
-                if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2">{parseInline(line.replace('### ', ''))}</h3>;
-                if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3">{parseInline(line.replace('## ', ''))}</h2>;
-                if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1">{parseInline(line.replace('# ', ''))}</h1>;
-
-                // 2. Lists
-                if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+        <div className="space-y-2 text-sm leading-6">
+            {parts.map((part, index) => {
+                // Formatting for Code Blocks (odd indices in split result)
+                if (index % 3 === 1) { // language
+                    // skip, handled in next iteration or merged?
+                    // actually split with capturing groups returns: [text, lang, code, text, lang, code...]
+                    return null;
+                }
+                if (index % 3 === 2) { // code content
+                    const language = parts[index - 1] || 'text';
                     return (
-                        <div key={i} className="flex gap-2 ml-1">
-                            <span className="text-zinc-500">•</span>
-                            <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
+                        <div key={index} className="my-3 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900/50">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/50 border-b border-zinc-700">
+                                <span className="text-xs text-zinc-400 font-mono">{language}</span>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(part.trim())}
+                                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                            <pre className="p-3 overflow-x-auto text-xs font-mono text-zinc-300">
+                                <code>{part.trim()}</code>
+                            </pre>
                         </div>
                     );
                 }
 
-                // 3. Code Blocks (simple fallback)
-                if (line.includes('```')) return <code key={i} className="block bg-black/50 p-2 rounded text-xs font-mono my-2">{line.replace(/```/g, '')}</code>;
+                // Formatting for Regular Text (even indices)
+                // Split by newlines to handle headers and lists
+                const lines = part.split('\n');
+                return (
+                    <div key={index} className="whitespace-pre-wrap">
+                        {lines.map((line, i) => {
+                            // Empty lines
+                            if (!line.trim()) return <div key={i} className="h-2" />;
 
-                // 4. Regular Text (empty lines as spacers)
-                if (!line.trim()) return <div key={i} className="h-2" />;
+                            // Headers
+                            if (line.trim().startsWith('### ')) return <h3 key={i} className="text-sm font-bold text-zinc-100 mt-2 mb-1">{parseInline(line.replace('### ', ''))}</h3>;
+                            if (line.trim().startsWith('## ')) return <h2 key={i} className="text-base font-bold text-white mt-3 mb-2">{parseInline(line.replace('## ', ''))}</h2>;
+                            if (line.trim().startsWith('# ')) return <h1 key={i} className="text-lg font-bold text-white mt-4 border-b border-zinc-700 pb-1 mb-2">{parseInline(line.replace('# ', ''))}</h1>;
 
-                return <p key={i} className="whitespace-pre-wrap">{parseInline(line)}</p>;
+                            // Lists
+                            if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
+                                return (
+                                    <div key={i} className="flex gap-2 ml-1 mb-1">
+                                        <span className="text-zinc-500 mt-1.5 text-[6px]">•</span>
+                                        <span>{parseInline(line.replace(/^[-*]\s/, ''))}</span>
+                                    </div>
+                                );
+                            }
+
+                            // Blockquotes
+                            if (line.trim().startsWith('> ')) {
+                                return (
+                                    <div key={i} className="border-l-2 border-zinc-600 pl-3 italic text-zinc-400 my-1">
+                                        {parseInline(line.replace(/^>\s/, ''))}
+                                    </div>
+                                );
+                            }
+
+                            // Regular paragraph line
+                            return <div key={i}>{parseInline(line)}</div>;
+                        })}
+                    </div>
+                );
             })}
         </div>
     );
 };
 
-// Helper for inline formatting (Bold)
-// Helper for inline formatting (Bold + Links)
+// Inline Parser (Bold, Italic, Link, Inline Code)
 const parseInline = (text) => {
-    // 1. Split by Link: [text](url)
-    const linkParts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+    // 1. Links: [text](url)
+    const linkRegex = /(\[[^\]]+\]\([^)]+\))/g;
+    const parts = text.split(linkRegex);
 
-    return linkParts.map((part, i) => {
-        // Handle Link
+    return parts.map((part, i) => {
         const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
         if (linkMatch) {
             return (
-                <a
-                    key={i}
-                    href={linkMatch[2]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 hover:underline cursor-pointer"
-                >
+                <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
                     {linkMatch[1]}
                 </a>
             );
         }
 
-        // Handle Bold (within non-link text)
-        const boldParts = part.split(/(\*\*.*?\*\*)/g);
-        return boldParts.map((subPart, j) => {
-            if (subPart.startsWith('**') && subPart.endsWith('**')) {
-                return <strong key={`${i}-${j}`} className="text-white font-semibold">{subPart.slice(2, -2)}</strong>;
+        // 2. Inline Code: `text`
+        const codeParts = part.split(/(`[^`]+`)/g);
+        return codeParts.map((subPart, j) => {
+            if (subPart.startsWith('`') && subPart.endsWith('`')) {
+                return <code key={`${i}-${j}`} className="bg-zinc-800 text-red-200 px-1 py-0.5 rounded text-xs mx-0.5 border border-zinc-700/50">{subPart.slice(1, -1)}</code>;
             }
-            return subPart;
+
+            // 3. Bold: **text**
+            const boldParts = subPart.split(/(\*\*.*?\*\*)/g);
+            return boldParts.map((bPart, k) => {
+                if (bPart.startsWith('**') && bPart.endsWith('**')) {
+                    return <strong key={`${i}-${j}-${k}`} className="font-bold text-white">{bPart.slice(2, -2)}</strong>;
+                }
+                return bPart;
+            });
         });
     });
 };
-
-
-// Initialize clients helper
 
 
 // Initialize clients helper
@@ -104,7 +146,7 @@ export default function UnifiedAssistant() {
         localStorage.setItem('masternote_assistant_mode', mode);
     }, [mode]);
 
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [input, setInput] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -157,7 +199,7 @@ export default function UnifiedAssistant() {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
-                        systemInstruction: "Use Google Search ONLY for real-time information (e.g. news, weather, stocks) or obscure facts you do not know. For general knowledge, coding, or logic, use your internal knowledge without searching.",
+                        systemInstruction: "You are MasterNote AI. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting (bold, italics, code blocks) to make your responses engaging and clear.",
                         tools: [{ googleSearch: {} }] // Internet access (dynamic)
                     });
                     const result = await model.generateContent(userText);
