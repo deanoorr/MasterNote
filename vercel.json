@@ -1,8 +1,8 @@
 {
     "rewrites": [
         {
-            "source": "/scira-api/(.*)",
-            "destination": "https://api.scira.ai/:1"
+            "source": "/scira-api/:path*",
+            "destination": "https://api.scira.ai/:path*"
         },
         {
             "source": "/(.*)",
