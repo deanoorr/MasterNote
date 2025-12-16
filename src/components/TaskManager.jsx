@@ -119,6 +119,18 @@ export default function TaskManager() {
         });
     };
 
+    const isOverdue = (dateString) => {
+        if (!dateString) return false;
+        if (['Today', 'Tomorrow', 'Upcoming'].includes(dateString)) return false;
+
+        // Simple YYYY-MM-DD check
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            return dateString < todayStr;
+        }
+        return false;
+    };
+
     const sortedTasks = getSortedTasks(getFilteredTasks());
     const currentProjectName = selectedProject === 'all' ? 'All Tasks' : selectedProject === 'inbox' ? 'Inbox' : projects.find(p => p.id === selectedProject)?.name || 'Project';
 
@@ -292,6 +304,7 @@ export default function TaskManager() {
 
                         {sortedTasks.map((task, index) => {
                             const project = projects.find(p => p.id === task.projectId);
+                            const overdue = isOverdue(task.date);
                             return (
                                 <motion.div
                                     key={task.id}
@@ -302,7 +315,9 @@ export default function TaskManager() {
                                     transition={{ duration: 0.2 }}
                                     className={`glass-card p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
                                         ? 'bg-slate-900/40 border-slate-800 opacity-60'
-                                        : 'border-white/5 hover:border-white/10 hover:shadow-lg'
+                                        : overdue
+                                            ? 'border-red-500/50 bg-red-500/10 hover:border-red-500/70'
+                                            : 'border-white/5 hover:border-white/10 hover:shadow-lg'
                                         }`}
                                 >
                                     {editingId === task.id ? (
