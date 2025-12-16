@@ -124,17 +124,21 @@ const initializeClients = () => {
     const googleKey = import.meta.env.VITE_GOOGLE_API_KEY;
     const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
     const xaiKey = import.meta.env.VITE_XAI_API_KEY;
+    const sciraKey = import.meta.env.VITE_SCIRA_API_KEY;
     const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
         openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
+
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
+        // scira: handled via custom fetch
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
         missingKeys: {
             google: !googleKey,
             openai: !openaiKey,
             xai: !xaiKey,
+            scira: !sciraKey,
             anthropic: !anthropicKey
         }
     };
@@ -358,6 +362,41 @@ export default function UnifiedAssistant() {
                         textAccumulator += "</think>";
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
+
+                } else if (selectedModel.provider === 'scira') {
+                    if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
+
+                    // Scira Custom Fetch Implementation via Proxy
+                    const response = await fetch('/scira-api/api/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}`
+                        },
+                        body: JSON.stringify({
+                            // Flatten history into a single query string for Scira (since it seems stateless or search-focused)
+                            messages: [
+                                {
+                                    role: 'user',
+                                    content: historyForModel.map(m => m.role === 'user' ? `User: ${m.content}` : `AI: ${m.content}`).join('\n') + `\nUser: ${userText}`
+                                }
+                            ],
+                            model: selectedModel.id
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || `Scira API Error: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.text) {
+                        updateMessage(currentSessionId, msgId, data.text);
+                    } else {
+                        throw new Error("Invalid response format from Scira");
+                    }
+
                 } else if (selectedModel.provider === 'anthropic') {
                     if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
 

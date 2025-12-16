@@ -9,7 +9,8 @@ export const models = [
     { id: 'gpt-5.2-2025-12-11', name: 'GPT-5.2', icon: BrainCircuit, color: 'text-green-400', provider: 'openai', thinking: false },
     { id: 'grok-4-1-fast-reasoning', name: 'Grok 4.1 Fast Thinking', icon: Zap, color: 'text-purple-400', provider: 'xai', thinking: true },
     { id: 'claude-sonnet-4-5', name: 'Claude 4.5 Sonnet', icon: Sparkles, color: 'text-orange-400', provider: 'anthropic', thinking: true },
-    { id: 'claude-opus-4-5', name: 'Claude 4.5 Opus', icon: BrainCircuit, color: 'text-red-400', provider: 'anthropic', thinking: true }
+    { id: 'claude-opus-4-5', name: 'Claude 4.5 Opus', icon: BrainCircuit, color: 'text-red-400', provider: 'anthropic', thinking: true },
+    { id: 'scira-default', name: 'Scira', icon: Zap, color: 'text-indigo-400', provider: 'scira', thinking: false }
 ];
 
 export function ModelProvider({ children }) {
