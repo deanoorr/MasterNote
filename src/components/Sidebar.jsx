@@ -16,7 +16,7 @@ export default function Sidebar({ activeTab, onTabChange }) {
 
             {/* Logo Area */}
             <div className="px-6 mb-12 mt-2">
-                <span className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 hidden md:block">
+                <span className="text-4xl font-bold tracking-tighter text-zinc-100 hidden md:block">
                     BART
                 </span>
             </div>
