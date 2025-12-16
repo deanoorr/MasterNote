@@ -168,8 +168,7 @@ export default function UnifiedAssistant() {
     const scrollRef = useRef(null);
 
     // Contexts
-
-    const { addTask, tasks, updateTask, deleteTask, clearTasks } = useTasks();
+    const { addTask, tasks, updateTask, deleteTask, clearTasks, projects } = useTasks();
     const {
         sessions,
         currentSessionId,
@@ -241,16 +240,6 @@ export default function UnifiedAssistant() {
                 content: '', // Start empty
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
-            // ! CRITICAL: we need valid streaming support. 
-            // I'll implement the stream consumption first, and assumes `currentSession` updates cause re-renders.
-            // I will use a local variable to track `fullContent`.
-            // And use `updateMessage` if I can access it? I don't see it in imports.
-            // I will implement a `updateLastMessage` in ChatContext in a separate tool call if needed.
-            // For now, let's write the streaming logic, and momentarily, I will just "simulate" streaming by batching or 
-            // I will just use `addMessageToSession` but that appends. 
-            // I'll check ChatContext.jsx in a second. 
-            // Let's assume for this step that I'll add `updateMessage` to the context. 
-            // Implementation below assumes `updateLastMessage` is available from useChat().
 
             try {
                 // Construct fresh history including the new user message
@@ -423,9 +412,15 @@ export default function UnifiedAssistant() {
                     status: t.status
                 })));
 
+                const projectContextJSON = JSON.stringify(projects.map(p => ({
+                    id: p.id,
+                    name: p.name
+                })));
+
                 const prompt = `
           Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           Existing Tasks: ${taskContextJSON}
+          Existing Projects: ${projectContextJSON}
           User Request: "${userText}"
           
           You are an intelligent task manager agent. Analyze the User Request and extract the intent.
@@ -433,12 +428,14 @@ export default function UnifiedAssistant() {
           Object Mapping:
           - Match "delete task X" or "complete task X" to a specific ID from Existing Tasks.
           - If the user refers to a task by name (e.g. "wash winnie"), find the corresponding ID.
+          - If the user says "in my X folder" or "project X", try to match it to Existing Projects.
           
           Rules:
           1. EXTRACT the core task title. Remove conversational fillers.
           2. EXTRACT metadata (date, priority, tags, status).
-          3. ACTION determination: "create", "update", "delete", "clear", "query".
-          4. INTENT MAPPING:
+          3. EXTRACT targetProject (name of project if mentioned).
+          4. ACTION determination: "create", "update", "delete", "clear", "query".
+          5. INTENT MAPPING:
              - "Complete", "finish", "check off", "done" -> action: "update", taskData: { status: "completed" }
              - "Uncheck", "restart", "todo" -> action: "update", taskData: { status: "pending" }
              - "What tasks...", "Show me...", "List..." -> action: "query"
@@ -451,6 +448,7 @@ export default function UnifiedAssistant() {
           { 
             "action": "create"|"update"|"delete"|"clear"|"query"|"invalid", 
             "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...], "status": "pending"|"completed" }, 
+            "targetProject": "Project Name or null",
             "targetId": "ID" (from list) or "all", 
             "response": "Natural language answer for queries",
             "reason": "explanation" 
@@ -477,6 +475,14 @@ export default function UnifiedAssistant() {
                     return null;
                 };
 
+                // --- Helper: Smart Project Finding ---
+                const findProjectId = (targetName) => {
+                    if (!targetName) return null;
+                    const lowerTarget = targetName.toLowerCase();
+                    const match = projects.find(p => p.name.toLowerCase().includes(lowerTarget));
+                    return match ? match.id : null;
+                };
+
                 if (actionData.action === 'query') {
                     addMessageToSession(currentSessionId, {
                         id: Date.now() + 1,
@@ -485,14 +491,20 @@ export default function UnifiedAssistant() {
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     });
                 } else if (actionData.action === 'create') {
+                    // Resolve project ID
+                    const projectId = findProjectId(actionData.targetProject);
+
                     const newTask = {
                         title: actionData.taskData.title || userText,
                         tags: actionData.taskData.tags?.length ? actionData.taskData.tags : ['New'],
                         date: actionData.taskData.date || 'Upcoming',
-                        priority: actionData.taskData.priority || 'Medium'
+                        priority: actionData.taskData.priority || 'Medium',
+                        projectId: projectId // Can be null if not found
                     };
                     addTask(newTask);
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${newTask.title}`, isSuccess: true });
+
+                    const projectMsg = projectId ? ` in project "${projects.find(p => p.id === projectId).name}"` : '';
+                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${newTask.title}${projectMsg}`, isSuccess: true });
                 } else if (actionData.action === 'update') {
                     if (actionData.targetId === 'all') {
                         tasks.forEach(t => updateTask(t.id, actionData.taskData));
