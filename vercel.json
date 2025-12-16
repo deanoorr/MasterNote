@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/scira-api/(.*)",
+            "destination": "https://api.scira.ai/:1"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
