@@ -4,6 +4,7 @@ import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, St
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
+import { useNotes } from '../context/NotesContext';
 import { useChat } from '../context/ChatContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
@@ -132,12 +133,14 @@ const initializeClients = () => {
         openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
 
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
+        scira: !!import.meta.env.VITE_SCIRA_API_KEY,
 
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
         missingKeys: {
             google: !googleKey,
             openai: !openaiKey,
             xai: !xaiKey,
+            scira: !import.meta.env.VITE_SCIRA_API_KEY,
 
             anthropic: !anthropicKey
         }
@@ -146,6 +149,7 @@ const initializeClients = () => {
 
 export default function UnifiedAssistant() {
     const [mode, setMode] = useState(() => localStorage.getItem('bart_assistant_mode') || 'chat');
+    const [sciraMode, setSciraMode] = useState('search'); // 'chat' | 'search' | 'x'
 
     useEffect(() => {
         localStorage.setItem('bart_assistant_mode', mode);
@@ -173,6 +177,7 @@ export default function UnifiedAssistant() {
 
     // Contexts
     const { addTask, tasks, updateTask, deleteTask, clearTasks, projects } = useTasks();
+    const { notes } = useNotes();
     const {
         sessions,
         currentSessionId,
@@ -262,8 +267,14 @@ export default function UnifiedAssistant() {
 
             try {
                 // Construct fresh history including the new user message
+                // Fix: Properly map roles and exclude internal system messages (like "Chat history cleared")
                 const historyForModel = [
-                    ...currentSession.messages.map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content })),
+                    ...currentSession.messages.map(m => {
+                        if (m.role === 'ai') return { role: 'assistant', content: m.content };
+                        if (m.role === 'user') return { role: 'user', content: m.content };
+                        // Ignore internal system messages to prevent context pollution
+                        return null;
+                    }).filter(Boolean),
                     { role: 'user', content: userText }
                 ];
 
@@ -445,6 +456,113 @@ export default function UnifiedAssistant() {
                             textAccumulator += chunk.delta.text;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
+                    }
+                } else if (selectedModel.provider === 'scira') {
+                    if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
+
+                    let endpoint = "/scira-api/api/search";
+                    let body = {};
+
+                    // Filter history to remove error messages which might confuse the model
+                    const cleanHistory = historyForModel.filter(m => !m.content.startsWith("Error:") && !m.content.startsWith(" Connection Failed:"));
+
+                    // --- Scira Modes ---
+                    if (sciraMode === 'x') {
+                        endpoint = "/scira-api/api/xsearch";
+                        // xsearch uses 'query'
+                        body = {
+                            query: userText
+                        };
+                        updateMessage(currentSessionId, msgId, " Searching X (Twitter)... 🐦");
+                    } else if (sciraMode === 'search') {
+                        // Search Mode: Now includes history to be "Content Aware" and handle follow-up questions
+                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍");
+
+                        // We use the same context injection as Chat Mode
+                        // Inject Context (Notes & Tasks) if available
+                        const notesContext = notes.map(n => `- [${n.title}]: ${n.content.substring(0, 200)}...`).join('\n');
+                        const tasksContext = tasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
+
+                        let enhancedUserMessage = userText;
+                        const hasContext = (notes.length > 0) || (tasks.length > 0);
+
+                        if (hasContext) {
+                            enhancedUserMessage = `Context (Notes & Tasks):\n${notesContext}\n${tasksContext}\n\n---\nUser Query: ${userText}`;
+                        }
+
+                        const finalHistory = [...cleanHistory];
+                        finalHistory.pop(); // Remove raw
+                        finalHistory.push({ role: 'user', content: enhancedUserMessage });
+
+                        // Ensure User First
+                        while (finalHistory.length > 0 && finalHistory[0].role !== 'user') {
+                            finalHistory.shift();
+                        }
+
+                        body = { messages: finalHistory };
+
+                    } else {
+                        // Scira API Fix: The API seems to ignore conversation history if sent as separate messages (causes looping greetings).
+                        // Solution: Flatten the entire history into a single 'user' prompt.
+
+                        let collapsedHistory = "";
+                        if (cleanHistory.length > 0) {
+                            collapsedHistory = "PREVIOUS CONVERSATION:\n";
+                            cleanHistory.forEach(msg => {
+                                const roleName = msg.role === 'user' ? 'User' : 'AI';
+                                // Skip system messages or empty content
+                                if (msg.content) {
+                                    collapsedHistory += `${roleName}: ${msg.content}\n`;
+                                }
+                            });
+                            collapsedHistory += "\n---\n";
+                        }
+
+                        // Add the context (Notes/Tasks) if enabled
+                        let contextBlock = "";
+                        if (notes.length > 0 || tasks.length > 0) {
+                            const notesContext = notes.map(n => `- [${n.title}]: ${n.content.substring(0, 200)}...`).join('\n');
+                            const tasksContext = tasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
+                            contextBlock = `REAL-TIME CONTEXT (Notes & Tasks):\n${notesContext}\n${tasksContext}\n\n---\n`;
+                        }
+
+                        const finalPrompt = `${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
+
+                        console.log("Scira Collapsed Payload:", finalPrompt);
+
+                        body = {
+                            messages: [
+                                { role: "user", content: finalPrompt }
+                            ]
+                        };
+                    }
+
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}`
+                            },
+                            body: JSON.stringify(body)
+                        });
+
+                        if (!response.ok) {
+                            const errText = await response.text();
+                            throw new Error(`Scira API Error: ${response.status} - ${errText}`);
+                        }
+
+                        const data = await response.json();
+                        let text = data.text || "";
+
+                        if (data.sources && data.sources.length > 0) {
+                            text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
+                        }
+
+                        updateMessage(currentSessionId, msgId, text);
+                    } catch (fetchError) {
+                        console.error("Scira Fetch Error:", fetchError);
+                        throw new Error(`Connection Failed: ${fetchError.message}`);
                     }
                 }
             } catch (error) {
@@ -794,6 +912,25 @@ export default function UnifiedAssistant() {
                         <div className="bg-zinc-900/80 backdrop-blur-xl border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10 focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)] rounded-2xl flex items-end p-2 transition-all duration-300">
                             <div className="pl-2 pb-2 flex items-center">
                                 <ModelSelector />
+                                {selectedModel.provider === 'scira' && (
+                                    <div className="flex items-center ml-2 bg-zinc-800 rounded-lg p-0.5 border border-zinc-700">
+                                        {[
+                                            { id: 'chat', label: 'Chat', icon: MessageSquare },
+                                            { id: 'search', label: 'Search', icon: Zap },
+                                            { id: 'x', label: 'X', icon: ({ size, className }) => <span className={`font-bold text-[10px] ${className}`} style={{ fontSize: size }}>𝕏</span> }
+                                        ].map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => setSciraMode(m.id)}
+                                                className={`p-1.5 rounded-md transition-colors flex items-center gap-1.5 ${sciraMode === m.id ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                title={`${m.label} Mode`}
+                                            >
+                                                <m.icon size={14} />
+                                                <span className="text-[10px] font-medium">{m.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="h-4 w-[1px] bg-zinc-800 mx-2"></div>
                                 <button
                                     onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
