@@ -215,7 +215,21 @@ export default function UnifiedAssistant() {
             `;
 
             const result = await model.generateContent(prompt);
-            const text = result.response.text();
+            const response = await result.response;
+            let text = response.text();
+
+            // Extract and append sources
+            const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+            if (groundingMetadata?.groundingChunks) {
+                const sources = groundingMetadata.groundingChunks
+                    .map(chunk => chunk.web?.uri ? `[${chunk.web.title || 'Source'}](${chunk.web.uri})` : null)
+                    .filter(Boolean);
+
+                if (sources.length > 0) {
+                    const uniqueSources = [...new Set(sources)];
+                    text += "\n\n**Sources:**\n" + uniqueSources.map(s => `- ${s}`).join("\n");
+                }
+            }
 
             if (text.includes("NO_SEARCH")) return null;
             return text;
@@ -291,9 +305,28 @@ export default function UnifiedAssistant() {
                     const result = await chatSession.sendMessageStream(userText);
 
                     let textAccumulator = "";
+                    let gatheredSources = new Set();
+
                     for await (const chunk of result.stream) {
                         const chunkText = chunk.text();
                         textAccumulator += chunkText;
+
+                        // Capture sources from chunk metadata
+                        const metadata = chunk.candidates?.[0]?.groundingMetadata;
+                        if (metadata?.groundingChunks) {
+                            metadata.groundingChunks.forEach(chunk => {
+                                if (chunk.web?.uri) {
+                                    gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
+                                }
+                            });
+                        }
+
+                        updateMessage(currentSessionId, msgId, textAccumulator);
+                    }
+
+                    // Append unique sources to the final message
+                    if (gatheredSources.size > 0) {
+                        textAccumulator += "\n\n**Sources:**\n" + Array.from(gatheredSources).map(s => `- ${s}`).join("\n");
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
@@ -310,7 +343,7 @@ export default function UnifiedAssistant() {
 
                         const webContext = await getWebContext(userText);
                         if (webContext) {
-                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nUse this context to answer the user's question accurately.`;
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
                             updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
                         } else {
                             updateMessage(currentSessionId, msgId, ""); // Clear status
@@ -375,7 +408,7 @@ export default function UnifiedAssistant() {
 
                         const webContext = await getWebContext(userText);
                         if (webContext) {
-                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nUse this context to answer the user's question accurately.`;
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
                             updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
                         } else {
                             updateMessage(currentSessionId, msgId, ""); // Clear status
