@@ -15,10 +15,9 @@ export default function Sidebar({ activeTab, onTabChange }) {
         <aside className="fixed left-0 top-0 h-full w-20 md:w-64 z-50 flex flex-col pt-8 pb-6 px-4 border-r border-zinc-900/0 md:border-zinc-900">
 
             {/* Logo Area */}
-            <div className="flex items-center gap-3 px-2 mb-12">
-                <Logo className="w-8 h-8" />
-                <span className="text-lg font-semibold tracking-tight hidden md:block text-zinc-200">
-                    MasterNote
+            <div className="px-6 mb-12 mt-2">
+                <span className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 hidden md:block">
+                    BART
                 </span>
             </div>
 
