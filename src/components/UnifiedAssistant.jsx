@@ -149,7 +149,7 @@ const initializeClients = () => {
 
 export default function UnifiedAssistant() {
     const [mode, setMode] = useState(() => localStorage.getItem('bart_assistant_mode') || 'chat');
-    const [sciraMode, setSciraMode] = useState('search'); // 'chat' | 'search' | 'x'
+    const [sciraMode, setSciraMode] = useState('chat'); // 'chat' | 'x'
 
     useEffect(() => {
         localStorage.setItem('bart_assistant_mode', mode);
@@ -466,44 +466,60 @@ export default function UnifiedAssistant() {
                     // Filter history to remove error messages which might confuse the model
                     const cleanHistory = historyForModel.filter(m => !m.content.startsWith("Error:") && !m.content.startsWith(" Connection Failed:"));
 
+                    // --- XPloit: Smart Query Generator for X Mode ---
+                    const generateSmartQuery = async (history, currentInput) => {
+                        try {
+                            if (!clientsRef.current.genAI) return currentInput; // Fallback
+
+                            // Only use last 3 messages for context to keep it fast
+                            const recentContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
+                            if (!recentContext) return currentInput;
+
+                            const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                            const prompt = `
+            Context:
+            ${recentContext}
+            
+            User's next input: "${currentInput}"
+            
+            Task: The user wants to search X (Twitter). Based on the context and their input, generate the best 2-3 keywords for a search query.
+            - If the user's input is "what about on X?", infer the topic from context.
+            - If they ask "what is elon saying", search "Elon Musk".
+            - Return ONLY the raw search query string. No quotes, no explanations.
+            `;
+
+                            const result = await model.generateContent(prompt);
+                            const smartQuery = result.response.text().trim();
+                            console.log("Smart X Query:", smartQuery);
+                            return smartQuery;
+                        } catch (e) {
+                            console.warn("Smart Query Failed, using raw input:", e);
+                            return currentInput;
+                        }
+                    };
+
                     // --- Scira Modes ---
                     if (sciraMode === 'x') {
                         endpoint = "/scira-api/api/xsearch";
-                        // xsearch uses 'query'
+                        updateMessage(currentSessionId, msgId, " Analyzing context for X... 🧠");
+
+                        // Generate Context-Aware Query
+                        const smartQuery = await generateSmartQuery(cleanHistory, userText);
+
+                        // Update status to show what we are searching for
+                        updateMessage(currentSessionId, msgId, ` Searching X for: "${smartQuery}"... 🐦`);
+
                         body = {
-                            query: userText
+                            query: smartQuery
                         };
-                        updateMessage(currentSessionId, msgId, " Searching X (Twitter)... 🐦");
-                    } else if (sciraMode === 'search') {
-                        // Search Mode: Now includes history to be "Content Aware" and handle follow-up questions
-                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍");
+                    } else {
+                        // Chat Mode (Unified): Include full history and context
+                        updateMessage(currentSessionId, msgId, " Thinking... 💭");
 
                         // We use the same context injection as Chat Mode
                         // Inject Context (Notes & Tasks) if available
                         const notesContext = notes.map(n => `- [${n.title}]: ${n.content.substring(0, 200)}...`).join('\n');
                         const tasksContext = tasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
-
-                        let enhancedUserMessage = userText;
-                        const hasContext = (notes.length > 0) || (tasks.length > 0);
-
-                        if (hasContext) {
-                            enhancedUserMessage = `Context (Notes & Tasks):\n${notesContext}\n${tasksContext}\n\n---\nUser Query: ${userText}`;
-                        }
-
-                        const finalHistory = [...cleanHistory];
-                        finalHistory.pop(); // Remove raw
-                        finalHistory.push({ role: 'user', content: enhancedUserMessage });
-
-                        // Ensure User First
-                        while (finalHistory.length > 0 && finalHistory[0].role !== 'user') {
-                            finalHistory.shift();
-                        }
-
-                        body = { messages: finalHistory };
-
-                    } else {
-                        // Scira API Fix: The API seems to ignore conversation history if sent as separate messages (causes looping greetings).
-                        // Solution: Flatten the entire history into a single 'user' prompt.
 
                         let collapsedHistory = "";
                         if (cleanHistory.length > 0) {
@@ -916,7 +932,6 @@ export default function UnifiedAssistant() {
                                     <div className="flex items-center ml-2 bg-zinc-800 rounded-lg p-0.5 border border-zinc-700">
                                         {[
                                             { id: 'chat', label: 'Chat', icon: MessageSquare },
-                                            { id: 'search', label: 'Search', icon: Zap },
                                             { id: 'x', label: 'X', icon: ({ size, className }) => <span className={`font-bold text-[10px] ${className}`} style={{ fontSize: size }}>𝕏</span> }
                                         ].map(m => (
                                             <button
