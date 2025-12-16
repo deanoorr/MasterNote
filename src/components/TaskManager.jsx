@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box } from 'lucide-react';
+import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder } from 'lucide-react';
 
 import { useTasks } from '../context/TaskContext';
 
@@ -24,6 +24,7 @@ export default function TaskManager() {
     const [editTitle, setEditTitle] = useState('');
     const [editDate, setEditDate] = useState('');
     const [editPriority, setEditPriority] = useState('');
+    const [editProjectId, setEditProjectId] = useState('inbox');
 
     const toggleStatus = (id, currentStatus) => {
         updateTask(id, { status: currentStatus === 'completed' ? 'pending' : 'completed' });
@@ -63,6 +64,7 @@ export default function TaskManager() {
         setEditTitle(task.title);
         setEditDate(task.date.includes('-') ? task.date : new Date().toISOString().split('T')[0]);
         setEditPriority(task.priority || 'Medium');
+        setEditProjectId(task.projectId || 'inbox');
     };
 
     const cancelEditing = () => {
@@ -70,14 +72,17 @@ export default function TaskManager() {
         setEditTitle('');
         setEditDate('');
         setEditPriority('');
+        setEditProjectId('inbox');
     };
 
     const saveEdit = () => {
         if (!editTitle.trim()) return;
         updateTask(editingId, {
             title: editTitle,
+            title: editTitle,
             date: editDate,
-            priority: editPriority
+            priority: editPriority,
+            projectId: editProjectId === 'inbox' ? null : editProjectId
         });
         cancelEditing();
     };
@@ -329,6 +334,19 @@ export default function TaskManager() {
                                                         <option value="High">High</option>
                                                         <option value="Medium">Medium</option>
                                                         <option value="Low">Low</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
+                                                    <Folder size={14} className="text-slate-400" />
+                                                    <select
+                                                        value={editProjectId}
+                                                        onChange={(e) => setEditProjectId(e.target.value)}
+                                                        className="bg-transparent border-none outline-none text-sm text-slate-300 max-w-[100px]"
+                                                    >
+                                                        <option value="inbox">Inbox</option>
+                                                        {projects.map(p => (
+                                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                                        ))}
                                                     </select>
                                                 </div>
                                                 <div className="flex-1"></div>
