@@ -542,7 +542,9 @@ export default function UnifiedAssistant() {
                             contextBlock = `REAL-TIME CONTEXT (Notes & Tasks):\n${notesContext}\n${tasksContext}\n\n---\n`;
                         }
 
-                        const finalPrompt = `${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
+                        const finalPrompt = `SYSTEM INSTRUCTION: You are an AI with real-time internet access. You MUST verify your knowledge with a web search before answering, especially for recent events, news, or technical releases. Do not rely solely on your internal cutoff knowledge. If the user asks about "new" things, SEARCH first.
+
+${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
 
                         console.log("Scira Collapsed Payload:", finalPrompt);
 
