@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save } from 'lucide-react';
+import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter } from 'lucide-react';
+
 import { useTasks } from '../context/TaskContext';
 
 export default function TaskManager() {
@@ -10,6 +11,8 @@ export default function TaskManager() {
     // Initialize with today's date in YYYY-MM-DD format for the input
     const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
     const [newTaskPriority, setNewTaskPriority] = useState('Medium');
+    const [sortBy, setSortBy] = useState('date'); // 'date', 'priority'
+
 
     // Edit State
     const [editingId, setEditingId] = useState(null);
@@ -65,6 +68,38 @@ export default function TaskManager() {
         cancelEditing();
     };
 
+    const getSortedTasks = () => {
+        return [...tasks].sort((a, b) => {
+            // First sort by status (pending first)
+            if (a.status !== b.status) {
+                return a.status === 'completed' ? 1 : -1;
+            }
+
+            if (sortBy === 'priority') {
+                const priorityWeight = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                const pA = priorityWeight[a.priority] || 0;
+                const pB = priorityWeight[b.priority] || 0;
+                return pB - pA; // Descending priority
+            } else if (sortBy === 'date') {
+                // Simple string compare works reasonably for YYYY-MM-DD and "Today"/"Tomorrow" (Today > Tomorrow alphabetically if not careful, but usually we want date objects)
+                // Let's force a basic date parse if possible, or fall back to string
+                const dateValue = (d) => {
+                    if (d === 'Today') return new Date().toISOString();
+                    if (d === 'Tomorrow') {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        return tomorrow.toISOString();
+                    }
+                    return d;
+                };
+                return dateValue(a.date).localeCompare(dateValue(b.date));
+            }
+            return 0;
+        });
+    };
+
+    const sortedTasks = getSortedTasks();
+
     return (
         <div className="h-full flex flex-col p-8 max-w-5xl mx-auto">
             <header className="mb-12 flex justify-between items-end border-b border-zinc-900 pb-6">
@@ -74,13 +109,27 @@ export default function TaskManager() {
                     </h1>
                     <p className="text-zinc-500 text-sm">Priorities for today.</p>
                 </div>
-                <button
-                    onClick={() => setShowAdd(!showAdd)}
-                    className="flex items-center gap-2 bg-zinc-100 text-black hover:bg-white px-4 py-2 rounded-md transition-all font-medium text-sm shadow-sm"
-                >
-                    {showAdd ? <X size={16} /> : <Plus size={16} />}
-                    {showAdd ? 'Cancel' : 'New Task'}
-                </button>
+                <div className="flex gap-3">
+                    <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-white/10">
+                        <ListFilter size={16} className="text-slate-400" />
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="bg-transparent border-none outline-none text-sm text-slate-300"
+                        >
+                            <option value="date">Sort by Date</option>
+                            <option value="priority">Sort by Priority</option>
+                        </select>
+                    </div>
+
+                    <button
+                        onClick={() => setShowAdd(!showAdd)}
+                        className="flex items-center gap-2 bg-zinc-100 text-black hover:bg-white px-4 py-2 rounded-md transition-all font-medium text-sm shadow-sm"
+                    >
+                        {showAdd ? <X size={16} /> : <Plus size={16} />}
+                        {showAdd ? 'Cancel' : 'New Task'}
+                    </button>
+                </div>
             </header>
 
             <AnimatePresence>
@@ -153,7 +202,7 @@ export default function TaskManager() {
                         </motion.div>
                     )}
 
-                    {tasks.map((task, index) => (
+                    {sortedTasks.map((task, index) => (
                         <motion.div
                             key={task.id}
                             initial={{ opacity: 0, scale: 0.9, y: 20 }}
