@@ -10,7 +10,7 @@ const DEFAULT_PROJECTS = [
 ];
 
 const DEFAULT_NOTE = {
-    content: "Welcome to MasterNote Sticky Notes! 📝\n\nClick here to edit me.",
+    content: "Welcome to Bart Sticky Notes! 📝\n\nClick here to edit me.",
     projectId: 'inbox'
 };
 

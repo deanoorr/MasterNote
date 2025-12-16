@@ -145,10 +145,10 @@ const initializeClients = () => {
 };
 
 export default function UnifiedAssistant() {
-    const [mode, setMode] = useState(() => localStorage.getItem('masternote_assistant_mode') || 'chat');
+    const [mode, setMode] = useState(() => localStorage.getItem('bart_assistant_mode') || 'chat');
 
     useEffect(() => {
-        localStorage.setItem('masternote_assistant_mode', mode);
+        localStorage.setItem('bart_assistant_mode', mode);
     }, [mode]);
 
     const { selectedModel } = useModel();
@@ -255,7 +255,7 @@ export default function UnifiedAssistant() {
                 const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                 const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-                const baseSystemPrompt = `You are MasterNote AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.`;
+                const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.`;
                 const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
 
                 const systemPrompt = (isThinkingEnabled && selectedModel.provider !== 'anthropic')
@@ -758,7 +758,7 @@ export default function UnifiedAssistant() {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder={mode === 'chat' ? "Message MasterNote..." : "Enter a task Command..."}
+                                placeholder={mode === 'chat' ? "Message Bart..." : "Enter a task Command..."}
                                 className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
                                 rows={1}
                             />
@@ -772,7 +772,7 @@ export default function UnifiedAssistant() {
                             </button>
                         </div>
                         <div className="text-center mt-2 text-[10px] text-zinc-700">
-                            MasterNote may display inaccurate info, including about people, so double-check its responses.
+                            Bart may display inaccurate info, including about people, so double-check its responses.
                         </div>
                     </div>
                 </div>
