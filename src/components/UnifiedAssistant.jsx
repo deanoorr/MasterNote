@@ -209,8 +209,9 @@ export default function UnifiedAssistant() {
             const prompt = `
             User Query: "${query}"
             Task: Search Google for this query. 
-            If it requests real-time info (news, weather, sports, facts), return a comprehensive text summary of the search results.
-            If it is a general knowledge question (e.g. "what is a cat") or creative writing, return exactly "NO_SEARCH".
+            ALWAYS search if the query involves news, current events, weather, sports, or specific facts that might change.
+            Only return "NO_SEARCH" if the user is asking for creative writing, simple coding tasks, or strictly internal knowledge (like "who are you").
+            Otherwise, return a comprehensive text summary of the search results.
             `;
 
             const result = await model.generateContent(prompt);
@@ -267,6 +268,7 @@ export default function UnifiedAssistant() {
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
                         systemInstruction: systemPrompt,
+                        tools: [{ googleSearch: {} }]
                     });
 
                     // Sanitize history for Gemini: Must start with User, and alternate User/Model
@@ -366,10 +368,27 @@ export default function UnifiedAssistant() {
                 } else if (selectedModel.provider === 'anthropic') {
                     if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
 
+                    // --- Hybrid Search Injection for Anthropic ---
+                    let finalSystemPrompt = systemPrompt;
+                    try {
+                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+
+                        const webContext = await getWebContext(userText);
+                        if (webContext) {
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nUse this context to answer the user's question accurately.`;
+                            updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+                        } else {
+                            updateMessage(currentSessionId, msgId, ""); // Clear status
+                        }
+                    } catch (err) {
+                        console.error("Hybrid search error", err);
+                        updateMessage(currentSessionId, msgId, "");
+                    }
+
                     const stream = await clientsRef.current.anthropic.messages.create({
                         model: selectedModel.id,
                         max_tokens: 40000,
-                        system: systemPrompt,
+                        system: finalSystemPrompt,
                         messages: historyForModel,
                         stream: true,
                         thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
