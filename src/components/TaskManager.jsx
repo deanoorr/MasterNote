@@ -79,7 +79,7 @@ export default function TaskManager() {
         if (!editTitle.trim()) return;
         updateTask(editingId, {
             title: editTitle,
-            title: editTitle,
+
             date: editDate,
             priority: editPriority,
             projectId: editProjectId === 'inbox' ? null : editProjectId
