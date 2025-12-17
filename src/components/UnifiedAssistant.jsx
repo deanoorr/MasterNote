@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit, Paperclip, X, FileText, Globe } from 'lucide-react';
+import {
+    Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit, Paperclip, X, FileText, Globe,
+    FolderPlus, Folder, ChevronRight, ChevronDown, Edit3 as FolderEdit, ArrowRight, Activity, Clock, MoreVertical, Share2, Copy, CheckCircle2, Terminal, Settings
+} from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
@@ -231,8 +234,130 @@ export default function UnifiedAssistant() {
         deleteSession,
         clearSession,
         addMessageToSession,
-        updateMessage
+        updateMessage,
+        folders,
+        addFolder,
+        deleteFolder,
+        renameFolder,
+        moveSessionToFolder,
+        renameSession
     } = useChat();
+
+    // --- Sidebar State ---
+    const [editingFolderId, setEditingFolderId] = useState(null);
+    const [editingSessionId, setEditingSessionId] = useState(null);
+    const [editValue, setEditValue] = useState('');
+    const [expandedFolders, setExpandedFolders] = useState({});
+    const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+
+    // --- Sidebar Helpers ---
+    const toggleFolder = (id) => {
+        setExpandedFolders(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const startEditingFolder = (e, folder) => {
+        e.stopPropagation();
+        setEditingFolderId(folder.id);
+        setEditValue(folder.name);
+    };
+
+    const startEditingSession = (e, session) => {
+        e.stopPropagation();
+        setEditingSessionId(session.id);
+        setEditValue(session.title);
+    };
+
+    const saveFolderRename = () => {
+        if (editValue.trim()) {
+            renameFolder(editingFolderId, editValue.trim());
+        }
+        setEditingFolderId(null);
+    };
+
+    const saveSessionRename = () => {
+        if (editValue.trim()) {
+            renameSession(editingSessionId, editValue.trim());
+        }
+        setEditingSessionId(null);
+    };
+
+    const handleCreateFolder = (e) => {
+        e.preventDefault();
+        if (newFolderName.trim()) {
+            addFolder(newFolderName.trim());
+            setNewFolderName('');
+            setIsCreatingFolder(false);
+        }
+    };
+
+    const renderChatItems = (folderId = null) => {
+        const filtered = sessions.filter(s => s.folderId === folderId);
+        if (filtered.length === 0 && folderId === null) {
+            return (
+                <div className="text-center text-xs text-zinc-500 dark:text-zinc-600 mt-4">No history</div>
+            );
+        }
+
+        return filtered.map(session => (
+            <motion.div
+                key={session.id}
+                layout
+                drag
+                dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                dragElastic={0.1}
+                onDragEnd={(event, info) => {
+                    const elements = document.elementsFromPoint(info.point.x, info.point.y);
+                    const folderEl = elements.find(el => el.dataset.folderId);
+                    if (folderEl) {
+                        moveSessionToFolder(session.id, folderEl.dataset.folderId);
+                    } else {
+                        const historyEl = elements.find(el => el.id === 'history-root');
+                        if (historyEl) moveSessionToFolder(session.id, null);
+                    }
+                }}
+                className={`group relative overflow-hidden rounded-lg mx-1 my-0.5 border-l-2 transition-all ${currentSessionId === session.id
+                    ? 'border-purple-500 bg-white dark:bg-white/5 text-zinc-900 dark:text-white shadow-sm'
+                    : 'border-transparent text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
+                    }`}
+            >
+                <div
+                    onClick={() => switchSession(session.id)}
+                    className="px-3 py-3 text-sm truncate flex items-center justify-between cursor-pointer"
+                >
+                    {editingSessionId === session.id ? (
+                        <input
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={saveSessionRename}
+                            onKeyDown={(e) => e.key === 'Enter' && saveSessionRename()}
+                            className="bg-zinc-100 dark:bg-zinc-800 text-sm py-0.5 px-1 rounded outline-none w-full"
+                        />
+                    ) : (
+                        <span className="truncate flex-1">{session.title}</span>
+                    )}
+
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                            onClick={(e) => startEditingSession(e, session)}
+                            className="p-1 hover:text-purple-500 transition-colors"
+                            title="Rename"
+                        >
+                            <FolderEdit size={12} />
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
+                            className="p-1 hover:text-red-500 transition-colors"
+                            title="Delete"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        ));
+    };
 
     // Scroll to bottom effect
     useEffect(() => {
@@ -246,21 +371,14 @@ export default function UnifiedAssistant() {
     }
 
     // --- Search Query Refinement Helper ---
-    // Uses Gemini to rewrite ambiguous queries based on history
     const refineSearchQuery = async (userQuery, history) => {
         try {
             if (!clientsRef.current.genAI) return userQuery;
-
-            // If history is empty, no context to refine from
             if (!history || history.length === 0) return userQuery;
-
             const model = clientsRef.current.genAI.getGenerativeModel({
                 model: "gemini-3-flash-preview",
             });
-
-            // Get last few messages for context (max 3 pairs)
             const recentHistory = history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
-
             const prompt = `
             Task: Rewrite the internal User Query into a specific, standalone Google Search string.
             Context: The user might be referring to previous topics. Use the conversation history to resolve pronouns like "it", "one", "this", or "best".
@@ -271,102 +389,76 @@ export default function UnifiedAssistant() {
             User Query: "${userQuery}"
             
             Output: ONLY the refined search query string. Do not add quotes or explanations.
-            Example Refinement:
-            History: "User: I like Padel. AI: It's fun." -> Query: "best rackets" -> Output: "best padel rackets"
             `;
-
             const result = await model.generateContent(prompt);
-            const refinedQuery = result.response.text().trim();
-            console.log("Refined Query:", refinedQuery);
-            return refinedQuery;
+            return result.response.text().trim() || userQuery;
         } catch (e) {
-            console.warn("Query Refinement Failed:", e);
             return userQuery;
         }
     };
 
     // --- Hybrid Search Helper ---
-    // Uses Gemini Flash to fetch real-time web context 
     const getWebContext = async (query) => {
         try {
             if (!clientsRef.current.genAI) return null;
             const model = clientsRef.current.genAI.getGenerativeModel({
                 model: "gemini-3-flash-preview",
-                tools: [{ googleSearch: {} }] // Enable Google Search
+                tools: [{ googleSearch: {} }]
             });
-
             const prompt = `
             Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             User Query: "${query}"
-            Task: Search Google for this query. 
-            ALWAYS search if the query involves news, current events, weather, sports, or specific facts that might change.
-            Only return "NO_SEARCH" if the user is asking for creative writing, simple coding tasks, or strictly internal knowledge (like "who are you").
-            Otherwise, return a comprehensive text summary of the search results.
+            Task: Search Google for this query and summarize search results.
             `;
-
             const result = await model.generateContent(prompt);
             const response = await result.response;
             let text = response.text();
-
-            // Extract and append sources
             const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
             if (groundingMetadata?.groundingChunks) {
                 const sources = groundingMetadata.groundingChunks
                     .map(chunk => chunk.web?.uri ? `[${chunk.web.title || 'Source'}](${chunk.web.uri})` : null)
                     .filter(Boolean);
-
                 if (sources.length > 0) {
-                    const uniqueSources = [...new Set(sources)];
-                    text += "\n\n**Sources:**\n" + uniqueSources.map(s => `- ${s}`).join("\n");
+                    text += "\n\n**Sources:**\n" + [...new Set(sources)].map(s => `- ${s}`).join("\n");
                 }
             }
-
-            if (text.includes("NO_SEARCH")) return null;
             return text;
         } catch (e) {
-            console.warn("Web Context Fetch Failed:", e);
             return null;
         }
     };
 
     const handleSend = async () => {
         if (!input.trim()) return;
-
         const userText = input;
         setInput('');
         setIsProcessing(true);
 
-        // --- 1. Chat Mode ---
         if (mode === 'chat') {
             const userMsg = {
                 id: Date.now(),
                 role: 'user',
                 content: userText,
-                attachments: attachments, // Save attachments to history
+                attachments: attachments,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
             addMessageToSession(currentSessionId, userMsg);
+            const currentAttachments = [...attachments];
+            setAttachments([]);
 
-            const currentAttachments = [...attachments]; // Capture for async usage
-            setAttachments([]); // Clear UI immediately
-
-            // Create placeholder message ID
             const msgId = Date.now() + 1;
             addMessageToSession(currentSessionId, {
                 id: msgId,
                 role: 'ai',
-                content: '', // Start empty
+                content: '',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
 
             try {
-                // Construct fresh history including the new user message
-                // Fix: Properly map roles and exclude internal system messages (like "Chat history cleared")
                 const historyForModel = [
                     ...currentSession.messages.map(m => {
                         if (m.role === 'ai') return { role: 'assistant', content: m.content };
                         if (m.role === 'user') return { role: 'user', content: m.content };
-                        // Ignore internal system messages to prevent context pollution
                         return null;
                     }).filter(Boolean),
                     { role: 'user', content: userText }
@@ -375,9 +467,8 @@ export default function UnifiedAssistant() {
                 const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                 const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-                // Construct User Profile & Preferences Block
                 const userProfileBlock = settings.userProfile.name || settings.userProfile.age || settings.userProfile.about
-                    ? `\n\nUSER PROFILE:\nName: ${settings.userProfile.name || 'Unknown'}\nAge: ${settings.userProfile.age || 'Unknown'}\nAbout: ${settings.userProfile.about || 'N/A'}`
+                    ? `\n\nUSER PROFILE:\nName: ${settings.userProfile.name}\nAge: ${settings.userProfile.age}\nAbout: ${settings.userProfile.about}`
                     : '';
 
                 const aiPreferencesBlock = settings.aiPreferences.customInstructions || settings.aiPreferences.tone
@@ -400,30 +491,17 @@ export default function UnifiedAssistant() {
                         generationConfig: isThinkingEnabled ? { thinkingConfig: { includeThoughts: true } } : undefined
                     });
 
-                    // Sanitize history for Gemini: Must start with User, and alternate User/Model
                     const rawHistory = currentSession.messages.map(m => ({
                         role: m.role === 'ai' ? 'model' : 'user',
                         parts: [{ text: m.content }],
                     }));
-
-                    // Find first user message index
                     const firstUserIndex = rawHistory.findIndex(m => m.role === 'user');
-
-                    // If no user message found in history (e.g. only AI greeting), use empty history
-                    // If found, slice from there to ensure it starts with User
                     const validHistory = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
 
-                    const chatSession = model.startChat({
-                        history: validHistory,
-                    });
+                    const chatSession = model.startChat({ history: validHistory });
 
-                    // 1. Refine Query for Visual Search (Parallel)
-                    // This fixes context issues (e.g. "which one is best" -> "best padel racket")
-                    let refinedQuery = userText;
                     if (isSearchEnabled) {
-                        refinedQuery = await refineSearchQuery(userText, currentSession.messages);
-
-                        // Trigger Visual Search with the REFINED query
+                        const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
                         searchImages(refinedQuery).then(imgs => {
                             if (imgs && imgs.length > 0) {
                                 updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
@@ -431,43 +509,31 @@ export default function UnifiedAssistant() {
                         });
                     }
 
-                    // Construct Message Parts
                     const messageParts = [{ text: userText }];
-
                     currentAttachments.forEach(att => {
-                        // Remove data:image/...;base64, prefix for inlineData
-                        const base64Data = att.preview.split(',')[1];
                         messageParts.push({
                             inlineData: {
                                 mimeType: att.mimeType,
-                                data: base64Data
+                                data: att.preview.split(',')[1]
                             }
                         });
                     });
 
                     const result = await chatSession.sendMessageStream(messageParts);
-
                     let textAccumulator = "";
                     let gatheredSources = new Set();
 
                     for await (const chunk of result.stream) {
-                        const chunkText = chunk.text();
-                        textAccumulator += chunkText;
-
-                        // Capture sources from chunk metadata
+                        textAccumulator += chunk.text();
                         const metadata = chunk.candidates?.[0]?.groundingMetadata;
                         if (metadata?.groundingChunks) {
                             metadata.groundingChunks.forEach(chunk => {
-                                if (chunk.web?.uri) {
-                                    gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
-                                }
+                                if (chunk.web?.uri) gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
                             });
                         }
-
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
-                    // Append unique sources to the final message
                     if (gatheredSources.size > 0) {
                         textAccumulator += "\n\n**Sources:**\n" + Array.from(gatheredSources).map(s => `- ${s}`).join("\n");
                         updateMessage(currentSessionId, msgId, textAccumulator);
@@ -480,52 +546,20 @@ export default function UnifiedAssistant() {
 
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
 
-                    // --- Dynamic Model Switching (Chat vs Reasoning) ---
                     let targetModelId = selectedModel.id;
+                    if (selectedModel.provider === 'deepseek' && isThinkingEnabled) targetModelId = 'deepseek-reasoner';
+                    else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
+                    else if (selectedModel.provider === 'openai' && isThinkingEnabled) targetModelId = 'gpt-5.2';
 
-                    if (selectedModel.provider === 'deepseek' && isThinkingEnabled) {
-                        targetModelId = 'deepseek-reasoner';
-                    } else if (selectedModel.provider === 'xai' && isThinkingEnabled) {
-                        targetModelId = 'grok-4-1-fast-reasoning';
-                    } else if (selectedModel.provider === 'openai' && isThinkingEnabled) {
-                        targetModelId = 'gpt-5.2'; // Use base GPT-5.2 for reasoning (Pro is completion-only)
-                    }
-
-                    // --- 1. Agent Logic (Non-Scira) ---
-                    if (selectedModel.provider !== 'scira') {
-                    }
-
-                    // --- Hybrid Search Injection ---
                     let finalSystemPrompt = systemPrompt;
-
-                    // Only search if explicitly enabled by the user
                     if (isSearchEnabled) {
-                        try {
-                            updateMessage(currentSessionId, msgId, " Thinking & Refining Search... 🧠"); // Visual feedback
-
-                            // 1. Refine the query based on history
-                            const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
-
-                            // 2. Fetch Text Context (Google Search)
-                            updateMessage(currentSessionId, msgId, ` Searching: "${refinedQuery}"... 🌍`);
-                            const webContext = await getWebContext(refinedQuery);
-
-                            if (webContext) {
-                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search for "${refinedQuery}"):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. Cite your sources INLINE immediately after facts using standard Markdown links in this format: [Domain](URL). Example: "Padel is growing fast [padelusa.com](https://...)". DO NOT append a list of sources at the end.`;
-                                updateMessage(currentSessionId, msgId, " Found info! Generating answer... ⚡");
-
-                                // 3. Trigger Visual Search (Parallel) with REFINED query
-                                searchImages(refinedQuery).then(imgs => {
-                                    if (imgs && imgs.length > 0) {
-                                        updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
-                                    }
-                                });
-                            } else {
-                                updateMessage(currentSessionId, msgId, ""); // Clear status
-                            }
-                        } catch (err) {
-                            console.error("Hybrid search error", err);
-                            updateMessage(currentSessionId, msgId, "");
+                        const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                        const webContext = await getWebContext(refinedQuery);
+                        if (webContext) {
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE: [Domain](URL).`;
+                            searchImages(refinedQuery).then(imgs => {
+                                if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
+                            });
                         }
                     }
 
@@ -546,10 +580,7 @@ export default function UnifiedAssistant() {
                         ],
                         model: targetModelId,
                         stream: true,
-                        // OpenAI GPT-5.2 Native Reasoning
                         reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
-                        // xAI / Grok Native Reasoning Param
-                        // extra_body: (selectedModel.provider === 'xai' && isThinkingEnabled) ? { reasoning: true } : undefined
                     });
 
                     let textAccumulator = "";
@@ -557,31 +588,20 @@ export default function UnifiedAssistant() {
 
                     for await (const chunk of stream) {
                         const delta = chunk.choices[0]?.delta;
-
-                        // Check for native reasoning fields (OpenAI/xAI/Deepseek conventions)
                         const reasoningChunk = delta?.reasoning_content || delta?.reasoning;
                         const contentChunk = delta?.content;
 
                         if (reasoningChunk) {
-                            if (!isThinking) {
-                                isThinking = true;
-                                textAccumulator += "<think>";
-                            }
+                            if (!isThinking) { isThinking = true; textAccumulator += "<think>"; }
                             textAccumulator += reasoningChunk;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
-
                         if (contentChunk) {
-                            if (isThinking) {
-                                isThinking = false;
-                                textAccumulator += "</think>";
-                            }
+                            if (isThinking) { isThinking = false; textAccumulator += "</think>"; }
                             textAccumulator += contentChunk;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         }
                     }
-
-                    // Ensure think block is closed if stream ends while thinking
                     if (isThinking) {
                         textAccumulator += "</think>";
                         updateMessage(currentSessionId, msgId, textAccumulator);
@@ -590,35 +610,15 @@ export default function UnifiedAssistant() {
                 } else if (selectedModel.provider === 'anthropic') {
                     if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
 
-                    // --- Hybrid Search Injection for Anthropic ---
                     let finalSystemPrompt = systemPrompt;
                     if (isSearchEnabled) {
-                        try {
-                            updateMessage(currentSessionId, msgId, " Thinking & Refining Search... 🧠"); // Visual feedback
-
-                            // 1. Refine the query based on history
-                            const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
-
-                            // 2. Fetch Text Context (Google Search)
-                            updateMessage(currentSessionId, msgId, ` Searching: "${refinedQuery}"... 🌍`);
-                            const webContext = await getWebContext(refinedQuery);
-
-                            if (webContext) {
-                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search for "${refinedQuery}"):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. Cite your sources INLINE immediately after facts using standard Markdown links in this format: [Domain](URL). Example: "Padel is growing fast [padelusa.com](https://...)". DO NOT append a list of sources at the end.`;
-                                updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
-
-                                // 3. Trigger Visual Search (Parallel) with REFINED query
-                                searchImages(refinedQuery).then(imgs => {
-                                    if (imgs && imgs.length > 0) {
-                                        updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
-                                    }
-                                });
-                            } else {
-                                updateMessage(currentSessionId, msgId, ""); // Clear status
-                            }
-                        } catch (err) {
-                            console.error("Hybrid search error", err);
-                            updateMessage(currentSessionId, msgId, "");
+                        const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                        const webContext = await getWebContext(refinedQuery);
+                        if (webContext) {
+                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE.`;
+                            searchImages(refinedQuery).then(imgs => {
+                                if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
+                            });
                         }
                     }
 
@@ -668,285 +668,26 @@ export default function UnifiedAssistant() {
                     }
                 } else if (selectedModel.provider === 'scira') {
                     if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
-
                     let endpoint = "/scira-api/api/search";
                     let body = {};
-
-                    // Filter history to remove error messages which might confuse the model
-                    const cleanHistory = historyForModel.filter(m => !m.content.startsWith("Error:") && !m.content.startsWith(" Connection Failed:"));
-
-                    // --- XPloit: Smart Query Generator for X Mode ---
-                    const generateSmartQuery = async (history, currentInput) => {
-                        try {
-                            if (!clientsRef.current.genAI) return currentInput; // Fallback
-
-                            // Only use last 3 messages for context to keep it fast
-                            const recentContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
-                            if (!recentContext) return currentInput;
-
-                            const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-                            const prompt = `
-            Context:
-            ${recentContext}
-            
-            User's next input: "${currentInput}"
-            
-            Task: The user wants to search X (Twitter). Based on the context and their input, generate the best 2-3 keywords for a search query.
-            - If the user's input is "what about on X?", infer the topic from context.
-            - If they ask "what is elon saying", search "Elon Musk".
-            - Return ONLY the raw search query string. No quotes, no explanations.
-            `;
-
-                            const result = await model.generateContent(prompt);
-                            const smartQuery = result.response.text().trim();
-                            console.log("Smart X Query:", smartQuery);
-                            return smartQuery;
-                        } catch (e) {
-                            console.warn("Smart Query Failed, using raw input:", e);
-                            return currentInput;
-                        }
-                    };
-
-                    // --- Scira Modes ---
                     if (sciraMode === 'x') {
                         endpoint = "/scira-api/api/xsearch";
-                        updateMessage(currentSessionId, msgId, " Analyzing context for X... 🧠");
-
-                        // Generate Context-Aware Query
-                        const smartQuery = await generateSmartQuery(cleanHistory, userText);
-
-                        // Update status to show what we are searching for
-                        updateMessage(currentSessionId, msgId, ` Searching X for: "${smartQuery}"... 🐦`);
-
-                        body = {
-                            query: smartQuery
-                        };
+                        body = { query: userText };
                     } else {
-                        // Chat Mode (Unified): Include full history and context
-                        updateMessage(currentSessionId, msgId, " Thinking... 💭");
-
-                        // We use the same context injection as Chat Mode
-                        // Inject Context (Notes & Tasks) if available
-                        const notesContext = notes.map(n => `- [${n.title}]: ${n.content.substring(0, 200)}...`).join('\n');
-                        const tasksContext = tasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
-
-                        let collapsedHistory = "";
-                        if (cleanHistory.length > 0) {
-                            collapsedHistory = "PREVIOUS CONVERSATION:\n";
-                            cleanHistory.forEach(msg => {
-                                const roleName = msg.role === 'user' ? 'User' : 'AI';
-                                // Skip system messages or empty content
-                                if (msg.content) {
-                                    collapsedHistory += `${roleName}: ${msg.content}\n`;
-                                }
-                            });
-                            collapsedHistory += "\n---\n";
-                        }
-
-                        // Add the context (Notes/Tasks) if enabled
-                        let contextBlock = "";
-                        if (notes.length > 0 || tasks.length > 0) {
-                            const notesContext = notes.map(n => `- [${n.title}]: ${n.content.substring(0, 200)}...`).join('\n');
-                            const tasksContext = tasks.map(t => `- [${t.status}] ${t.title}`).join('\n');
-                            contextBlock = `REAL-TIME CONTEXT (Notes & Tasks):\n${notesContext}\n${tasksContext}\n\n---\n`;
-                        }
-
-                        const systemInstruction = `You are an AI with real-time internet access. You MUST verify your knowledge with a web search before answering, especially for recent events, news, or technical releases. Do not rely solely on your internal cutoff knowledge. If the user asks about ANY factual topic (sports, news, tech), SEARCH the internet first.`;
-
-                        const finalPrompt = `SYSTEM INSTRUCTION: ${systemInstruction}\n\n${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
-
-                        console.log("Scira Collapsed Payload:", finalPrompt);
-
-                        body = {
-                            messages: [
-                                { role: "user", content: finalPrompt }
-                            ]
-                        };
+                        body = { messages: [{ role: "user", content: userText }] };
                     }
-
-                    try {
-                        const response = await fetch(endpoint, {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}`
-                            },
-                            body: JSON.stringify(body)
-                        });
-
-                        if (!response.ok) {
-                            const errText = await response.text();
-                            throw new Error(`Scira API Error: ${response.status} - ${errText}`);
-                        }
-
-                        const data = await response.json();
-                        let text = data.text || "";
-
-                        if (data.sources && data.sources.length > 0) {
-                            text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
-                        }
-
-                        updateMessage(currentSessionId, msgId, text);
-                    } catch (fetchError) {
-                        console.error("Scira Fetch Error:", fetchError);
-                        throw new Error(`Connection Failed: ${fetchError.message}`);
-                    }
-                }
-            } catch (error) {
-                console.error("OpenAI API Error:", error);
-                updateMessage(currentSessionId, msgId, `Error: ${error.message} (Full: ${JSON.stringify(error, Object.getOwnPropertyNames(error))})`);
-            }
-        }
-
-        // --- 2. Agent Mode ---
-        else {
-            addMessageToSession(currentSessionId, { id: Date.now(), role: 'system', content: `Command: "${userText}"`, timestamp: 'System' });
-
-            try {
-                if (!clientsRef.current.genAI) throw new Error("Google API Key missing for Agent mode");
-                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-                // Enhanced context with dates and status
-                const taskContextJSON = JSON.stringify(tasks.map(t => ({
-                    id: t.id,
-                    title: t.title,
-                    date: t.date,
-                    priority: t.priority,
-                    status: t.status
-                })));
-
-                const projectContextJSON = JSON.stringify(projects.map(p => ({
-                    id: p.id,
-                    name: p.name
-                })));
-
-                const prompt = `
-          Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          Existing Tasks: ${taskContextJSON}
-          Existing Projects: ${projectContextJSON}
-          User Request: "${userText}"
-          
-          You are an intelligent task manager agent. Analyze the User Request and extract the intent.
-          
-          Object Mapping:
-          - Match "delete task X" or "complete task X" to a specific ID from Existing Tasks.
-          - If the user refers to a task by name (e.g. "wash winnie"), find the corresponding ID.
-          - If the user says "in my X folder" or "project X", try to match it to Existing Projects.
-          
-          Rules:
-          1. EXTRACT the core task title. Remove conversational fillers.
-          2. EXTRACT metadata (date, priority, tags, status).
-          3. EXTRACT targetProject (name of project if mentioned).
-          4. ACTION determination: "create", "update", "delete", "clear", "query".
-          5. INTENT MAPPING:
-             - "Complete", "finish", "check off", "done" -> action: "update", taskData: { status: "completed" }
-             - "Uncheck", "restart", "todo" -> action: "update", taskData: { status: "pending" }
-             - "What tasks...", "Show me...", "List..." -> action: "query"
-          
-          IMPORTANT: 
-          - For "update" or "delete", you MUST return the exact 'id' found in Existing Tasks as 'targetId'.
-          - For "query", provide a helpful, natural language summary in the 'response' field. Use Markdown formatting (bolding, lists).
-
-          Return JSON ONLY: 
-          { 
-            "action": "create"|"update"|"delete"|"clear"|"query"|"invalid", 
-            "taskData": { "title": "...", "date": "...", "priority": "...", "tags": [...], "status": "pending"|"completed" }, 
-            "targetProject": "Project Name or null",
-            "targetId": "ID" (from list) or "all", 
-            "response": "Natural language answer for queries",
-            "reason": "explanation" 
-          }
-        `;
-
-                const result = await model.generateContent(prompt);
-                const text = (await result.response).text().replace(/```json|```/g, '').trim();
-                const actionData = JSON.parse(text);
-
-                // --- Helper: Smart Task Finding ---
-                const findTaskId = (target) => {
-                    if (!target) return null;
-                    // 1. Exact ID match (string or number)
-                    const exact = tasks.find(t => t.id == target);
-                    if (exact) return exact.id;
-
-                    // 2. Fuzzy Title Match (if target is a string name)
-                    if (typeof target === 'string') {
-                        const lowerTarget = target.toLowerCase();
-                        const match = tasks.find(t => t.title.toLowerCase().includes(lowerTarget));
-                        if (match) return match.id;
-                    }
-                    return null;
-                };
-
-                // --- Helper: Smart Project Finding ---
-                const findProjectId = (targetName) => {
-                    if (!targetName) return null;
-                    const lowerTarget = targetName.toLowerCase();
-                    const match = projects.find(p => p.name.toLowerCase().includes(lowerTarget));
-                    return match ? match.id : null;
-                };
-
-                if (actionData.action === 'query') {
-                    addMessageToSession(currentSessionId, {
-                        id: Date.now() + 1,
-                        role: 'ai', // Use AI role for rich text rendering
-                        content: actionData.response || "Here are your tasks.",
-                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    const response = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}` },
+                        body: JSON.stringify(body)
                     });
-                } else if (actionData.action === 'create') {
-                    // Resolve project ID
-                    const projectId = findProjectId(actionData.targetProject);
-
-                    const newTask = {
-                        title: actionData.taskData.title || userText,
-                        tags: actionData.taskData.tags?.length ? actionData.taskData.tags : ['New'],
-                        date: actionData.taskData.date || 'Upcoming',
-                        priority: actionData.taskData.priority || 'Medium',
-                        projectId: projectId // Can be null if not found
-                    };
-                    addTask(newTask);
-
-                    const projectMsg = projectId ? ` in project "${projects.find(p => p.id === projectId).name}"` : '';
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Created: ${newTask.title}${projectMsg}`, isSuccess: true });
-                } else if (actionData.action === 'update') {
-                    if (actionData.targetId === 'all') {
-                        tasks.forEach(t => updateTask(t.id, actionData.taskData));
-                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Updated all tasks.`, isSuccess: true });
-                    } else {
-                        const realId = findTaskId(actionData.targetId);
-                        if (realId) {
-                            updateTask(realId, actionData.taskData);
-                            const taskTitle = tasks.find(t => t.id === realId)?.title || 'task';
-                            const actionVerb = actionData.taskData.status === 'completed' ? 'Completed' : 'Updated';
-                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `${actionVerb} "${taskTitle}".`, isSuccess: true });
-                        } else {
-                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Could not find task to update: "${actionData.targetId || 'unknown'}"`, isSuccess: false });
-                        }
-                    }
-                } else if (actionData.action === 'delete') {
-                    if (actionData.targetId === 'all') {
-                        clearTasks();
-                        addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted all tasks.`, isSuccess: true });
-                    } else {
-                        const realId = findTaskId(actionData.targetId);
-                        if (realId) {
-                            deleteTask(realId);
-                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Deleted task.`, isSuccess: true });
-                        } else {
-                            addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Could not find task to delete: "${actionData.targetId || 'unknown'}"`, isSuccess: false });
-                        }
-                    }
-                } else if (actionData.action === 'clear') {
-                    clearTasks();
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Cleared all tasks.`, isSuccess: true });
-                } else if (actionData.action === 'invalid') {
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `I'm not sure how to help with that. Try asking me to create or manage tasks.` });
-                } else {
-                    addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Unknown action: ${actionData.action}`, isSuccess: false });
+                    const data = await response.json();
+                    let text = data.text || "";
+                    if (data.sources) text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
+                    updateMessage(currentSessionId, msgId, text);
                 }
             } catch (error) {
-                console.error("AI Action Error:", error);
-                addMessageToSession(currentSessionId, { id: Date.now() + 1, role: 'system', content: `Error executing command: ${error.message}` });
+                updateMessage(currentSessionId, msgId, `Error: ${error.message}`);
             }
         }
         setIsProcessing(false);
@@ -960,9 +701,7 @@ export default function UnifiedAssistant() {
     };
 
     return (
-        <div className="flex h-full w-full bg-transparent font-sans text-white relative overflow-hidden">
-
-
+        <div className="flex h-screen w-full bg-transparent font-sans text-white relative overflow-hidden bg-zinc-950">
             {isSidebarOpen && (
                 <motion.aside
                     initial={{ width: 0, opacity: 0 }}
@@ -972,91 +711,129 @@ export default function UnifiedAssistant() {
                     className="border-r border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden"
                 >
                     <div className="p-4 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-black/20 h-[57px]">
-                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-500 tracking-wider">HISTORY</span>
-                        <button
-                            onClick={() => createSession()}
-                            className="p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md transition-colors"
-                            title="New Chat"
-                        >
-                            <Plus size={16} />
-                        </button>
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-500 tracking-wider uppercase">Folders & History</span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setIsCreatingFolder(true)} className="p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-md transition-colors" title="New Folder">
+                                <FolderPlus size={16} />
+                            </button>
+                            <button onClick={() => createSession()} className="p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-md transition-colors" title="New Chat">
+                                <Plus size={16} />
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                        {sessions.map(session => (
-                            <button
-                                key={session.id}
-                                onClick={() => switchSession(session.id)}
-                                className={`w-full text-left px-3 py-3 text-sm transition-all truncate flex items-center justify-between group border-l-2 ${currentSessionId === session.id
-                                    ? 'border-purple-500 bg-white dark:bg-white/5 text-zinc-900 dark:text-white shadow-sm dark:shadow-none'
-                                    : 'border-transparent text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
-                                    }`}
-                            >
-                                <span className="truncate">{session.title}</span>
-                                <div
-                                    onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
-                                    className="opacity-0 group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400 p-1"
-                                >
-                                    <Trash2 size={12} />
-                                </div>
-                            </button>
-                        ))}
-                        {sessions.length === 0 && (
-                            <div className="text-center text-xs text-zinc-500 dark:text-zinc-600 mt-4">No history</div>
+                    <div id="history-root" className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                        {isCreatingFolder && (
+                            <form onSubmit={handleCreateFolder} className="px-2 mb-2">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newFolderName}
+                                    onChange={(e) => setNewFolderName(e.target.value)}
+                                    placeholder="Folder Name..."
+                                    onBlur={() => setIsCreatingFolder(false)}
+                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-900 dark:text-white outline-none focus:border-purple-500"
+                                />
+                            </form>
                         )}
+
+                        <div className="space-y-1 mb-4">
+                            {folders.map(folder => (
+                                <div key={folder.id} className="space-y-1">
+                                    <div
+                                        data-folder-id={folder.id}
+                                        onClick={() => toggleFolder(folder.id)}
+                                        className={`group flex items-center justify-between px-3 py-2 text-sm rounded-lg cursor-pointer transition-colors ${expandedFolders[folder.id] ? 'bg-zinc-100 dark:bg-white/5' : 'hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                    >
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            {expandedFolders[folder.id] ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
+                                            <Folder size={14} className="text-purple-500 shrink-0" />
+                                            {editingFolderId === folder.id ? (
+                                                <input
+                                                    autoFocus
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    onBlur={saveFolderRename}
+                                                    onKeyDown={(e) => e.key === 'Enter' && saveFolderRename()}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="bg-transparent text-sm outline-none w-full border-b border-purple-500"
+                                                />
+                                            ) : (
+                                                <span className="truncate text-zinc-700 dark:text-zinc-300 font-medium">{folder.name}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => startEditingFolder(e, folder)} className="p-1 hover:text-purple-500"><FolderEdit size={12} /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }} className="p-1 hover:text-red-500"><Trash2 size={12} /></button>
+                                        </div>
+                                    </div>
+                                    <AnimatePresence>
+                                        {expandedFolders[folder.id] && (
+                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden pl-4">
+                                                {renderChatItems(folder.id)}
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="pt-2">
+                            {folders.length > 0 && <div className="px-3 py-1 text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">Uncategorized</div>}
+                            {renderChatItems(null)}
+                        </div>
                     </div>
                 </motion.aside>
             )}
 
-            {/* --- Main Chat Area --- */}
-            <main className="flex-1 flex flex-col relative bg-transparent">
-
-                {/* Header: Mode & Model */}
-                <header className="h-14 border-b border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
+            <main className="flex-1 flex flex-col relative bg-transparent h-screen overflow-hidden">
+                <header className="h-[60px] border-b border-zinc-200 dark:border-white/5 bg-white/70 dark:bg-zinc-950/60 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 sticky top-0 z-30">
                     <div className="flex items-center gap-4">
-                        <button
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className={`p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors ${!isSidebarOpen ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
-                            title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
+                            className={`p-2 rounded-xl transition-all duration-200 ${isSidebarOpen ? 'bg-blue-500/10 text-blue-500' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
                         >
-                            <PanelLeft size={18} />
-                        </button>
+                            <PanelLeft size={20} />
+                        </motion.button>
 
-                        <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg">
+                        <div className="flex bg-zinc-100 dark:bg-white/5 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-inner">
                             <button
                                 onClick={() => setMode('chat')}
-                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'chat' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
+                                className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${mode === 'chat' ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                             >
                                 Chat
                             </button>
                             <button
                                 onClick={() => setMode('agent')}
-                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'agent' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
+                                className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all duration-300 ${mode === 'agent' ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                             >
                                 Agent
                             </button>
                         </div>
-
-
-
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <button
+                    <div className="flex items-center gap-3">
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => createSession()}
-                            className="text-zinc-500 hover:text-white text-xs flex items-center gap-1 transition-colors"
-                            title="New Chat"
+                            className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-black/20 hover:shadow-black/30 transition-shadow"
                         >
-                            <Plus size={16} /> New
-                        </button>
-                        <div className="h-4 w-[1px] bg-zinc-800"></div>
-                        <button onClick={() => clearSession(currentSessionId)} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1">
-                            <Trash2 size={14} /> Clear
+                            <Plus size={16} /> New Chat
+                        </motion.button>
+
+                        <button
+                            onClick={() => clearSession(currentSessionId)}
+                            className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Clear Chat"
+                        >
+                            <Trash2 size={18} />
                         </button>
                     </div>
                 </header>
 
-                {/* Messages */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6" ref={scrollRef}>
                     <div className="max-w-5xl mx-auto space-y-8 pb-4">
                         {/* Show Hero/Empty State ONLY if we just have the initial AI greeting */}
@@ -1132,168 +909,129 @@ export default function UnifiedAssistant() {
                             </div>
                         )}
 
-                        {/* Show Message List if we have real interaction (more than 1 msg OR first msg is not generic AI greeting) */}
-                        {(!((currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai'))) && currentSession.messages.map((msg) => (
-                            <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                {msg.role !== 'user' && (
-                                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700/50 shadow-sm dark:shadow-none">
-                                        {msg.role === 'system' ? <Command size={14} className="text-zinc-400" /> : <Sparkles size={16} className="text-zinc-900 dark:text-white" />}
-                                    </div>
-                                )}
+                        {currentSession.messages.map((msg, idx) => {
+                            // Suppress the initial AI greeting from the chat list to favor the Hero state
+                            if (msg.role === 'ai' && idx === 0) return null;
 
-                                <div className={`max-w-[80%] ${msg.role === 'user' ? 'space-y-1' : ''}`}>
-                                    {/* Render Attachments if any */}
-                                    {msg.attachments && msg.attachments.length > 0 && (
-                                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
-                                            {msg.attachments.map((att, idx) => (
-                                                <div key={idx} className="relative group rounded-lg overflow-hidden border border-zinc-700/50 w-32 h-32 bg-zinc-900">
-                                                    {att.type === 'image' ? (
-                                                        <img src={att.preview} alt="Attachment" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
-                                                            <FileText size={24} />
-                                                            <span className="text-[10px] mt-2 px-2 truncate w-full text-center">{att.name}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                            return (
+                                <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    {msg.role !== 'user' && (
+                                        <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                                            <Sparkles size={16} className="text-zinc-900 dark:text-white" />
                                         </div>
                                     )}
-
-                                    <div className={`p-4 rounded-2xl ${msg.role === 'user'
-                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
-                                        : 'bg-transparent text-zinc-800 dark:text-zinc-300 p-0 pl-0'
-                                        }`}
-                                    >
-                                        {/* Visual Search Carousel */}
-                                        {msg.role === 'ai' && msg.visualResults && (
-                                            <VisualSearchCarousel images={msg.visualResults} />
-                                        )}
-
-                                        {msg.content ? (
-                                            <FormattedMessage content={msg.content} />
-                                        ) : (
-                                            <div className="animate-pulse h-4 w-4 bg-zinc-700 rounded-full" />
-                                        )}
-
+                                    <div className={`max-w-[80%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
+                                        {msg.visualResults && <VisualSearchCarousel images={msg.visualResults} />}
+                                        <FormattedMessage content={msg.content} />
                                     </div>
-                                    {msg.role === 'user' && <div className="text-[10px] text-zinc-600 text-right pr-1">{msg.timestamp}</div>}
                                 </div>
-                            </div>
-                        ))}
-
-                        {/* Processing indicator removed as per user request */}
+                            );
+                        })}
                     </div>
                 </div>
 
                 {/* Input Area */}
                 <div className="p-6 pt-2">
-                    <div className="max-w-3xl mx-auto relative group z-20">
-                        <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-gray-50/80 dark:from-zinc-950 dark:via-zinc-950/80 to-transparent pointer-events-none -top-20" />
-                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-white/10 focus-within:border-zinc-300 dark:focus-within:border-white/20 focus-within:ring-1 focus-within:ring-zinc-200 dark:focus-within:ring-white/10 focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.1)] dark:focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)] rounded-2xl flex items-end p-2 transition-all duration-300 shadow-lg shadow-black/5 dark:shadow-none">
-                            <div className="pl-2 pb-2 flex items-center">
-                                <ModelSelector />
-                                {selectedModel.provider === 'scira' && (
-                                    <div className="flex items-center ml-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 border border-zinc-200 dark:border-zinc-700">
-                                        {[
-                                            { id: 'chat', label: 'Chat', icon: MessageSquare },
-                                            { id: 'x', label: 'X', icon: ({ size, className }) => <span className={`font-bold text-[10px] ${className}`} style={{ fontSize: size }}>𝕏</span> }
-                                        ].map(m => (
-                                            <button
-                                                key={m.id}
-                                                onClick={() => setSciraMode(m.id)}
-                                                className={`p-1.5 rounded-md transition-colors flex items-center gap-1.5 ${sciraMode === m.id ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
-                                                title={`${m.label} Mode`}
-                                            >
-                                                <m.icon size={14} />
-                                                <span className="text-[10px] font-medium">{m.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="h-4 w-[1px] bg-zinc-800 mx-2"></div>
-                                <button
-                                    onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
-                                    className={`p-1.5 rounded-md transition-colors ${isThinkingEnabled
-                                        ? 'bg-purple-500/10 text-purple-300'
-                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-                                        }`}
-                                    title="Extended Thinking"
-                                >
-                                    <BrainCircuit size={14} />
-                                </button>
+                    <div className="max-w-4xl mx-auto relative group">
+                        {/* Animated Glow Border */}
+                        <div className="absolute -inset-[1px] bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-[22px] blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
 
-                                <button
-                                    onClick={() => setIsSearchEnabled(!isSearchEnabled)}
-                                    className={`p-1.5 rounded-md transition-colors ${isSearchEnabled
-                                        ? 'bg-blue-500/10 text-blue-300'
-                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
-                                        }`}
-                                    title="Web Search"
-                                >
-                                    <Globe size={14} />
-                                </button>
-                            </div>
+                        <div className="relative bg-white/80 dark:bg-zinc-950/80 backdrop-blur-2xl border border-zinc-200 dark:border-white/10 rounded-[21px] flex flex-col p-2 transition-all duration-300 shadow-2xl shadow-black/20 group-focus-within:ring-1 group-focus-within:ring-blue-500/20">
+                            {/* Toolbar */}
+                            <div className="px-2 pb-1 flex items-center justify-between border-b border-zinc-100 dark:border-white/5 mb-1">
+                                <div className="flex items-center gap-1 py-1">
+                                    <ModelSelector />
+                                    <div className="w-[1px] h-4 bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" />
 
-                            {/* Attachments Preview */}
-                            {attachments.length > 0 && (
-                                <div className="absolute bottom-full left-0 mb-2 w-full px-2 flex gap-2 overflow-x-auto">
-                                    {attachments.map((att, idx) => (
-                                        <div key={idx} className="relative group w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900 shadow-lg">
-                                            {att.type === 'image' ? (
-                                                <img src={att.preview} alt="Preview" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                                                    <FileText size={20} />
-                                                </div>
-                                            )}
-                                            <button
-                                                onClick={() => removeAttachment(idx)}
-                                                className="absolute top-0 right-0 p-0.5 bg-black/50 text-white hover:text-red-400 rounded-bl-md transition-colors"
-                                            >
-                                                <X size={12} />
-                                            </button>
-                                        </div>
-                                    ))}
+                                    <button
+                                        onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
+                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${isThinkingEnabled ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                        title="Deep Thinking"
+                                    >
+                                        <BrainCircuit size={16} />
+                                        <span className="hidden sm:inline">Thinking</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${isSearchEnabled ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                        title="Web Search"
+                                    >
+                                        <Globe size={16} />
+                                        <span className="hidden sm:inline">Search</span>
+                                    </button>
                                 </div>
-                            )}
 
-                            <div className="flex items-end flex-1 gap-2">
-                                <textarea
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder={mode === 'chat' ? "Message Bart..." : "Enter a task Command..."}
-                                    className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
-                                    rows={1}
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                                        title="Attach file"
+                                    >
+                                        <Paperclip size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Textarea Area */}
+                            <div className="flex items-end gap-2 px-2">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileSelect}
+                                    multiple
+                                    className="hidden"
                                 />
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="p-2 mb-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                                    title="Attach files"
-                                >
-                                    <Paperclip size={18} />
-                                </button>
-                                <button
+
+                                <div className="flex-1 flex flex-col">
+                                    {/* Attachments Preview */}
+                                    {attachments.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 py-2">
+                                            {attachments.map((att, idx) => (
+                                                <div key={idx} className="relative group/att">
+                                                    {att.type === 'image' ? (
+                                                        <img src={att.preview} className="h-12 w-12 object-cover rounded-lg border border-zinc-200 dark:border-white/10" />
+                                                    ) : (
+                                                        <div className="h-12 px-3 flex items-center gap-2 bg-zinc-100 dark:bg-white/5 rounded-lg border border-zinc-200 dark:border-white/10 text-[10px] text-zinc-500">
+                                                            <FileText size={14} />
+                                                            <span className="max-w-[80px] truncate">{att.name}</span>
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        onClick={() => removeAttachment(idx)}
+                                                        className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover/att:opacity-100 transition-opacity"
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <textarea
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={handleKeyDown}
+                                        className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 text-sm py-4 w-full resize-none min-h-[44px] max-h-[300px] placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
+                                        rows={1}
+                                        placeholder="Message Bart..."
+                                        style={{ height: 'auto' }}
+                                    />
+                                </div>
+
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={handleSend}
-                                    disabled={!input && attachments.length === 0}
-                                    className={`p-2 rounded-lg mb-1 transition-all ${input.trim() || attachments.length > 0 ? 'bg-zinc-900 dark:bg-white text-white dark:text-black' : 'bg-transparent text-zinc-400 dark:text-zinc-600'
+                                    disabled={!input.trim() || isProcessing}
+                                    className={`mb-3 p-2.5 rounded-xl transition-all duration-300 shadow-xl ${input.trim()
+                                        ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 shadow-black/20'
+                                        : 'bg-zinc-100 dark:bg-white/5 text-zinc-400 cursor-not-allowed'
                                         }`}
                                 >
-                                    <ArrowUp size={18} />
-                                </button>
+                                    <ArrowUp size={20} strokeWidth={2.5} />
+                                </motion.button>
                             </div>
-                        </div>
-                        <input
-                            type="file"
-                            multiple
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleFileSelect}
-                            accept="image/*,application/pdf"
-                        />
-                        <div className="text-center mt-2 text-[10px] text-zinc-700">
-                            Bart may display inaccurate info, including about people, so double-check its responses.
                         </div>
                     </div>
                 </div>

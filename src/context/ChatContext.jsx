@@ -14,28 +14,34 @@ export function ChatProvider({ children }) {
         const saved = localStorage.getItem('nexus_sessions');
         return saved ? JSON.parse(saved) : [DEFAULT_SESSION];
     });
+    const [folders, setFolders] = useState(() => {
+        const saved = localStorage.getItem('nexus_folders');
+        return saved ? JSON.parse(saved) : [];
+    });
     const [currentSessionId, setCurrentSessionId] = useState(() => {
         return localStorage.getItem('nexus_current_session_id') || 'default';
     });
 
     useEffect(() => {
         localStorage.setItem('nexus_sessions', JSON.stringify(sessions));
+        localStorage.setItem('nexus_folders', JSON.stringify(folders));
         localStorage.setItem('nexus_current_session_id', currentSessionId);
 
         // Safety check: specific session ID might be stale
         if (!sessions.find(s => s.id === currentSessionId)) {
             setCurrentSessionId(sessions[0].id);
         }
-    }, [sessions, currentSessionId]);
+    }, [sessions, folders, currentSessionId]);
 
     const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
 
-    const createSession = () => {
+    const createSession = (folderId = null) => {
         const newSession = {
             id: Date.now().toString(),
             title: 'New Chat',
             messages: [{ id: Date.now(), role: 'ai', content: "New session started.", timestamp: 'Now' }],
-            lastUpdated: Date.now()
+            lastUpdated: Date.now(),
+            folderId: folderId
         };
         setSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
@@ -57,6 +63,18 @@ export function ChatProvider({ children }) {
             }
             return filtered;
         });
+    };
+
+    const renameSession = (id, newTitle) => {
+        setSessions(prev => prev.map(s =>
+            s.id === id ? { ...s, title: newTitle } : s
+        ));
+    };
+
+    const moveSessionToFolder = (sessionId, folderId) => {
+        setSessions(prev => prev.map(s =>
+            s.id === sessionId ? { ...s, folderId } : s
+        ));
     };
 
     const clearSession = (id) => {
@@ -108,17 +126,43 @@ export function ChatProvider({ children }) {
         }));
     };
 
+    // --- Folder Logic ---
+    const addFolder = (name) => {
+        const newFolder = {
+            id: 'folder_' + Date.now(),
+            name: name,
+            createdAt: Date.now()
+        };
+        setFolders(prev => [...prev, newFolder]);
+    };
+
+    const deleteFolder = (id) => {
+        setFolders(prev => prev.filter(f => f.id !== id));
+        // Reset sessions in that folder to null folder
+        setSessions(prev => prev.map(s => s.folderId === id ? { ...s, folderId: null } : s));
+    };
+
+    const renameFolder = (id, newName) => {
+        setFolders(prev => prev.map(f => f.id === id ? { ...f, name: newName } : f));
+    };
+
     return (
         <ChatContext.Provider value={{
             sessions,
+            folders,
             currentSessionId,
             currentSession,
             createSession,
             switchSession,
             deleteSession,
+            renameSession,
             clearSession,
             addMessageToSession,
-            updateMessage
+            updateMessage,
+            addFolder,
+            deleteFolder,
+            renameFolder,
+            moveSessionToFolder
         }}>
             {children}
         </ChatContext.Provider>
