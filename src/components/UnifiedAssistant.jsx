@@ -131,7 +131,7 @@ const initializeClients = () => {
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
-        openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
+        openai: openaiKey ? new OpenAI({ apiKey: openaiKey, baseURL: window.location.origin + "/openai-api/v1", dangerouslyAllowBrowser: true }) : null,
 
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
         deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: window.location.origin + "/deepseek-api", dangerouslyAllowBrowser: true }) : null,
@@ -336,7 +336,7 @@ export default function UnifiedAssistant() {
                 const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.${userProfileBlock}${aiPreferencesBlock}`;
                 const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
 
-                const systemPrompt = (isThinkingEnabled && selectedModel.provider !== 'anthropic')
+                const systemPrompt = (isThinkingEnabled && !['anthropic', 'google', 'xai', 'openai'].includes(selectedModel.provider))
                     ? baseSystemPrompt + thinkingPrompt
                     : baseSystemPrompt;
 
@@ -345,7 +345,8 @@ export default function UnifiedAssistant() {
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
                         systemInstruction: systemPrompt,
-                        tools: isSearchEnabled ? [{ googleSearch: {} }] : []
+                        tools: isSearchEnabled ? [{ googleSearch: {} }] : [],
+                        generationConfig: isThinkingEnabled ? { thinkingConfig: { includeThoughts: true } } : undefined
                     });
 
                     // Sanitize history for Gemini: Must start with User, and alternate User/Model
@@ -413,11 +414,19 @@ export default function UnifiedAssistant() {
 
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
 
-                    // Resolve Model ID (DeepSeek Toggle support)
+                    // --- Dynamic Model Switching (Chat vs Reasoning) ---
                     let targetModelId = selectedModel.id;
+
                     if (selectedModel.provider === 'deepseek' && isThinkingEnabled) {
                         targetModelId = 'deepseek-reasoner';
-                        updateMessage(currentSessionId, msgId, " Thinking hard... 🧠");
+                    } else if (selectedModel.provider === 'xai' && isThinkingEnabled) {
+                        // targetModelId = 'grok-4-1-reasoning'; // If xAI releases a distinct ID
+                    } else if (selectedModel.provider === 'openai' && isThinkingEnabled) {
+                        targetModelId = 'gpt-5.2'; // Use base GPT-5.2 for reasoning (Pro is completion-only)
+                    }
+
+                    // --- 1. Agent Logic (Non-Scira) ---
+                    if (selectedModel.provider !== 'scira') {
                     }
 
                     // --- Hybrid Search Injection ---
@@ -458,6 +467,10 @@ export default function UnifiedAssistant() {
                         ],
                         model: targetModelId,
                         stream: true,
+                        // OpenAI GPT-5.2 Native Reasoning
+                        reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
+                        // xAI / Grok Native Reasoning Param
+                        extra_body: (selectedModel.provider === 'xai' && isThinkingEnabled) ? { reasoning: true } : undefined
                     });
 
                     let textAccumulator = "";
@@ -688,7 +701,8 @@ export default function UnifiedAssistant() {
                     }
                 }
             } catch (error) {
-                updateMessage(currentSessionId, msgId, `Error: ${error.message}`);
+                console.error("OpenAI API Error:", error);
+                updateMessage(currentSessionId, msgId, `Error: ${error.message} (Full: ${JSON.stringify(error, Object.getOwnPropertyNames(error))})`);
             }
         }
 
