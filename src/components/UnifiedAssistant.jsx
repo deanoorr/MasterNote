@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit, Paperclip, X, FileText } from 'lucide-react';
+import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit, Paperclip, X, FileText, Globe } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
@@ -134,6 +134,7 @@ const initializeClients = () => {
         openai: openaiKey ? new OpenAI({ apiKey: openaiKey, dangerouslyAllowBrowser: true }) : null,
 
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
+        deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: window.location.origin + "/deepseek-api", dangerouslyAllowBrowser: true }) : null,
         scira: !!import.meta.env.VITE_SCIRA_API_KEY,
 
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
@@ -141,6 +142,7 @@ const initializeClients = () => {
             google: !googleKey,
             openai: !openaiKey,
             xai: !xaiKey,
+            deepseek: !import.meta.env.VITE_DEEPSEEK_API_KEY,
             scira: !import.meta.env.VITE_SCIRA_API_KEY,
 
             anthropic: !anthropicKey
@@ -162,6 +164,7 @@ export default function UnifiedAssistant() {
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
+    const [isSearchEnabled, setIsSearchEnabled] = useState(false);
 
     // Lazy init clients
     const clientsRef = useRef(initializeClients());
@@ -196,11 +199,9 @@ export default function UnifiedAssistant() {
         setAttachments(prev => prev.filter((_, i) => i !== index));
     };
 
-    // Auto-enable Thinking for reasoning models
+    // Reset Thinking to OFF when switching models
     useEffect(() => {
-        if (selectedModel.thinking) {
-            setIsThinkingEnabled(true);
-        }
+        setIsThinkingEnabled(false);
     }, [selectedModel.id]);
 
     // Auto-scroll ref
@@ -244,6 +245,7 @@ export default function UnifiedAssistant() {
             });
 
             const prompt = `
+            Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             User Query: "${query}"
             Task: Search Google for this query. 
             ALWAYS search if the query involves news, current events, weather, sports, or specific facts that might change.
@@ -343,7 +345,7 @@ export default function UnifiedAssistant() {
                     const model = clientsRef.current.genAI.getGenerativeModel({
                         model: selectedModel.id,
                         systemInstruction: systemPrompt,
-                        tools: [{ googleSearch: {} }]
+                        tools: isSearchEnabled ? [{ googleSearch: {} }] : []
                     });
 
                     // Sanitize history for Gemini: Must start with User, and alternate User/Model
@@ -404,28 +406,39 @@ export default function UnifiedAssistant() {
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
-                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai') {
-                    const client = selectedModel.provider === 'openai' ? clientsRef.current.openai : clientsRef.current.xai;
+                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek') {
+                    const client = selectedModel.provider === 'openai' ? clientsRef.current.openai
+                        : selectedModel.provider === 'xai' ? clientsRef.current.xai
+                            : clientsRef.current.deepseek;
+
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
+
+                    // Resolve Model ID (DeepSeek Toggle support)
+                    let targetModelId = selectedModel.id;
+                    if (selectedModel.provider === 'deepseek' && isThinkingEnabled) {
+                        targetModelId = 'deepseek-reasoner';
+                        updateMessage(currentSessionId, msgId, " Thinking hard... 🧠");
+                    }
 
                     // --- Hybrid Search Injection ---
                     let finalSystemPrompt = systemPrompt;
-                    try {
-                        // Only search if the model is Grok or specifically requested (can be expanded)
-                        // For now, enable for all xAI/OpenAI to give them "Superpowers"
-                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
 
-                        const webContext = await getWebContext(userText);
-                        if (webContext) {
-                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
-                            updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
-                        } else {
-                            updateMessage(currentSessionId, msgId, ""); // Clear status
+                    // Only search if explicitly enabled by the user
+                    if (isSearchEnabled) {
+                        try {
+                            updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+
+                            const webContext = await getWebContext(userText);
+                            if (webContext) {
+                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
+                                updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+                            } else {
+                                updateMessage(currentSessionId, msgId, ""); // Clear status
+                            }
+                        } catch (err) {
+                            console.error("Hybrid search error", err);
+                            updateMessage(currentSessionId, msgId, "");
                         }
-                    } catch (err) {
-                        console.error("Hybrid search error", err);
-                        // Continue without web context
-                        updateMessage(currentSessionId, msgId, "");
                     }
 
                     const stream = await client.chat.completions.create({
@@ -443,7 +456,7 @@ export default function UnifiedAssistant() {
                                 ]
                             }
                         ],
-                        model: selectedModel.id,
+                        model: targetModelId,
                         stream: true,
                     });
 
@@ -487,19 +500,21 @@ export default function UnifiedAssistant() {
 
                     // --- Hybrid Search Injection for Anthropic ---
                     let finalSystemPrompt = systemPrompt;
-                    try {
-                        updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+                    if (isSearchEnabled) {
+                        try {
+                            updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
 
-                        const webContext = await getWebContext(userText);
-                        if (webContext) {
-                            finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
-                            updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
-                        } else {
-                            updateMessage(currentSessionId, msgId, ""); // Clear status
+                            const webContext = await getWebContext(userText);
+                            if (webContext) {
+                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
+                                updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+                            } else {
+                                updateMessage(currentSessionId, msgId, ""); // Clear status
+                            }
+                        } catch (err) {
+                            console.error("Hybrid search error", err);
+                            updateMessage(currentSessionId, msgId, "");
                         }
-                    } catch (err) {
-                        console.error("Hybrid search error", err);
-                        updateMessage(currentSessionId, msgId, "");
                     }
 
                     const stream = await clientsRef.current.anthropic.messages.create({
@@ -1062,9 +1077,20 @@ export default function UnifiedAssistant() {
                                         ? 'bg-purple-500/10 text-purple-300'
                                         : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
                                         }`}
-                                    title="Toggle Extended Thinking"
+                                    title="Extended Thinking"
                                 >
-                                    <BrainCircuit size={16} className={isThinkingEnabled ? "text-purple-400" : "text-zinc-500"} />
+                                    <BrainCircuit size={14} />
+                                </button>
+
+                                <button
+                                    onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                                    className={`p-1.5 rounded-md transition-colors ${isSearchEnabled
+                                        ? 'bg-blue-500/10 text-blue-300'
+                                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                                        }`}
+                                    title="Web Search"
+                                >
+                                    <Globe size={14} />
                                 </button>
                             </div>
 

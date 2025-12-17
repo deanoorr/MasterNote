@@ -11,6 +11,11 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/scira-api/, ''),
             },
+            '/deepseek-api': {
+                target: 'https://api.deepseek.com',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/deepseek-api/, ''),
+            },
         },
     },
 });

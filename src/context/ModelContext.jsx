@@ -11,6 +11,7 @@ export const models = [
     { id: 'claude-sonnet-4-5', name: 'Claude 4.5 Sonnet', icon: Sparkles, color: 'text-orange-400', provider: 'anthropic', thinking: true },
     { id: 'claude-opus-4-5', name: 'Claude 4.5 Opus', icon: BrainCircuit, color: 'text-red-400', provider: 'anthropic', thinking: true },
     { id: 'scira-default', name: 'Scira', icon: Zap, color: 'text-indigo-400', provider: 'scira', thinking: false },
+    { id: 'deepseek-chat', name: 'DeepSeek V3', icon: BrainCircuit, color: 'text-cyan-400', provider: 'deepseek', thinking: true },
 
 ];
 
