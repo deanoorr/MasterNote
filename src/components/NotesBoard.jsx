@@ -31,7 +31,7 @@ export default function NotesBoard() {
     };
 
     return (
-        <div className="flex h-full w-full bg-zinc-950/50">
+        <div className="flex h-full w-full bg-transparent">
             {/* Secondary Sidebar - Projects */}
             <AnimatePresence mode="wait">
                 {isSidebarOpen && (

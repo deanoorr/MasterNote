@@ -17,10 +17,16 @@ function LayoutContent() {
     const [activeTab, setActiveTab] = useState('home');
 
     return (
-        <div className="flex h-screen bg-zinc-950 text-white font-sans overflow-hidden selection:bg-rose-500/30">
+        <div className="flex h-screen bg-black text-white font-sans overflow-hidden selection:bg-blue-500/30 relative">
+            {/* Global Nebula Background */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-500/10 blur-[100px]" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-purple-500/10 blur-[100px]" />
+                <div className="absolute top-[20%] right-[20%] w-[30%] h-[30%] rounded-full bg-blue-500/5 blur-[80px]" />
+            </div>
+
             <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-            <main className="flex-1 ml-20 md:ml-64 h-full relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-rose-500/5 pointer-events-none" />
+            <main className="flex-1 ml-20 md:ml-64 h-full relative overflow-hidden z-10">
                 {activeTab === 'home' && <DashboardPage onNavigate={setActiveTab} />}
                 {activeTab === 'workspace' && <Workspace />}
                 {activeTab === 'assistant' && <AssistantView />}

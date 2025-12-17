@@ -67,14 +67,14 @@ export default function DashboardPage({ onNavigate }) {
     };
 
     return (
-        <div className="h-full w-full p-8 overflow-y-auto custom-scrollbar bg-zinc-950">
+        <div className="h-full w-full p-8 overflow-y-auto custom-scrollbar bg-transparent">
             <div className="max-w-5xl mx-auto space-y-8">
 
                 {/* 1. Morning Briefing Section */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 relative overflow-hidden"
+                    className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-indigo-900/20"
                 >
                     <div className="absolute top-0 right-0 p-8 opacity-5">
                         <Sparkles size={120} className="text-white" />
@@ -112,7 +112,7 @@ export default function DashboardPage({ onNavigate }) {
                             </button>
                         </div>
 
-                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-2 min-h-[200px]">
+                        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 min-h-[200px]">
                             {pendingTasks.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
                                     <Clock size={32} className="mb-2 opacity-50" />
@@ -153,7 +153,7 @@ export default function DashboardPage({ onNavigate }) {
                             </button>
                         </div>
 
-                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-2 min-h-[200px]">
+                        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 min-h-[200px]">
                             {todaysHabits.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
                                     <Sparkles size={32} className="mb-2 opacity-50" />

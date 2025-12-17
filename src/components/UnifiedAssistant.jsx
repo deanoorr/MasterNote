@@ -868,9 +868,7 @@ export default function UnifiedAssistant() {
     };
 
     return (
-        <div className="flex h-full w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-black font-sans text-white relative overflow-hidden">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+        <div className="flex h-full w-full bg-transparent font-sans text-white relative overflow-hidden">
 
 
             {/* --- Left Sidebar: History --- */}
@@ -922,7 +920,7 @@ export default function UnifiedAssistant() {
             </AnimatePresence>
 
             {/* --- Main Chat Area --- */}
-            <main className="flex-1 flex flex-col relative bg-background">
+            <main className="flex-1 flex flex-col relative bg-transparent">
 
                 {/* Header: Mode & Model */}
                 <header className="h-14 border-b border-white/5 bg-zinc-900/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
@@ -976,33 +974,69 @@ export default function UnifiedAssistant() {
                         {currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && (
                             <div className="flex flex-col items-center justify-center mt-20">
                                 <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
+                                    initial={{ opacity: 0, y: 30 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.5 }}
-                                    className="text-center space-y-6"
+                                    transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
+                                    className="text-center space-y-8 w-full max-w-2xl"
                                 >
-                                    <div className="inline-flex items-center justify-center p-4 rounded-3xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 mb-2 shadow-xl shadow-black/20">
-                                        <Sparkles size={40} className="text-zinc-400" />
+                                    {/* Premium Nebula Orb Logo */}
+                                    <div className="relative inline-flex items-center justify-center group py-8">
+                                        {/* Ambient Glow */}
+                                        <div className="absolute inset-0 bg-blue-500/20 blur-[60px] rounded-full opacity-50 group-hover:opacity-80 transition-opacity duration-700"></div>
+
+                                        <div className="relative">
+                                            {/* Rotating Ring */}
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                                                className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-30 blur-sm"
+                                            />
+
+                                            {/* Core Container */}
+                                            <div className="relative w-24 h-24 rounded-full bg-zinc-950 flex items-center justify-center border border-white/10 shadow-2xl shadow-black/80">
+                                                {/* Inner Gradient */}
+                                                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10"></div>
+
+                                                {/* Icon */}
+                                                <motion.div
+                                                    animate={{ scale: [1, 1.1, 1] }}
+                                                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                                >
+                                                    <Sparkles size={40} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
+                                                </motion.div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h2 className="text-2xl font-semibold text-zinc-200 tracking-tight">
+
+                                    <h2 className="text-3xl md:text-4xl font-light text-transparent bg-clip-text bg-gradient-to-b from-white to-white/40 tracking-tight pb-2">
                                         How can I help you, Master?
                                     </h2>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg mx-auto pt-4">
+                                    {/* Suggestion Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full px-4 pt-8">
                                         {[
-                                            { icon: <MessageSquare size={18} />, label: "Draft an email", query: "Draft a professional email about..." },
-                                            { icon: <Zap size={18} />, label: "Analyze code", query: "Review this code for bugs..." },
-                                            { icon: <BrainCircuit size={18} />, label: "Brainstorm ideas", query: "Give me 5 creative ideas for..." },
-                                            { icon: <Bot size={18} />, label: "Task planning", query: "Create a plan to launch..." },
+                                            { icon: <MessageSquare size={20} />, label: "Draft an email", desc: "Professional correspondence", query: "Draft a professional email about..." },
+                                            { icon: <Zap size={20} />, label: "Analyze code", desc: "Debug & optimize snippets", query: "Review this code for bugs..." },
+                                            { icon: <BrainCircuit size={20} />, label: "Brainstorm ideas", desc: "Unlock creativity", query: "Give me 5 creative ideas for..." },
+                                            { icon: <Bot size={20} />, label: "Task planning", desc: "Organize your workflow", query: "Create a plan to launch..." },
                                         ].map((item, idx) => (
-                                            <button
+                                            <motion.button
+                                                whileHover={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.08)" }}
+                                                whileTap={{ scale: 0.98 }}
                                                 key={idx}
                                                 onClick={() => setInput(item.query)}
-                                                className="flex items-center gap-3 p-3 text-sm text-zinc-400 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl transition-all hover:scale-[1.02] text-left group"
+                                                className="flex flex-col gap-2 p-5 text-left bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-sm group shadow-lg shadow-black/20"
                                             >
-                                                <span className="p-2 rounded-lg bg-zinc-900/50 text-zinc-500 group-hover:text-zinc-300 transition-colors">{item.icon}</span>
-                                                <span className="group-hover:text-zinc-200 transition-colors">{item.label}</span>
-                                            </button>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="p-2.5 rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 group-hover:from-blue-500/10 group-hover:to-purple-500/10 text-zinc-400 group-hover:text-blue-300 transition-all duration-300">
+                                                        {item.icon}
+                                                    </span>
+                                                    <span className="text-zinc-200 font-medium">{item.label}</span>
+                                                </div>
+                                                <span className="text-xs text-zinc-500 group-hover:text-zinc-400 pl-[3.25rem] transition-colors">
+                                                    {item.desc}
+                                                </span>
+                                            </motion.button>
                                         ))}
                                     </div>
                                 </motion.div>

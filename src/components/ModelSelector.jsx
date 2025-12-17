@@ -13,7 +13,7 @@ export default function ModelSelector() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors border border-zinc-700/50 hover:border-zinc-700"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-white/10 transition-colors border border-white/10 hover:border-white/20"
             >
                 <selectedModel.icon size={14} className={selectedModel.color} />
                 <span className="text-xs font-medium text-zinc-200">{selectedModel.name}</span>
@@ -27,7 +27,7 @@ export default function ModelSelector() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.95 }}
                         transition={{ duration: 0.15, ease: "easeOut" }}
-                        className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-zinc-800 bg-zinc-900 shadow-xl overflow-hidden"
+                        className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-xl overflow-hidden"
                     >
                         <div className="p-1.5 space-y-0.5">
                             {models.map((model) => (
@@ -38,8 +38,8 @@ export default function ModelSelector() {
                                         setIsOpen(false);
                                     }}
                                     className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition-colors ${selectedModel.id === model.id
-                                        ? 'bg-zinc-800 text-white'
-                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                                        ? 'bg-white/10 text-white'
+                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
                                         }`}
                                 >
                                     <model.icon size={14} className={model.color} />

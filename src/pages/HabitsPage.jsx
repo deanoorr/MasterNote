@@ -69,13 +69,13 @@ export default function HabitsPage() {
     };
 
     return (
-        <div className="h-full w-full p-8 overflow-y-auto custom-scrollbar bg-zinc-950">
+        <div className="h-full w-full p-8 overflow-y-auto custom-scrollbar bg-transparent">
             <div className="max-w-4xl mx-auto space-y-8">
 
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+                        <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200 mb-2 flex items-center gap-3">
                             <Activity className="text-emerald-400" />
                             Habit Tracker
                         </h1>
@@ -84,7 +84,7 @@ export default function HabitsPage() {
                 </div>
 
                 {/* AI Helper Section */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 relative overflow-hidden shadow-lg">
                     <div className="absolute top-0 right-0 p-4 opacity-10">
                         <Sparkles size={100} className="text-emerald-400" />
                     </div>
@@ -100,13 +100,13 @@ export default function HabitsPage() {
                             value={userGoal}
                             onChange={(e) => setUserGoal(e.target.value)}
                             placeholder="I want to read more..."
-                            className="flex-1 bg-zinc-800 border-zinc-700 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500/50 outline-none placeholder:text-zinc-600"
+                            className="flex-1 bg-black/40 backdrop-blur-md border border-white/10 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 outline-none placeholder:text-zinc-600 transition-all shadow-inner"
                             onKeyDown={(e) => e.key === 'Enter' && generateHabits()}
                         />
                         <button
                             onClick={generateHabits}
                             disabled={isGenerating || !userGoal.trim()}
-                            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded-xl font-medium transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-2 hover:scale-105 active:scale-95"
                         >
                             {isGenerating ? 'Thinking...' : 'Generate Plan'}
                         </button>
@@ -122,12 +122,12 @@ export default function HabitsPage() {
                         value={manualInput}
                         onChange={(e) => setManualInput(e.target.value)}
                         placeholder="Add a new habit manually..."
-                        className="flex-1 bg-transparent border-b border-zinc-800 text-white px-2 py-2 focus:border-emerald-500 outline-none placeholder:text-zinc-700 transition-colors"
+                        className="flex-1 bg-transparent border-b border-white/10 text-white px-2 py-2 focus:border-emerald-500 outline-none placeholder:text-zinc-600 transition-colors"
                     />
                     <button
                         type="submit"
                         disabled={!manualInput.trim()}
-                        className="text-zinc-500 hover:text-emerald-400 disabled:opacity-30 transition-colors"
+                        className="text-zinc-500 hover:text-emerald-400 disabled:opacity-30 transition-colors hover:bg-white/5 p-2 rounded-full"
                     >
                         <Plus size={24} />
                     </button>
@@ -146,14 +146,14 @@ export default function HabitsPage() {
                                 layout
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between group hover:border-zinc-700 transition-colors"
+                                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
                                     <button
                                         onClick={() => toggleHabit(habit.id)}
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isCompletedToday(habit)
-                                            ? 'bg-emerald-500 text-black scale-110'
-                                            : 'bg-zinc-800 text-zinc-600 hover:bg-zinc-700'
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isCompletedToday(habit)
+                                            ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] scale-110'
+                                            : 'bg-black/40 border border-white/10 text-zinc-600 hover:border-emerald-500/50 hover:text-emerald-500'
                                             }`}
                                     >
                                         {isCompletedToday(habit) && <Check size={18} strokeWidth={3} />}

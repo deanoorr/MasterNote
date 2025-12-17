@@ -145,7 +145,7 @@ export default function TaskManager() {
                         animate={{ width: 256, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-white/5 bg-zinc-950/30 flex flex-col overflow-hidden whitespace-nowrap"
+                        className="border-r border-white/5 bg-black/20 backdrop-blur-xl flex flex-col overflow-hidden whitespace-nowrap"
                     >
                         <div className="p-4 w-64">
                             <div className="flex justify-between items-center mb-4">
@@ -227,7 +227,7 @@ export default function TaskManager() {
                                     <PanelLeft size={20} />
                                 </button>
                             )}
-                            <h1 className="text-3xl font-semibold text-white tracking-tight">
+                            <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60">
                                 {currentProjectName}
                             </h1>
                         </div>
@@ -267,7 +267,7 @@ export default function TaskManager() {
                             onSubmit={handleManualAdd}
                             className="overflow-hidden mb-6"
                         >
-                            <div className="p-4 glass-card rounded-xl border border-primary-500/30 flex flex-col gap-3">
+                            <div className="p-4 bg-white/5 backdrop-blur-md rounded-xl border border-white/10 shadow-lg flex flex-col gap-3">
                                 <input
                                     autoFocus
                                     type="text"
@@ -340,11 +340,11 @@ export default function TaskManager() {
                                     exit={{ opacity: 0, scale: 0.95, x: -20 }}
                                     layout
                                     transition={{ duration: 0.2 }}
-                                    className={`glass-card p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
-                                        ? 'bg-slate-900/40 border-slate-800 opacity-60'
+                                    className={`p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
+                                        ? 'bg-black/20 border-white/5 opacity-50'
                                         : overdue
-                                            ? 'border-red-500/50 bg-red-500/10 hover:border-red-500/70'
-                                            : 'border-white/5 hover:border-white/10 hover:shadow-lg'
+                                            ? 'border-red-500/30 bg-red-500/10'
+                                            : 'bg-white/5 backdrop-blur-md border-white/5 hover:border-white/20 hover:bg-white/10 hover:shadow-xl hover:shadow-black/20'
                                         }`}
                                 >
                                     {editingId === task.id ? (

@@ -21,7 +21,7 @@ export default function NoteCard({ note, onDelete, onUpdate, onExpand }) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 250, damping: 25 }}
-            className="group rounded-[2rem] p-6 bg-zinc-800/80 backdrop-blur-sm hover:bg-zinc-800 text-zinc-100 shadow-xl shadow-black/20 hover:shadow-2xl transition-all flex flex-col border border-white/5 min-h-[200px] relative"
+            className="group rounded-[2rem] p-6 bg-white/5 backdrop-blur-md hover:bg-white/10 text-zinc-100 shadow-xl shadow-black/10 hover:shadow-black/30 transition-all flex flex-col border border-white/5 hover:border-white/10 min-h-[200px] relative"
         >
             {/* Toolbar (Always faintly visible, bright on hover) */}
             <div className="absolute top-4 right-4 flex items-center gap-2 opacity-20 group-hover:opacity-100 transition-opacity duration-200 z-10">
