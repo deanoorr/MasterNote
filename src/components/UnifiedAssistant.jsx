@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit } from 'lucide-react';
+import { Send, Plus, Trash2, Zap, MessageSquare, ArrowUp, Command, Bot, User, StopCircle, PanelLeft, Sparkles, BrainCircuit, Paperclip, X, FileText } from 'lucide-react';
 import { useModel } from '../context/ModelContext';
 import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
@@ -166,6 +166,36 @@ export default function UnifiedAssistant() {
     // Lazy init clients
     const clientsRef = useRef(initializeClients());
 
+    // File Upload State
+    const [attachments, setAttachments] = useState([]);
+    const fileInputRef = useRef(null);
+
+    const handleFileSelect = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length + attachments.length > 4) {
+            alert("Maximum 4 attachments allowed."); // Basic limit
+            return;
+        }
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setAttachments(prev => [...prev, {
+                    preview: e.target.result, // Data URL
+                    type: file.type.startsWith('image/') ? 'image' : 'file',
+                    mimeType: file.type,
+                    name: file.name
+                }]);
+            };
+            reader.readAsDataURL(file);
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const removeAttachment = (index) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
+
     // Auto-enable Thinking for reasoning models
     useEffect(() => {
         if (selectedModel.thinking) {
@@ -209,7 +239,7 @@ export default function UnifiedAssistant() {
         try {
             if (!clientsRef.current.genAI) return null;
             const model = clientsRef.current.genAI.getGenerativeModel({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash-preview",
                 tools: [{ googleSearch: {} }] // Enable Google Search
             });
 
@@ -255,8 +285,17 @@ export default function UnifiedAssistant() {
 
         // --- 1. Chat Mode ---
         if (mode === 'chat') {
-            const userMsg = { id: Date.now(), role: 'user', content: userText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+            const userMsg = {
+                id: Date.now(),
+                role: 'user',
+                content: userText,
+                attachments: attachments, // Save attachments to history
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
             addMessageToSession(currentSessionId, userMsg);
+
+            const currentAttachments = [...attachments]; // Capture for async usage
+            setAttachments([]); // Clear UI immediately
 
             // Create placeholder message ID
             const msgId = Date.now() + 1;
@@ -324,7 +363,20 @@ export default function UnifiedAssistant() {
                         history: validHistory,
                     });
 
-                    const result = await chatSession.sendMessageStream(userText);
+                    // Construct Message Parts (Text + Images)
+                    const messageParts = [{ text: userText }];
+                    currentAttachments.forEach(att => {
+                        // Remove data:image/...;base64, prefix for inlineData
+                        const base64Data = att.preview.split(',')[1];
+                        messageParts.push({
+                            inlineData: {
+                                mimeType: att.mimeType,
+                                data: base64Data
+                            }
+                        });
+                    });
+
+                    const result = await chatSession.sendMessageStream(messageParts);
 
                     let textAccumulator = "";
                     let gatheredSources = new Set();
@@ -379,7 +431,17 @@ export default function UnifiedAssistant() {
                     const stream = await client.chat.completions.create({
                         messages: [
                             { role: "system", content: finalSystemPrompt },
-                            ...historyForModel
+                            ...historyForModel,
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: userText },
+                                    ...currentAttachments.map(att => ({
+                                        type: "image_url",
+                                        image_url: { url: att.preview }
+                                    }))
+                                ]
+                            }
                         ],
                         model: selectedModel.id,
                         stream: true,
@@ -444,7 +506,23 @@ export default function UnifiedAssistant() {
                         model: selectedModel.id,
                         max_tokens: 40000,
                         system: finalSystemPrompt,
-                        messages: historyForModel,
+                        messages: [
+                            ...historyForModel,
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: userText },
+                                    ...currentAttachments.map(att => ({
+                                        type: "image",
+                                        source: {
+                                            type: "base64",
+                                            media_type: att.mimeType,
+                                            data: att.preview.split(',')[1]
+                                        }
+                                    }))
+                                ]
+                            }
+                        ],
                         stream: true,
                         thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
                     });
@@ -486,7 +564,7 @@ export default function UnifiedAssistant() {
                             const recentContext = history.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n');
                             if (!recentContext) return currentInput;
 
-                            const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                            const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
                             const prompt = `
             Context:
             ${recentContext}
@@ -605,7 +683,7 @@ export default function UnifiedAssistant() {
 
             try {
                 if (!clientsRef.current.genAI) throw new Error("Google API Key missing for Agent mode");
-                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
                 // Enhanced context with dates and status
                 const taskContextJSON = JSON.stringify(tasks.map(t => ({
@@ -912,6 +990,24 @@ export default function UnifiedAssistant() {
                                 )}
 
                                 <div className={`max-w-[80%] ${msg.role === 'user' ? 'space-y-1' : ''}`}>
+                                    {/* Render Attachments if any */}
+                                    {msg.attachments && msg.attachments.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                                            {msg.attachments.map((att, idx) => (
+                                                <div key={idx} className="relative group rounded-lg overflow-hidden border border-zinc-700/50 w-32 h-32 bg-zinc-900">
+                                                    {att.type === 'image' ? (
+                                                        <img src={att.preview} alt="Attachment" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500">
+                                                            <FileText size={24} />
+                                                            <span className="text-[10px] mt-2 px-2 truncate w-full text-center">{att.name}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     <div className={`text-sm leading-7 ${msg.role === 'user'
                                         ? 'bg-zinc-800 text-zinc-100 px-4 py-2 rounded-2xl rounded-tr-sm border border-zinc-700'
                                         : msg.role === 'system'
@@ -971,23 +1067,64 @@ export default function UnifiedAssistant() {
                                     <BrainCircuit size={16} className={isThinkingEnabled ? "text-purple-400" : "text-zinc-500"} />
                                 </button>
                             </div>
-                            <textarea
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder={mode === 'chat' ? "Message Bart..." : "Enter a task Command..."}
-                                className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
-                                rows={1}
-                            />
-                            <button
-                                onClick={handleSend}
-                                disabled={!input}
-                                className={`p-2 rounded-lg mb-1 transition-all ${input.trim() ? 'bg-white text-black' : 'bg-transparent text-zinc-600'
-                                    }`}
-                            >
-                                <ArrowUp size={18} />
-                            </button>
+
+                            {/* Attachments Preview */}
+                            {attachments.length > 0 && (
+                                <div className="absolute bottom-full left-0 mb-2 w-full px-2 flex gap-2 overflow-x-auto">
+                                    {attachments.map((att, idx) => (
+                                        <div key={idx} className="relative group w-16 h-16 shrink-0 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900 shadow-lg">
+                                            {att.type === 'image' ? (
+                                                <img src={att.preview} alt="Preview" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                                    <FileText size={20} />
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => removeAttachment(idx)}
+                                                className="absolute top-0 right-0 p-0.5 bg-black/50 text-white hover:text-red-400 rounded-bl-md transition-colors"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex items-end flex-1 gap-2">
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={mode === 'chat' ? "Message Bart..." : "Enter a task Command..."}
+                                    className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
+                                    rows={1}
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="p-2 mb-1 text-zinc-500 hover:text-white transition-colors"
+                                    title="Attach files"
+                                >
+                                    <Paperclip size={18} />
+                                </button>
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!input && attachments.length === 0}
+                                    className={`p-2 rounded-lg mb-1 transition-all ${input.trim() || attachments.length > 0 ? 'bg-white text-black' : 'bg-transparent text-zinc-600'
+                                        }`}
+                                >
+                                    <ArrowUp size={18} />
+                                </button>
+                            </div>
                         </div>
+                        <input
+                            type="file"
+                            multiple
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={handleFileSelect}
+                            accept="image/*,application/pdf"
+                        />
                         <div className="text-center mt-2 text-[10px] text-zinc-700">
                             Bart may display inaccurate info, including about people, so double-check its responses.
                         </div>

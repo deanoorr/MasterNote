@@ -21,16 +21,18 @@ export default function HabitsPage() {
             if (!apiKey) throw new Error("Google API Key missing");
 
             const genAI = new GoogleGenerativeAI(apiKey);
-            // Reverted to gemini-2.5-flash as requested, but keeping in-depth prompt
-            const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            // Reverted to gemini-3-flash-preview per user request
+            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
             const prompt = `
-                User Goal: "${userGoal}"
-                Task: Create a set of 3-5 daily habits to help achieve this goal. 
+                You are a behavioral psychology expert.
+                Task: Create a set of 3-5 daily habits to help achieve the user's goal.
                 Focus on behavioral psychology but keep them CONCISE, ACTIONABLE, and EASY TO DIGEST.
                 Limit each habit to maximum 15 words.
                 Return ONLY a JSON array of strings. No markdown formatting.
                 Example Output: ["Read 5 pages", "Place book on pillow", "Drink 1 glass of water"]
+
+                User Goal: "${userGoal}"
             `;
 
             const result = await model.generateContent(prompt);

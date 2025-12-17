@@ -24,8 +24,8 @@ export default function DashboardPage({ onNavigate }) {
             try {
                 const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
                 if (!apiKey) throw new Error("API Key missing");
-                // Reverting to 2.5-flash for stability (1.5 might be restricted/unavailable)
-                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                // Using gemini-3-flash-preview as requested
+                const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
                 const prompt = `
                     User: ${userName}
