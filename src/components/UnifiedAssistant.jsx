@@ -142,10 +142,10 @@ const initializeClients = () => {
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
-        openai: openaiKey ? new OpenAI({ apiKey: openaiKey, baseURL: "https://api.openai.com/v1", dangerouslyAllowBrowser: true }) : null,
+        openai: openaiKey ? new OpenAI({ apiKey: openaiKey, baseURL: window.location.origin + "/openai-api/v1", dangerouslyAllowBrowser: true }) : null,
 
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
-        deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: "https://api.deepseek.com", dangerouslyAllowBrowser: true }) : null,
+        deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: window.location.origin + "/deepseek-api/v1", dangerouslyAllowBrowser: true }) : null,
         scira: !!import.meta.env.VITE_SCIRA_API_KEY,
 
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
@@ -669,7 +669,7 @@ export default function UnifiedAssistant() {
                 } else if (selectedModel.provider === 'scira') {
                     if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
 
-                    let endpoint = "https://api.scira.ai/api/search";
+                    let endpoint = "/scira-api/api/search";
                     let body = {};
 
                     // Filter history to remove error messages which might confuse the model
@@ -709,7 +709,7 @@ export default function UnifiedAssistant() {
 
                     // --- Scira Modes ---
                     if (sciraMode === 'x') {
-                        endpoint = "https://api.scira.ai/api/xsearch";
+                        endpoint = "/scira-api/api/xsearch";
                         updateMessage(currentSessionId, msgId, " Analyzing context for X... 🧠");
 
                         // Generate Context-Aware Query
