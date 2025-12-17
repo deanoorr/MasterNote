@@ -370,6 +370,53 @@ export default function UnifiedAssistant() {
         return <div className="flex h-full w-full items-center justify-center text-zinc-500">Loading...</div>;
     }
 
+    // --- Dynamic AI Avatar Renderer ---
+    const renderAIAvatar = (msg, idx) => {
+        const isLatestAI = msg.role === 'ai' && idx === currentSession.messages.length - 1;
+        const showAnimation = isLatestAI && isProcessing;
+
+        if (showAnimation) {
+            return (
+                <div className="relative w-8 h-8 flex items-center justify-center shrink-0">
+                    {/* Pulsing Ambient Glow */}
+                    <motion.div
+                        animate={{
+                            scale: [1, 1.4, 1],
+                            opacity: [0.3, 0.6, 0.3]
+                        }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        className="absolute inset-0 bg-blue-500/30 rounded-full blur-[6px]"
+                    />
+
+                    {/* Spinning Gradient Ring */}
+                    <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 rounded-xl border-[1.5px] border-transparent border-t-blue-500 border-r-purple-500/50"
+                    />
+
+                    <div className="relative w-full h-full rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 flex items-center justify-center shadow-sm overflow-hidden">
+                        <motion.div
+                            animate={{
+                                y: [-1, 1, -1],
+                                opacity: [0.7, 1, 0.7]
+                            }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                            <Sparkles size={16} className="text-blue-500 dark:text-blue-400" />
+                        </motion.div>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-white/5">
+                <Sparkles size={16} className="text-zinc-600 dark:text-zinc-400" />
+            </div>
+        );
+    };
+
     // --- Search Query Refinement Helper ---
     const refineSearchQuery = async (userQuery, history) => {
         try {
@@ -915,11 +962,7 @@ export default function UnifiedAssistant() {
 
                             return (
                                 <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    {msg.role !== 'user' && (
-                                        <div className="w-8 h-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
-                                            <Sparkles size={16} className="text-zinc-900 dark:text-white" />
-                                        </div>
-                                    )}
+                                    {msg.role !== 'user' && renderAIAvatar(msg, idx)}
                                     <div className={`max-w-[80%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
                                         {msg.visualResults && <VisualSearchCarousel images={msg.visualResults} />}
                                         <FormattedMessage content={msg.content} />
