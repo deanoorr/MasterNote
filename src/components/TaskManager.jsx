@@ -353,36 +353,36 @@ export default function TaskManager() {
                                                 type="text"
                                                 value={editTitle}
                                                 onChange={(e) => setEditTitle(e.target.value)}
-                                                className="w-full bg-slate-800/50 rounded-lg px-3 py-2 border border-white/10 outline-none text-white"
+                                                className="w-full bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 outline-none text-zinc-900 dark:text-white"
                                             />
                                             <div className="flex gap-3">
-                                                <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
-                                                    <Clock size={14} className="text-slate-400" />
+                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
+                                                    <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
                                                     <input
                                                         type="date"
                                                         value={editDate}
                                                         onChange={(e) => setEditDate(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-slate-300 [color-scheme:dark]"
+                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
                                                     />
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
-                                                    <AlertCircle size={14} className="text-slate-400" />
+                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
+                                                    <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
                                                     <select
                                                         value={editPriority}
                                                         onChange={(e) => setEditPriority(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-slate-300"
+                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
                                                     >
                                                         <option value="High">High</option>
                                                         <option value="Medium">Medium</option>
                                                         <option value="Low">Low</option>
                                                     </select>
                                                 </div>
-                                                <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
-                                                    <Folder size={14} className="text-slate-400" />
+                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
+                                                    <Folder size={14} className="text-zinc-500 dark:text-slate-400" />
                                                     <select
                                                         value={editProjectId}
                                                         onChange={(e) => setEditProjectId(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-slate-300 max-w-[100px]"
+                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 max-w-[100px]"
                                                     >
                                                         <option value="inbox">Inbox</option>
                                                         {projects.map(p => (
@@ -391,7 +391,7 @@ export default function TaskManager() {
                                                     </select>
                                                 </div>
                                                 <div className="flex-1"></div>
-                                                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-slate-400 hover:text-white">Cancel</button>
+                                                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-slate-400 dark:hover:text-white">Cancel</button>
                                                 <button onClick={saveEdit} className="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
                                                     <Save size={14} /> Save
                                                 </button>
@@ -432,7 +432,7 @@ export default function TaskManager() {
                                                         </span>
                                                     )}
 
-                                                    <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 border border-slate-700">
+                                                    <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-slate-800 text-zinc-600 dark:text-slate-400 border border-zinc-200 dark:border-slate-700">
                                                         <Calendar size={12} className="mr-1.5" /> {task.date}
                                                     </span>
                                                 </div>
