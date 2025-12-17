@@ -544,13 +544,12 @@ export default function UnifiedAssistant() {
 
                         const systemInstruction = `You are an AI with real-time internet access. You MUST verify your knowledge with a web search before answering, especially for recent events, news, or technical releases. Do not rely solely on your internal cutoff knowledge. If the user asks about ANY factual topic (sports, news, tech), SEARCH the internet first.`;
 
-                        const finalPrompt = `${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
+                        const finalPrompt = `SYSTEM INSTRUCTION: ${systemInstruction}\n\n${contextBlock}${collapsedHistory}CURRENT USER QUERY: ${userText}`;
 
                         console.log("Scira Collapsed Payload:", finalPrompt);
 
                         body = {
                             messages: [
-                                { role: "system", content: systemInstruction },
                                 { role: "user", content: finalPrompt }
                             ]
                         };
