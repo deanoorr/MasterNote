@@ -145,7 +145,7 @@ export default function TaskManager() {
                         animate={{ width: 256, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-white/5 bg-black/20 backdrop-blur-xl flex flex-col overflow-hidden whitespace-nowrap"
+                        className="border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-xl flex flex-col overflow-hidden whitespace-nowrap"
                     >
                         <div className="p-4 w-64">
                             <div className="flex justify-between items-center mb-4">
@@ -157,13 +157,13 @@ export default function TaskManager() {
                             <div className="space-y-1">
                                 <button
                                     onClick={() => setSelectedProject('all')}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'all' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'all' ? 'bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'}`}
                                 >
                                     <ListFilter size={16} /> All Tasks
                                 </button>
                                 <button
                                     onClick={() => setSelectedProject('inbox')}
-                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'inbox' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'inbox' ? 'bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'}`}
                                 >
                                     <Box size={16} /> Inbox
                                 </button>
@@ -184,7 +184,7 @@ export default function TaskManager() {
                                         placeholder="Project Name"
                                         value={newProjectName}
                                         onChange={(e) => setNewProjectName(e.target.value)}
-                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500"
+                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-zinc-500"
                                     />
                                 </form>
                             )}
@@ -194,7 +194,7 @@ export default function TaskManager() {
                                     <div key={project.id} className="group flex items-center">
                                         <button
                                             onClick={() => setSelectedProject(project.id)}
-                                            className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === project.id ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                            className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === project.id ? 'bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'}`}
                                         >
                                             <span className={`w-2 h-2 rounded-full bg-${project.color}-500`} />
                                             {project.name}
@@ -215,7 +215,7 @@ export default function TaskManager() {
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full">
-                <header className="mb-8 flex justify-between items-end border-b border-zinc-900 pb-6">
+                <header className="mb-8 flex justify-between items-end border-b border-zinc-200 dark:border-zinc-900 pb-6">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             {!isSidebarOpen && (
@@ -227,7 +227,7 @@ export default function TaskManager() {
                                     <PanelLeft size={20} />
                                 </button>
                             )}
-                            <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60">
+                            <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-900 to-zinc-500 dark:from-white dark:to-white/60">
                                 {currentProjectName}
                             </h1>
                         </div>
@@ -236,12 +236,12 @@ export default function TaskManager() {
                         </p>
                     </div>
                     <div className="flex gap-3">
-                        <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-2 border border-white/10">
-                            <ListFilter size={16} className="text-slate-400" />
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10">
+                            <ListFilter size={16} className="text-slate-500 dark:text-slate-400" />
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="bg-transparent border-none outline-none text-sm text-slate-300 cursor-pointer"
+                                className="bg-transparent border-none outline-none text-sm text-slate-500 dark:text-slate-300 cursor-pointer"
                             >
                                 <option value="date">Sort by Date</option>
                                 <option value="priority">Sort by Priority</option>
@@ -267,33 +267,32 @@ export default function TaskManager() {
                             onSubmit={handleManualAdd}
                             className="overflow-hidden mb-6"
                         >
-                            <div className="p-4 bg-white/5 backdrop-blur-md rounded-xl border border-white/10 shadow-lg flex flex-col gap-3">
+                            <div className="p-4 bg-white dark:bg-white/5 backdrop-blur-md rounded-xl border border-zinc-200 dark:border-white/10 shadow-lg flex flex-col gap-3">
                                 <input
                                     autoFocus
                                     type="text"
                                     value={newTaskTitle}
                                     onChange={(e) => setNewTaskTitle(e.target.value)}
                                     placeholder={`Add a task to ${currentProjectName === 'All Tasks' ? 'Inbox' : currentProjectName}...`}
-                                    className="w-full bg-transparent border-none outline-none text-white placeholder-slate-500 text-lg"
+                                    className="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-slate-500 text-lg"
                                 />
 
-                                <div className="flex items-center gap-3 pt-2 border-t border-white/5">
-                                    <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
-                                        <Clock size={14} className="text-slate-400" />
+                                <div className="flex items-center gap-3 pt-2 border-t border-zinc-200 dark:border-white/5">
+                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
+                                        <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
                                         <input
-                                            type="date"
                                             value={newTaskDate}
                                             onChange={(e) => setNewTaskDate(e.target.value)}
-                                            className="bg-transparent border-none outline-none text-sm text-slate-300 [color-scheme:dark]"
+                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
                                         />
                                     </div>
 
-                                    <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg px-3 py-1.5 border border-white/10">
-                                        <AlertCircle size={14} className="text-slate-400" />
+                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
+                                        <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
                                         <select
                                             value={newTaskPriority}
                                             onChange={(e) => setNewTaskPriority(e.target.value)}
-                                            className="bg-transparent border-none outline-none text-sm text-slate-300"
+                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
                                         >
                                             <option value="High">High</option>
                                             <option value="Medium">Medium</option>
@@ -341,10 +340,10 @@ export default function TaskManager() {
                                     layout
                                     transition={{ duration: 0.2 }}
                                     className={`p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
-                                        ? 'bg-black/20 border-white/5 opacity-50'
+                                        ? 'bg-zinc-100 dark:bg-black/20 border-zinc-200 dark:border-white/5 opacity-50'
                                         : overdue
                                             ? 'border-red-500/30 bg-red-500/10'
-                                            : 'bg-white/5 backdrop-blur-md border-white/5 hover:border-white/20 hover:bg-white/10 hover:shadow-xl hover:shadow-black/20'
+                                            : 'bg-white dark:bg-white/5 backdrop-blur-md border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/20 hover:bg-zinc-50 dark:hover:bg-white/10 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/20'
                                         }`}
                                 >
                                     {editingId === task.id ? (
@@ -412,7 +411,7 @@ export default function TaskManager() {
 
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h3 className={`text-lg font-medium transition-colors ${task.status === 'completed' ? 'text-slate-500 line-through' : 'text-slate-200 group-hover:text-white'
+                                                    <h3 className={`text-lg font-medium transition-colors ${task.status === 'completed' ? 'text-zinc-400 dark:text-slate-500 line-through' : 'text-zinc-800 dark:text-slate-200 group-hover:text-black dark:group-hover:text-white'
                                                         }`}>
                                                         {task.title}
                                                     </h3>

@@ -14,11 +14,11 @@ const navItems = [
 
 export default function Sidebar({ activeTab, onTabChange }) {
     return (
-        <aside className="fixed left-0 top-0 h-full w-20 md:w-64 z-50 flex flex-col pt-8 pb-6 px-4 border-r border-white/5 bg-black/20 backdrop-blur-xl">
+        <aside className="fixed left-0 top-0 h-full w-20 md:w-64 z-50 flex flex-col pt-8 pb-6 px-4 border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-xl transition-colors duration-300">
 
             {/* Logo Area */}
             <div className="px-6 mb-12 mt-2">
-                <span className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-zinc-200 to-zinc-600 hidden md:block">
+                <span className="text-4xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-zinc-900 via-zinc-700 to-zinc-500 dark:from-white dark:via-zinc-200 dark:to-zinc-600 hidden md:block">
                     BART AI
                 </span>
             </div>
@@ -32,8 +32,8 @@ export default function Sidebar({ activeTab, onTabChange }) {
                             key={item.id}
                             onClick={() => onTabChange(item.id)}
                             className={`relative w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group overflow-hidden ${isActive
-                                ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 text-white shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                                : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
+                                ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 text-blue-700 dark:text-white shadow-[0_0_20px_rgba(59,130,246,0.1)]'
+                                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5'
                                 }`}
                         >
                             {isActive && (
@@ -41,9 +41,9 @@ export default function Sidebar({ activeTab, onTabChange }) {
                             )}
                             <item.icon
                                 size={20}
-                                className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-blue-400' : 'text-zinc-500 group-hover:text-zinc-300'}`}
+                                className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-blue-500 dark:text-blue-400' : 'text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300'}`}
                             />
-                            <span className={`relative z-10 text-sm font-medium hidden md:block ${isActive ? 'text-blue-100' : ''}`}>
+                            <span className={`relative z-10 text-sm font-medium hidden md:block ${isActive ? 'text-blue-700 dark:text-blue-100' : ''}`}>
                                 {item.label}
                             </span>
                         </button>
@@ -53,7 +53,7 @@ export default function Sidebar({ activeTab, onTabChange }) {
 
             {/* Bottom Profile/Logout */}
             <div className="mt-auto px-2">
-                <button className="w-full flex items-center gap-3 p-3 rounded-xl text-zinc-600 hover:text-zinc-300 hover:bg-white/5 transition-all text-sm">
+                <button className="w-full flex items-center gap-3 p-3 rounded-xl text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-sm">
                     <LogOut size={18} />
                     <span className="font-medium hidden md:block">Sign Out</span>
                 </button>

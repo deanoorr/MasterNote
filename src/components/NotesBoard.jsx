@@ -40,7 +40,7 @@ export default function NotesBoard() {
                         animate={{ width: 256, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-white/5 bg-black/20 flex flex-col overflow-hidden whitespace-nowrap shrink-0"
+                        className="border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 flex flex-col overflow-hidden whitespace-nowrap shrink-0"
                     >
                         <div className="w-64 p-4 flex flex-col h-full">
                             <div className="flex items-center justify-between mb-6">
@@ -55,7 +55,7 @@ export default function NotesBoard() {
                                     </button>
                                     <button
                                         onClick={() => setIsSidebarOpen(false)}
-                                        className="text-zinc-500 hover:text-white transition-colors"
+                                        className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
                                         title="Close Sidebar"
                                     >
                                         <PanelLeft size={16} />
@@ -72,7 +72,7 @@ export default function NotesBoard() {
                                         onChange={(e) => setNewProjectName(e.target.value)}
                                         placeholder="Project Name..."
                                         onBlur={() => setIsAddingProject(false)}
-                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500"
+                                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-sm text-zinc-900 dark:text-white outline-none focus:border-blue-500"
                                     />
                                 </form>
                             )}
@@ -81,8 +81,8 @@ export default function NotesBoard() {
                                 <button
                                     onClick={() => setSelectedProject('all')}
                                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedProject === 'all'
-                                        ? 'bg-zinc-800 text-white font-medium'
-                                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                        ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
+                                        : 'text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-200'
                                         }`}
                                 >
                                     <span className="flex items-center gap-2">
@@ -98,8 +98,8 @@ export default function NotesBoard() {
                                         key={project.id}
                                         onClick={() => setSelectedProject(project.id)}
                                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${selectedProject === project.id
-                                            ? 'bg-zinc-800 text-white font-medium'
-                                            : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                            ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-white font-medium'
+                                            : 'text-zinc-500 dark:text-zinc-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-200'
                                             }`}
                                     >
                                         <span className="flex items-center gap-2 truncate">
@@ -132,7 +132,7 @@ export default function NotesBoard() {
                         {!isSidebarOpen && (
                             <button
                                 onClick={() => setIsSidebarOpen(true)}
-                                className="text-zinc-500 hover:text-white transition-colors"
+                                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
                                 title="Open Sidebar"
                             >
                                 <PanelLeft size={20} />
@@ -145,13 +145,13 @@ export default function NotesBoard() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search notes..."
-                                className="w-full bg-zinc-900/50 border border-white/5 rounded-full pl-9 pr-4 py-2 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-600"
+                                className="w-full bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-white/5 rounded-full pl-9 pr-4 py-2 text-sm text-zinc-900 dark:text-zinc-300 outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-700 transition-all placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
                             />
                         </div>
                     </div>
                     <button
                         onClick={() => addNote(selectedProject === 'all' ? 'inbox' : selectedProject)}
-                        className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full text-sm font-medium hover:bg-zinc-200 transition-colors shadow-lg shadow-white/5"
+                        className="flex items-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-full text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-lg shadow-black/5 dark:shadow-white/5"
                     >
                         <Plus size={16} /> New Note
                     </button>
@@ -174,7 +174,7 @@ export default function NotesBoard() {
 
                         {filteredNotes.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center h-64 text-zinc-600">
-                                <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
+                                <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-900 flex items-center justify-center mb-4">
                                     <LayoutGrid size={24} opacity={0.5} />
                                 </div>
                                 <p>No notes found.</p>
@@ -200,7 +200,7 @@ export default function NotesBoard() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ type: 'spring', stiffness: 250, damping: 25 }}
-                            className="relative w-full max-w-4xl h-[80vh] bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl flex flex-col p-8 overflow-hidden z-10"
+                            className="relative w-full max-w-4xl h-[80vh] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-[2.5rem] shadow-2xl flex flex-col p-8 overflow-hidden z-10"
                         >
                             <div className="absolute top-6 right-6 flex items-center gap-2">
                                 <button
@@ -226,7 +226,7 @@ export default function NotesBoard() {
                                 value={selectedNote.content}
                                 onChange={(e) => updateNote(selectedNote.id, { content: e.target.value })}
                                 placeholder="Type something..."
-                                className="w-full h-full bg-transparent border-none outline-none resize-none text-lg leading-relaxed text-zinc-100 placeholder-zinc-600 custom-scrollbar selection:bg-white/20 p-2 pr-24"
+                                className="w-full h-full bg-transparent border-none outline-none resize-none text-lg leading-relaxed text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 custom-scrollbar selection:bg-blue-500/20 dark:selection:bg-white/20 p-2 pr-24"
                                 spellCheck={false}
                                 autoFocus
                             />

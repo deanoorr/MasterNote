@@ -86,13 +86,13 @@ export default function HabitsPage() {
                 {/* AI Helper Section */}
                 <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                    <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-8 overflow-hidden shadow-2xl">
+                    <div className="relative bg-white/50 dark:bg-black/40 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl p-8 overflow-hidden shadow-2xl">
                         <div className="absolute -top-10 -right-10 p-4 opacity-5 pointer-events-none">
                             <Sparkles size={200} className="text-indigo-400" />
                         </div>
 
-                        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-3">
-                            <Sparkles className="text-blue-400" size={22} />
+                        <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-3">
+                            <Sparkles className="text-blue-500 dark:text-blue-400" size={22} />
                             AI Habit Architect
                         </h2>
 
@@ -103,7 +103,7 @@ export default function HabitsPage() {
                                     value={userGoal}
                                     onChange={(e) => setUserGoal(e.target.value)}
                                     placeholder="I want to master deep work..."
-                                    className="w-full bg-black/60 border border-white/5 text-white rounded-xl px-4 py-4 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400/50 outline-none placeholder:text-zinc-600 transition-all shadow-inner text-lg"
+                                    className="w-full bg-white dark:bg-black/60 border border-zinc-200 dark:border-white/5 text-zinc-900 dark:text-white rounded-xl px-4 py-4 focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400/50 outline-none placeholder:text-zinc-500 dark:placeholder:text-zinc-600 transition-all shadow-inner text-lg"
                                     onKeyDown={(e) => e.key === 'Enter' && generateHabits()}
                                 />
                             </div>
@@ -136,14 +136,14 @@ export default function HabitsPage() {
                             value={manualInput}
                             onChange={(e) => setManualInput(e.target.value)}
                             placeholder="Construct a custom habit..."
-                            className="w-full bg-transparent border-b border-white/5 text-white px-0 py-3 focus:border-indigo-500/50 outline-none placeholder:text-zinc-700 transition-all text-lg"
+                            className="w-full bg-transparent border-b border-zinc-200 dark:border-white/5 text-zinc-900 dark:text-white px-0 py-3 focus:border-indigo-500/50 outline-none placeholder:text-zinc-500 dark:placeholder:text-zinc-700 transition-all text-lg"
                         />
                         <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-500 to-blue-500 transition-all duration-500 group-focus-within:w-full"></div>
                     </div>
                     <button
                         type="submit"
                         disabled={!manualInput.trim()}
-                        className="p-3 rounded-full bg-white/5 text-zinc-400 hover:text-indigo-400 hover:bg-white/10 disabled:opacity-20 transition-all"
+                        className="p-3 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-400 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-zinc-200 dark:hover:bg-white/10 disabled:opacity-20 transition-all"
                     >
                         <Plus size={28} />
                     </button>
@@ -152,7 +152,7 @@ export default function HabitsPage() {
                 {/* Habits List */}
                 <div className="grid gap-4">
                     {habits.length === 0 ? (
-                        <div className="text-center py-20 bg-white/5 rounded-2xl border border-dashed border-white/10">
+                        <div className="text-center py-20 bg-white/50 dark:bg-white/5 rounded-2xl border border-dashed border-zinc-200 dark:border-white/10">
                             <Activity size={48} className="mx-auto text-zinc-800 mb-4" />
                             <p className="text-zinc-500 text-lg">Your habit landscape is currently pristine.</p>
                             <p className="text-zinc-600 text-sm mt-2">Begin your journey by adding a habit above.</p>
@@ -164,14 +164,14 @@ export default function HabitsPage() {
                                 layout
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 flex items-center justify-between group hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-lg"
+                                className="bg-white dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between group hover:bg-zinc-50 dark:hover:bg-white/[0.08] hover:border-zinc-300 dark:hover:border-white/20 transition-all duration-300 shadow-lg"
                             >
                                 <div className="flex items-center gap-6">
                                     <button
                                         onClick={() => toggleHabit(habit.id)}
                                         className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${isCompletedToday(habit)
                                             ? 'bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-[0_8px_20px_-4px_rgba(99,102,241,0.6)]'
-                                            : 'bg-black/60 border border-white/10 text-zinc-700 hover:border-indigo-500/50 hover:text-indigo-400'
+                                            : 'bg-zinc-100 dark:bg-black/60 border border-zinc-200 dark:border-white/10 text-zinc-700 hover:border-indigo-500/50 hover:text-indigo-500 dark:hover:text-indigo-400'
                                             }`}
                                     >
                                         {isCompletedToday(habit) ? (
@@ -181,11 +181,11 @@ export default function HabitsPage() {
                                         )}
                                     </button>
                                     <div>
-                                        <h3 className={`text-lg font-medium transition-all duration-500 ${isCompletedToday(habit) ? 'text-zinc-600 line-through' : 'text-white'}`}>
+                                        <h3 className={`text-lg font-medium transition-all duration-500 ${isCompletedToday(habit) ? 'text-zinc-400 dark:text-zinc-600 line-through' : 'text-zinc-900 dark:text-white'}`}>
                                             {habit.title}
                                         </h3>
                                         <div className="flex items-center gap-4 text-xs mt-2">
-                                            <span className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${habit.streak > 0 ? 'bg-orange-500/10 text-orange-400' : 'bg-zinc-800/50 text-zinc-600'}`}>
+                                            <span className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${habit.streak > 0 ? 'bg-orange-500/10 text-orange-400' : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-600'}`}>
                                                 <Flame size={14} className={habit.streak > 0 ? 'animate-pulse' : ''} />
                                                 <span className="font-semibold">{habit.streak} DAY STREAK</span>
                                             </span>

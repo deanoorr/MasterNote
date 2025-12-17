@@ -74,21 +74,21 @@ export default function DashboardPage({ onNavigate }) {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-indigo-900/20"
+                    className="bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-indigo-200/50 dark:shadow-indigo-900/20"
                 >
                     <div className="absolute top-0 right-0 p-8 opacity-5">
-                        <Sparkles size={120} className="text-white" />
+                        <Sparkles size={120} className="text-zinc-900 dark:text-white" />
                     </div>
 
                     <div className="relative z-10">
-                        <h1 className="text-3xl font-bold text-white mb-4">Command Center</h1>
+                        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-4">Command Center</h1>
                         {isLoadingBriefing ? (
-                            <div className="flex items-center gap-2 text-zinc-400 animate-pulse">
+                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 animate-pulse">
                                 <Loader2 size={18} className="animate-spin" />
                                 <span>Generating briefing...</span>
                             </div>
                         ) : (
-                            <p className="text-xl text-zinc-300 leading-relaxed max-w-3xl">
+                            <p className="text-xl text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-3xl">
                                 {briefing}
                             </p>
                         )}
@@ -100,21 +100,21 @@ export default function DashboardPage({ onNavigate }) {
                     {/* 2. Today's Focus (Tasks) */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
                                 <CheckCircle2 className="text-blue-500" size={20} />
                                 Today's Focus
                             </h2>
                             <button
                                 onClick={() => onNavigate('workspace')}
-                                className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1"
+                                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors flex items-center gap-1"
                             >
                                 View All <ArrowRight size={12} />
                             </button>
                         </div>
 
-                        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 min-h-[200px]">
+                        <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-4 min-h-[200px]">
                             {pendingTasks.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
+                                <div className="h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-600 p-8">
                                     <Clock size={32} className="mb-2 opacity-50" />
                                     <p>All caught up!</p>
                                 </div>
@@ -123,13 +123,13 @@ export default function DashboardPage({ onNavigate }) {
                                     {pendingTasks.map(task => (
                                         <div
                                             key={task.id}
-                                            className="group flex items-center gap-3 p-3 hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
+                                            className="group flex items-center gap-3 p-3 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
                                             onClick={() => handleToggleTask(task)}
                                         >
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${task.status === 'completed' ? 'bg-blue-500 border-blue-500' : 'border-zinc-600 group-hover:border-zinc-500'}`}>
-                                                {task.status === 'completed' && <CheckCircle2 size={14} className="text-black" />}
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${task.status === 'completed' ? 'bg-blue-500 border-blue-500' : 'border-zinc-400 dark:border-zinc-600 group-hover:border-zinc-600 dark:group-hover:border-zinc-500'}`}>
+                                                {task.status === 'completed' && <CheckCircle2 size={14} className="text-white dark:text-black" />}
                                             </div>
-                                            <span className="text-zinc-300 text-sm truncate flex-1">{task.title}</span>
+                                            <span className="text-zinc-700 dark:text-zinc-300 text-sm truncate flex-1">{task.title}</span>
                                             {task.priority === 'High' && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
                                         </div>
                                     ))}
@@ -141,21 +141,21 @@ export default function DashboardPage({ onNavigate }) {
                     {/* 3. Habit Pulse */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
                                 <Activity className="text-emerald-500" size={20} />
                                 Habit Pulse
                             </h2>
                             <button
                                 onClick={() => onNavigate('habits')}
-                                className="text-xs text-zinc-500 hover:text-white transition-colors flex items-center gap-1"
+                                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors flex items-center gap-1"
                             >
                                 Manage <ArrowRight size={12} />
                             </button>
                         </div>
 
-                        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 min-h-[200px]">
+                        <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-4 min-h-[200px]">
                             {todaysHabits.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
+                                <div className="h-full flex flex-col items-center justify-center text-zinc-500 dark:text-zinc-600 p-8">
                                     <Sparkles size={32} className="mb-2 opacity-50" />
                                     <p>No active habits.</p>
                                 </div>
@@ -166,13 +166,13 @@ export default function DashboardPage({ onNavigate }) {
                                         return (
                                             <div
                                                 key={habit.id}
-                                                className="group flex items-center justify-between gap-4 p-3 hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
+                                                className="group flex items-center justify-between gap-4 p-3 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
                                                 onClick={() => toggleHabit(habit.id)}
                                             >
-                                                <span className={`text-sm transition-colors flex-1 ${completed ? 'text-emerald-500/50 line-through' : 'text-zinc-300'}`}>
+                                                <span className={`text-sm transition-colors flex-1 ${completed ? 'text-emerald-500/50 line-through' : 'text-zinc-700 dark:text-zinc-300'}`}>
                                                     {habit.title}
                                                 </span>
-                                                <div className={`w-8 h-5 rounded-full flex items-center p-0.5 transition-colors shrink-0 ${completed ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'}`}>
+                                                <div className={`w-8 h-5 rounded-full flex items-center p-0.5 transition-colors shrink-0 ${completed ? 'bg-emerald-500 justify-end' : 'bg-zinc-300 dark:bg-zinc-700 justify-start'}`}>
                                                     <motion.div
                                                         layout
                                                         className="w-4 h-4 bg-white rounded-full shadow-sm"

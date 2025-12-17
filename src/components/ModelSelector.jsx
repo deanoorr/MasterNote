@@ -13,10 +13,10 @@ export default function ModelSelector() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/20 hover:bg-white/10 transition-colors border border-white/10 hover:border-white/20"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-black/20 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20"
             >
                 <selectedModel.icon size={14} className={selectedModel.color} />
-                <span className="text-xs font-medium text-zinc-200">{selectedModel.name}</span>
+                <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200">{selectedModel.name}</span>
                 <ChevronDown size={12} className={`text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </motion.button>
 
@@ -27,7 +27,7 @@ export default function ModelSelector() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.95 }}
                         transition={{ duration: 0.15, ease: "easeOut" }}
-                        className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-xl overflow-hidden"
+                        className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-black/80 backdrop-blur-xl shadow-xl overflow-hidden"
                     >
                         <div className="p-1.5 space-y-0.5">
                             {models.map((model) => (
@@ -38,8 +38,8 @@ export default function ModelSelector() {
                                         setIsOpen(false);
                                     }}
                                     className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition-colors ${selectedModel.id === model.id
-                                        ? 'bg-white/10 text-white'
-                                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                                        ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white'
+                                        : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5'
                                         }`}
                                 >
                                     <model.icon size={14} className={model.color} />

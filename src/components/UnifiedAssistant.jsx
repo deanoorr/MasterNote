@@ -29,17 +29,17 @@ const FormattedMessage = ({ content }) => {
                 if (index % 3 === 2) { // code content
                     const language = parts[index - 1] || 'text';
                     return (
-                        <div key={index} className="my-3 rounded-lg overflow-hidden border border-zinc-700 bg-zinc-900/50">
-                            <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/50 border-b border-zinc-700">
-                                <span className="text-xs text-zinc-400 font-mono">{language}</span>
+                        <div key={index} className="my-3 rounded-lg overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/50">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-200/50 dark:bg-zinc-800/50 border-b border-zinc-300 dark:border-zinc-700">
+                                <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">{language}</span>
                                 <button
                                     onClick={() => navigator.clipboard.writeText(part.trim())}
-                                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                                    className="text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-500 dark:hover:text-zinc-300"
                                 >
                                     Copy
                                 </button>
                             </div>
-                            <pre className="p-3 overflow-x-auto text-xs font-mono text-zinc-300">
+                            <pre className="p-3 overflow-x-auto text-xs font-mono text-zinc-800 dark:text-zinc-300">
                                 <code>{part.trim()}</code>
                             </pre>
                         </div>
@@ -78,34 +78,34 @@ const FormattedMessage = ({ content }) => {
                                     components={{
                                         // Text
                                         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                                        strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
-                                        em: ({ children }) => <em className="italic text-zinc-400">{children}</em>,
-                                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">{children}</a>,
+                                        strong: ({ children }) => <strong className="font-bold text-zinc-900 dark:text-white">{children}</strong>,
+                                        em: ({ children }) => <em className="italic text-zinc-600 dark:text-zinc-400">{children}</em>,
+                                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 hover:underline">{children}</a>,
 
                                         // Headers
-                                        h1: ({ children }) => <h1 className="text-xl font-bold text-white mt-4 mb-2 pb-1 border-b border-zinc-700">{children}</h1>,
-                                        h2: ({ children }) => <h2 className="text-lg font-bold text-white mt-3 mb-2">{children}</h2>,
-                                        h3: ({ children }) => <h3 className="text-base font-bold text-zinc-100 mt-2 mb-1">{children}</h3>,
+                                        h1: ({ children }) => <h1 className="text-xl font-bold text-zinc-900 dark:text-white mt-4 mb-2 pb-1 border-b border-zinc-300 dark:border-zinc-700">{children}</h1>,
+                                        h2: ({ children }) => <h2 className="text-lg font-bold text-zinc-900 dark:text-white mt-3 mb-2">{children}</h2>,
+                                        h3: ({ children }) => <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100 mt-2 mb-1">{children}</h3>,
 
                                         // Lists
-                                        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ul>,
-                                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 text-zinc-300 ml-2">{children}</ol>,
-                                        li: ({ children }) => <li className="text-zinc-300 [&>p]:mb-1">{children}</li>,
+                                        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-2">{children}</ul>,
+                                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-2">{children}</ol>,
+                                        li: ({ children }) => <li className="text-zinc-800 dark:text-zinc-300 [&>p]:mb-1">{children}</li>,
 
                                         // Blockquotes
-                                        blockquote: ({ children }) => <blockquote className="border-l-4 border-zinc-600 pl-4 italic text-zinc-400 my-2">{children}</blockquote>,
+                                        blockquote: ({ children }) => <blockquote className="border-l-4 border-zinc-400 dark:border-zinc-600 pl-4 italic text-zinc-600 dark:text-zinc-400 my-2">{children}</blockquote>,
 
                                         // Tables (The request!)
-                                        table: ({ children }) => <div className="overflow-x-auto my-4 border border-zinc-700 rounded-lg"><table className="min-w-full text-left text-sm">{children}</table></div>,
-                                        thead: ({ children }) => <thead className="bg-zinc-800 text-zinc-200 font-semibold">{children}</thead>,
-                                        tbody: ({ children }) => <tbody className="divide-y divide-zinc-700 bg-zinc-900/50">{children}</tbody>,
-                                        tr: ({ children }) => <tr className="hover:bg-zinc-800/50 transition-colors">{children}</tr>,
+                                        table: ({ children }) => <div className="overflow-x-auto my-4 border border-zinc-300 dark:border-zinc-700 rounded-lg"><table className="min-w-full text-left text-sm">{children}</table></div>,
+                                        thead: ({ children }) => <thead className="bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 font-semibold">{children}</thead>,
+                                        tbody: ({ children }) => <tbody className="divide-y divide-zinc-300 dark:divide-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/50">{children}</tbody>,
+                                        tr: ({ children }) => <tr className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-colors">{children}</tr>,
                                         th: ({ children }) => <th className="px-4 py-3 whitespace-nowrap">{children}</th>,
-                                        td: ({ children }) => <td className="px-4 py-2 text-zinc-300">{children}</td>,
+                                        td: ({ children }) => <td className="px-4 py-2 text-zinc-800 dark:text-zinc-300">{children}</td>,
 
                                         // Code
                                         code: ({ inline, className, children, ...props }) => {
-                                            return <code className="bg-zinc-800 text-red-200 px-1 py-0.5 rounded text-xs mx-0.5 border border-zinc-700/50" {...props}>{children}</code>;
+                                            return <code className="bg-zinc-200 dark:bg-zinc-800 text-red-700 dark:text-red-200 px-1 py-0.5 rounded text-xs mx-0.5 border border-zinc-300 dark:border-zinc-700/50" {...props}>{children}</code>;
                                         }
                                     }}
                                 >
@@ -923,26 +923,26 @@ export default function UnifiedAssistant() {
             <main className="flex-1 flex flex-col relative bg-transparent">
 
                 {/* Header: Mode & Model */}
-                <header className="h-14 border-b border-white/5 bg-zinc-900/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
+                <header className="h-14 border-b border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-zinc-900/60 backdrop-blur-md flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className={`p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-md transition-colors ${!isSidebarOpen ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
+                            className={`p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md transition-colors ${!isSidebarOpen ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
                             title={isSidebarOpen ? "Close Sidebar" : "Open Sidebar"}
                         >
                             <PanelLeft size={18} />
                         </button>
 
-                        <div className="flex bg-zinc-900 p-1 rounded-lg">
+                        <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg">
                             <button
                                 onClick={() => setMode('chat')}
-                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'chat' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'chat' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
                             >
                                 Chat
                             </button>
                             <button
                                 onClick={() => setMode('agent')}
-                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'agent' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${mode === 'agent' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
                             >
                                 Agent
                             </button>
@@ -993,7 +993,7 @@ export default function UnifiedAssistant() {
                                             />
 
                                             {/* Core Container */}
-                                            <div className="relative w-24 h-24 rounded-full bg-zinc-950 flex items-center justify-center border border-white/10 shadow-2xl shadow-black/80">
+                                            <div className="relative w-24 h-24 rounded-full bg-white dark:bg-zinc-950 flex items-center justify-center border border-zinc-200 dark:border-white/10 shadow-2xl shadow-black/80">
                                                 {/* Inner Gradient */}
                                                 <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10"></div>
 
@@ -1002,13 +1002,13 @@ export default function UnifiedAssistant() {
                                                     animate={{ scale: [1, 1.1, 1] }}
                                                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                                                 >
-                                                    <Sparkles size={40} className="text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
+                                                    <Sparkles size={40} className="text-zinc-900 dark:text-white drop-shadow-[0_0_15px_rgba(0,0,0,0.2)] dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
                                                 </motion.div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <h2 className="text-3xl md:text-4xl font-light text-transparent bg-clip-text bg-gradient-to-b from-white to-white/40 tracking-tight pb-2">
+                                    <h2 className="text-3xl md:text-4xl font-light text-transparent bg-clip-text bg-gradient-to-b from-zinc-900 to-zinc-500 dark:from-white dark:to-white/40 tracking-tight pb-2">
                                         How can I help you, Master?
                                     </h2>
 
@@ -1025,13 +1025,13 @@ export default function UnifiedAssistant() {
                                                 whileTap={{ scale: 0.98 }}
                                                 key={idx}
                                                 onClick={() => setInput(item.query)}
-                                                className="flex flex-col gap-2 p-5 text-left bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-sm group shadow-lg shadow-black/20"
+                                                className="flex flex-col gap-2 p-5 text-left bg-white dark:bg-white/5 hover:bg-zinc-50 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-sm group shadow-sm hover:shadow-md dark:shadow-none"
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <span className="p-2.5 rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 group-hover:from-blue-500/10 group-hover:to-purple-500/10 text-zinc-400 group-hover:text-blue-300 transition-all duration-300">
+                                                    <span className="p-2.5 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 group-hover:from-blue-500/10 group-hover:to-purple-500/10 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-all duration-300">
                                                         {item.icon}
                                                     </span>
-                                                    <span className="text-zinc-200 font-medium">{item.label}</span>
+                                                    <span className="text-zinc-800 dark:text-zinc-200 font-medium">{item.label}</span>
                                                 </div>
                                                 <span className="text-xs text-zinc-500 group-hover:text-zinc-400 pl-[3.25rem] transition-colors">
                                                     {item.desc}
@@ -1047,8 +1047,8 @@ export default function UnifiedAssistant() {
                         {(!((currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai'))) && currentSession.messages.map((msg) => (
                             <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 {msg.role !== 'user' && (
-                                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-700/50">
-                                        {msg.role === 'system' ? <Command size={14} className="text-zinc-400" /> : <Sparkles size={16} className="text-white" />}
+                                    <div className="w-8 h-8 rounded-lg bg-white dark:bg-zinc-800 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700/50 shadow-sm dark:shadow-none">
+                                        {msg.role === 'system' ? <Command size={14} className="text-zinc-400" /> : <Sparkles size={16} className="text-zinc-900 dark:text-white" />}
                                     </div>
                                 )}
 
@@ -1072,10 +1072,10 @@ export default function UnifiedAssistant() {
                                     )}
 
                                     <div className={`text-sm leading-7 ${msg.role === 'user'
-                                        ? 'bg-zinc-800 text-zinc-100 px-4 py-2 rounded-2xl rounded-tr-sm border border-zinc-700'
+                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-4 py-2 rounded-2xl rounded-tr-sm border border-zinc-200 dark:border-zinc-700'
                                         : msg.role === 'system'
                                             ? 'font-mono text-xs text-zinc-500 py-2'
-                                            : 'text-zinc-300'
+                                            : 'text-zinc-800 dark:text-zinc-300'
                                         }`}>
                                         {msg.content ? (
                                             <FormattedMessage content={msg.content} />
@@ -1096,12 +1096,12 @@ export default function UnifiedAssistant() {
                 {/* Input Area */}
                 <div className="p-6 pt-2">
                     <div className="max-w-3xl mx-auto relative group z-20">
-                        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/80 to-transparent pointer-events-none -top-20" />
-                        <div className="bg-zinc-900/80 backdrop-blur-xl border border-white/10 focus-within:border-white/20 focus-within:ring-1 focus-within:ring-white/10 focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)] rounded-2xl flex items-end p-2 transition-all duration-300">
+                        <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-gray-50/80 dark:from-zinc-950 dark:via-zinc-950/80 to-transparent pointer-events-none -top-20" />
+                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-white/10 focus-within:border-zinc-300 dark:focus-within:border-white/20 focus-within:ring-1 focus-within:ring-zinc-200 dark:focus-within:ring-white/10 focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.1)] dark:focus-within:shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)] rounded-2xl flex items-end p-2 transition-all duration-300 shadow-lg shadow-black/5 dark:shadow-none">
                             <div className="pl-2 pb-2 flex items-center">
                                 <ModelSelector />
                                 {selectedModel.provider === 'scira' && (
-                                    <div className="flex items-center ml-2 bg-zinc-800 rounded-lg p-0.5 border border-zinc-700">
+                                    <div className="flex items-center ml-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5 border border-zinc-200 dark:border-zinc-700">
                                         {[
                                             { id: 'chat', label: 'Chat', icon: MessageSquare },
                                             { id: 'x', label: 'X', icon: ({ size, className }) => <span className={`font-bold text-[10px] ${className}`} style={{ fontSize: size }}>𝕏</span> }
@@ -1109,7 +1109,7 @@ export default function UnifiedAssistant() {
                                             <button
                                                 key={m.id}
                                                 onClick={() => setSciraMode(m.id)}
-                                                className={`p-1.5 rounded-md transition-colors flex items-center gap-1.5 ${sciraMode === m.id ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                className={`p-1.5 rounded-md transition-colors flex items-center gap-1.5 ${sciraMode === m.id ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm ring-1 ring-zinc-200 dark:ring-transparent' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
                                                 title={`${m.label} Mode`}
                                             >
                                                 <m.icon size={14} />
@@ -1171,12 +1171,12 @@ export default function UnifiedAssistant() {
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={handleKeyDown}
                                     placeholder={mode === 'chat' ? "Message Bart..." : "Enter a task Command..."}
-                                    className="flex-1 bg-transparent border-none outline-none text-zinc-200 placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
+                                    className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-600 text-sm px-3 py-3 w-full resize-none max-h-40"
                                     rows={1}
                                 />
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="p-2 mb-1 text-zinc-500 hover:text-white transition-colors"
+                                    className="p-2 mb-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
                                     title="Attach files"
                                 >
                                     <Paperclip size={18} />
@@ -1184,7 +1184,7 @@ export default function UnifiedAssistant() {
                                 <button
                                     onClick={handleSend}
                                     disabled={!input && attachments.length === 0}
-                                    className={`p-2 rounded-lg mb-1 transition-all ${input.trim() || attachments.length > 0 ? 'bg-white text-black' : 'bg-transparent text-zinc-600'
+                                    className={`p-2 rounded-lg mb-1 transition-all ${input.trim() || attachments.length > 0 ? 'bg-zinc-900 dark:bg-white text-white dark:text-black' : 'bg-transparent text-zinc-400 dark:text-zinc-600'
                                         }`}
                                 >
                                     <ArrowUp size={18} />
