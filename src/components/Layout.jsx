@@ -10,6 +10,8 @@ import { SettingsProvider } from '../context/SettingsContext';
 import { Logo } from './Logo';
 import NotesPage from '../pages/NotesPage';
 import SettingsPage from '../pages/SettingsPage';
+import HabitsPage from '../pages/HabitsPage';
+import { HabitProvider } from '../context/HabitContext';
 
 function LayoutContent() {
     const [activeTab, setActiveTab] = useState('workspace');
@@ -25,6 +27,7 @@ function LayoutContent() {
                 <header className="h-20 flex items-center justify-between px-8 shrink-0 z-30">
                     <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-white/60 flex items-center gap-2">
                         {activeTab === 'workspace' && 'My Tasks'}
+                        {activeTab === 'habits' && 'Habits'}
                         {activeTab === 'assistant' && 'AI Assistant'}
                         {activeTab === 'notes' && 'Sticky Notes'}
                         {activeTab === 'settings' && 'Settings'}
@@ -34,6 +37,7 @@ function LayoutContent() {
                 {/* Content Area */}
                 <div className="flex-1 overflow-hidden relative">
                     {activeTab === 'workspace' && <Workspace />}
+                    {activeTab === 'habits' && <HabitsPage />}
                     {activeTab === 'assistant' && <AssistantView />}
                     {activeTab === 'notes' && <NotesPage />}
                     {activeTab === 'settings' && <SettingsPage />}
@@ -50,7 +54,9 @@ export default function Layout() {
                 <TaskProvider>
                     <ChatProvider>
                         <NotesProvider>
-                            <LayoutContent />
+                            <HabitProvider>
+                                <LayoutContent />
+                            </HabitProvider>
                         </NotesProvider>
                     </ChatProvider>
                 </TaskProvider>

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder } from 'lucide-react';
+import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder, PanelLeft } from 'lucide-react';
 
 import { useTasks } from '../context/TaskContext';
 
 export default function TaskManager() {
     const { tasks, addTask, updateTask, deleteTask, projects, addProject, deleteProject } = useTasks();
     const [selectedProject, setSelectedProject] = useState('all'); // 'all', 'inbox', or projectId
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     // Task Logic
     const [showAdd, setShowAdd] = useState(false);
@@ -137,73 +138,99 @@ export default function TaskManager() {
     return (
         <div className="h-full flex overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-64 border-r border-white/5 bg-zinc-950/30 flex flex-col">
-                <div className="p-4">
-                    <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Views</h2>
-                    <div className="space-y-1">
-                        <button
-                            onClick={() => setSelectedProject('all')}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'all' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <ListFilter size={16} /> All Tasks
-                        </button>
-                        <button
-                            onClick={() => setSelectedProject('inbox')}
-                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'inbox' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                            <Box size={16} /> Inbox
-                        </button>
-                    </div>
-
-                    <div className="mt-8 flex items-center justify-between mb-2 px-1">
-                        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Projects</h2>
-                        <button onClick={() => setShowAddProject(!showAddProject)} className="text-zinc-500 hover:text-white">
-                            <Plus size={14} />
-                        </button>
-                    </div>
-
-                    {showAddProject && (
-                        <form onSubmit={handleAddProject} className="mb-2">
-                            <input
-                                autoFocus
-                                type="text"
-                                placeholder="Project Name"
-                                value={newProjectName}
-                                onChange={(e) => setNewProjectName(e.target.value)}
-                                className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500"
-                            />
-                        </form>
-                    )}
-
-                    <div className="space-y-1">
-                        {projects.map(project => (
-                            <div key={project.id} className="group flex items-center">
-                                <button
-                                    onClick={() => setSelectedProject(project.id)}
-                                    className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === project.id ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    <span className={`w-2 h-2 rounded-full bg-${project.color}-500`} />
-                                    {project.name}
-                                </button>
-                                <button
-                                    onClick={() => deleteProject(project.id)}
-                                    className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-600 hover:text-red-400 transition-all"
-                                >
-                                    <Trash2 size={12} />
+            <AnimatePresence mode="wait">
+                {isSidebarOpen && (
+                    <motion.aside
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 256, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="border-r border-white/5 bg-zinc-950/30 flex flex-col overflow-hidden whitespace-nowrap"
+                    >
+                        <div className="p-4 w-64">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Views</h2>
+                                <button onClick={() => setIsSidebarOpen(false)} className="text-zinc-500 hover:text-white">
+                                    <PanelLeft size={16} />
                                 </button>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            </aside>
+                            <div className="space-y-1">
+                                <button
+                                    onClick={() => setSelectedProject('all')}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'all' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <ListFilter size={16} /> All Tasks
+                                </button>
+                                <button
+                                    onClick={() => setSelectedProject('inbox')}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === 'inbox' ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <Box size={16} /> Inbox
+                                </button>
+                            </div>
+
+                            <div className="mt-8 flex items-center justify-between mb-2 px-1">
+                                <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Projects</h2>
+                                <button onClick={() => setShowAddProject(!showAddProject)} className="text-zinc-500 hover:text-white">
+                                    <Plus size={14} />
+                                </button>
+                            </div>
+
+                            {showAddProject && (
+                                <form onSubmit={handleAddProject} className="mb-2">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        placeholder="Project Name"
+                                        value={newProjectName}
+                                        onChange={(e) => setNewProjectName(e.target.value)}
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500"
+                                    />
+                                </form>
+                            )}
+
+                            <div className="space-y-1">
+                                {projects.map(project => (
+                                    <div key={project.id} className="group flex items-center">
+                                        <button
+                                            onClick={() => setSelectedProject(project.id)}
+                                            className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-3 ${selectedProject === project.id ? 'bg-white/10 text-white' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            <span className={`w-2 h-2 rounded-full bg-${project.color}-500`} />
+                                            {project.name}
+                                        </button>
+                                        <button
+                                            onClick={() => deleteProject(project.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-600 hover:text-red-400 transition-all"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.aside>
+                )}
+            </AnimatePresence>
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full">
                 <header className="mb-8 flex justify-between items-end border-b border-zinc-900 pb-6">
                     <div>
-                        <h1 className="text-3xl font-semibold text-white mb-2 tracking-tight">
-                            {currentProjectName}
-                        </h1>
+                        <div className="flex items-center gap-3 mb-2">
+                            {!isSidebarOpen && (
+                                <button
+                                    onClick={() => setIsSidebarOpen(true)}
+                                    className="text-zinc-500 hover:text-white transition-colors"
+                                    title="Open Sidebar"
+                                >
+                                    <PanelLeft size={20} />
+                                </button>
+                            )}
+                            <h1 className="text-3xl font-semibold text-white tracking-tight">
+                                {currentProjectName}
+                            </h1>
+                        </div>
                         <p className="text-zinc-500 text-sm">
                             {sortedTasks.length} {sortedTasks.length === 1 ? 'task' : 'tasks'}
                         </p>

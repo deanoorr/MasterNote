@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNotes } from '../context/NotesContext';
 import NoteCard from './NoteCard';
-import { Plus, FolderPlus, Trash2, Search, LayoutGrid, X, Minimize2 } from 'lucide-react';
+import { Plus, FolderPlus, Trash2, Search, LayoutGrid, X, Minimize2, PanelLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function NotesBoard() {
@@ -11,6 +11,7 @@ export default function NotesBoard() {
     const [search, setSearch] = useState('');
     const [isAddingProject, setIsAddingProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const selectedNote = notes.find(n => n.id === selectedNoteId);
 
@@ -32,89 +33,121 @@ export default function NotesBoard() {
     return (
         <div className="flex h-full w-full bg-zinc-950/50">
             {/* Secondary Sidebar - Projects */}
-            <div className="w-64 border-r border-white/5 bg-black/20 flex flex-col p-4 shrink-0">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xs font-semibold text-zinc-500 tracking-wider">PROJECTS</h2>
-                    <button
-                        onClick={() => setIsAddingProject(true)}
-                        className="text-zinc-500 hover:text-zinc-300 transition-colors"
-                        title="Add Project"
+            <AnimatePresence mode="wait">
+                {isSidebarOpen && (
+                    <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 256, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="border-r border-white/5 bg-black/20 flex flex-col overflow-hidden whitespace-nowrap shrink-0"
                     >
-                        <FolderPlus size={16} />
-                    </button>
-                </div>
-
-                {isAddingProject && (
-                    <form onSubmit={handleCreateProject} className="mb-4">
-                        <input
-                            autoFocus
-                            type="text"
-                            value={newProjectName}
-                            onChange={(e) => setNewProjectName(e.target.value)}
-                            placeholder="Project Name..."
-                            onBlur={() => setIsAddingProject(false)}
-                            className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500"
-                        />
-                    </form>
-                )}
-
-                <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
-                    <button
-                        onClick={() => setSelectedProject('all')}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedProject === 'all'
-                            ? 'bg-zinc-800 text-white font-medium'
-                            : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-                            }`}
-                    >
-                        <span className="flex items-center gap-2">
-                            <LayoutGrid size={16} /> All Notes
-                        </span>
-                        <span className="text-xs opacity-50">{notes.length}</span>
-                    </button>
-
-                    <div className="h-px bg-white/5 my-2 mx-2"></div>
-
-                    {projects.map(project => (
-                        <button
-                            key={project.id}
-                            onClick={() => setSelectedProject(project.id)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${selectedProject === project.id
-                                ? 'bg-zinc-800 text-white font-medium'
-                                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-                                }`}
-                        >
-                            <span className="flex items-center gap-2 truncate">
-                                <span className={`w-2 h-2 rounded-full ${project.color || 'bg-zinc-600'}`}></span>
-                                {project.name}
-                            </span>
-
-                            {/* Delete Project Button (only visible on hover and not default projects) */}
-                            {!['inbox', 'personal', 'work'].includes(project.id) && (
-                                <div
-                                    onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }}
-                                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"
-                                >
-                                    <Trash2 size={12} />
+                        <div className="w-64 p-4 flex flex-col h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-xs font-semibold text-zinc-500 tracking-wider">PROJECTS</h2>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setIsAddingProject(true)}
+                                        className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                                        title="Add Project"
+                                    >
+                                        <FolderPlus size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsSidebarOpen(false)}
+                                        className="text-zinc-500 hover:text-white transition-colors"
+                                        title="Close Sidebar"
+                                    >
+                                        <PanelLeft size={16} />
+                                    </button>
                                 </div>
+                            </div>
+
+                            {isAddingProject && (
+                                <form onSubmit={handleCreateProject} className="mb-4">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newProjectName}
+                                        onChange={(e) => setNewProjectName(e.target.value)}
+                                        placeholder="Project Name..."
+                                        onBlur={() => setIsAddingProject(false)}
+                                        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-sm text-white outline-none focus:border-blue-500"
+                                    />
+                                </form>
                             )}
-                        </button>
-                    ))}
-                </div>
-            </div>
+
+                            <div className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+                                <button
+                                    onClick={() => setSelectedProject('all')}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${selectedProject === 'all'
+                                        ? 'bg-zinc-800 text-white font-medium'
+                                        : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <LayoutGrid size={16} /> All Notes
+                                    </span>
+                                    <span className="text-xs opacity-50">{notes.length}</span>
+                                </button>
+
+                                <div className="h-px bg-white/5 my-2 mx-2"></div>
+
+                                {projects.map(project => (
+                                    <button
+                                        key={project.id}
+                                        onClick={() => setSelectedProject(project.id)}
+                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${selectedProject === project.id
+                                            ? 'bg-zinc-800 text-white font-medium'
+                                            : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                                            }`}
+                                    >
+                                        <span className="flex items-center gap-2 truncate">
+                                            <span className={`w-2 h-2 rounded-full ${project.color || 'bg-zinc-600'}`}></span>
+                                            {project.name}
+                                        </span>
+
+                                        {/* Delete Project Button (only visible on hover and not default projects) */}
+                                        {!['inbox', 'personal', 'work'].includes(project.id) && (
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }}
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-opacity"
+                                            >
+                                                <Trash2 size={12} />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Main Content - Grid */}
             <div className="flex-1 flex flex-col p-8 overflow-hidden">
                 {/* Toolbar */}
                 <div className="flex items-center justify-between mb-8 shrink-0">
-                    <div className="relative w-64">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search notes..."
-                            className="w-full bg-zinc-900/50 border border-white/5 rounded-full pl-9 pr-4 py-2 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-600"
-                        />
+                    <div className="flex items-center gap-4 flex-1">
+                        {!isSidebarOpen && (
+                            <button
+                                onClick={() => setIsSidebarOpen(true)}
+                                className="text-zinc-500 hover:text-white transition-colors"
+                                title="Open Sidebar"
+                            >
+                                <PanelLeft size={20} />
+                            </button>
+                        )}
+                        <div className="relative w-64">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search notes..."
+                                className="w-full bg-zinc-900/50 border border-white/5 rounded-full pl-9 pr-4 py-2 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-600"
+                            />
+                        </div>
                     </div>
                     <button
                         onClick={() => addNote(selectedProject === 'all' ? 'inbox' : selectedProject)}
