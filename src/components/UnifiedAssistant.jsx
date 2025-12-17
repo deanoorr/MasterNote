@@ -6,6 +6,7 @@ import ModelSelector from './ModelSelector';
 import { useTasks } from '../context/TaskContext';
 import { useNotes } from '../context/NotesContext';
 import { useChat } from '../context/ChatContext';
+import { useSettings } from '../context/SettingsContext';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
@@ -178,6 +179,7 @@ export default function UnifiedAssistant() {
     // Contexts
     const { addTask, tasks, updateTask, deleteTask, clearTasks, projects } = useTasks();
     const { notes } = useNotes();
+    const { settings } = useSettings();
     const {
         sessions,
         currentSessionId,
@@ -281,7 +283,16 @@ export default function UnifiedAssistant() {
                 const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
                 const currentTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-                const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.`;
+                // Construct User Profile & Preferences Block
+                const userProfileBlock = settings.userProfile.name || settings.userProfile.age || settings.userProfile.about
+                    ? `\n\nUSER PROFILE:\nName: ${settings.userProfile.name || 'Unknown'}\nAge: ${settings.userProfile.age || 'Unknown'}\nAbout: ${settings.userProfile.about || 'N/A'}`
+                    : '';
+
+                const aiPreferencesBlock = settings.aiPreferences.customInstructions || settings.aiPreferences.tone
+                    ? `\n\nCUSTOM INSTRUCTIONS:\nTone: ${settings.aiPreferences.tone}\nInstructions: ${settings.aiPreferences.customInstructions}`
+                    : '';
+
+                const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.${userProfileBlock}${aiPreferencesBlock}`;
                 const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
 
                 const systemPrompt = (isThinkingEnabled && selectedModel.provider !== 'anthropic')

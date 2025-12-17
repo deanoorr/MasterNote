@@ -6,18 +6,10 @@ import { ModelProvider } from '../context/ModelContext';
 import { TaskProvider } from '../context/TaskContext';
 import { ChatProvider } from '../context/ChatContext';
 import { NotesProvider } from '../context/NotesContext';
+import { SettingsProvider } from '../context/SettingsContext';
 import { Logo } from './Logo';
 import NotesPage from '../pages/NotesPage';
-
-// Placeholder for Settings
-const Settings = () => (
-    <div className="flex items-center justify-center h-full text-slate-500">
-        <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-200 mb-2">Settings</h2>
-            <p>Preferences configuration coming soon.</p>
-        </div>
-    </div>
-);
+import SettingsPage from '../pages/SettingsPage';
 
 function LayoutContent() {
     const [activeTab, setActiveTab] = useState('workspace');
@@ -44,7 +36,7 @@ function LayoutContent() {
                     {activeTab === 'workspace' && <Workspace />}
                     {activeTab === 'assistant' && <AssistantView />}
                     {activeTab === 'notes' && <NotesPage />}
-                    {activeTab === 'settings' && <Settings />}
+                    {activeTab === 'settings' && <SettingsPage />}
                 </div>
             </main>
         </div>
@@ -53,14 +45,16 @@ function LayoutContent() {
 
 export default function Layout() {
     return (
-        <ModelProvider>
-            <TaskProvider>
-                <ChatProvider>
-                    <NotesProvider>
-                        <LayoutContent />
-                    </NotesProvider>
-                </ChatProvider>
-            </TaskProvider>
-        </ModelProvider>
+        <SettingsProvider>
+            <ModelProvider>
+                <TaskProvider>
+                    <ChatProvider>
+                        <NotesProvider>
+                            <LayoutContent />
+                        </NotesProvider>
+                    </ChatProvider>
+                </TaskProvider>
+            </ModelProvider>
+        </SettingsProvider>
     );
 }
