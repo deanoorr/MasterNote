@@ -13,6 +13,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import ThinkingProcess from './ThinkingProcess';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import VisualSearchCarousel from './VisualSearchCarousel';
+import { searchImages } from '../services/searchService';
 
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
@@ -80,7 +82,16 @@ const FormattedMessage = ({ content }) => {
                                         p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                                         strong: ({ children }) => <strong className="font-bold text-zinc-900 dark:text-white">{children}</strong>,
                                         em: ({ children }) => <em className="italic text-zinc-600 dark:text-zinc-400">{children}</em>,
-                                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 hover:underline">{children}</a>,
+                                        a: ({ href, children }) => (
+                                            <a
+                                                href={href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center align-baseline gap-1 mx-0.5 px-1.5 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 no-underline hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
+                                            >
+                                                {children}
+                                            </a>
+                                        ),
 
                                         // Headers
                                         h1: ({ children }) => <h1 className="text-xl font-bold text-zinc-900 dark:text-white mt-4 mb-2 pb-1 border-b border-zinc-300 dark:border-zinc-700">{children}</h1>,
@@ -234,6 +245,46 @@ export default function UnifiedAssistant() {
         return <div className="flex h-full w-full items-center justify-center text-zinc-500">Loading...</div>;
     }
 
+    // --- Search Query Refinement Helper ---
+    // Uses Gemini to rewrite ambiguous queries based on history
+    const refineSearchQuery = async (userQuery, history) => {
+        try {
+            if (!clientsRef.current.genAI) return userQuery;
+
+            // If history is empty, no context to refine from
+            if (!history || history.length === 0) return userQuery;
+
+            const model = clientsRef.current.genAI.getGenerativeModel({
+                model: "gemini-3-flash-preview",
+            });
+
+            // Get last few messages for context (max 3 pairs)
+            const recentHistory = history.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
+
+            const prompt = `
+            Task: Rewrite the internal User Query into a specific, standalone Google Search string.
+            Context: The user might be referring to previous topics. Use the conversation history to resolve pronouns like "it", "one", "this", or "best".
+            
+            Conversation History:
+            ${recentHistory}
+            
+            User Query: "${userQuery}"
+            
+            Output: ONLY the refined search query string. Do not add quotes or explanations.
+            Example Refinement:
+            History: "User: I like Padel. AI: It's fun." -> Query: "best rackets" -> Output: "best padel rackets"
+            `;
+
+            const result = await model.generateContent(prompt);
+            const refinedQuery = result.response.text().trim();
+            console.log("Refined Query:", refinedQuery);
+            return refinedQuery;
+        } catch (e) {
+            console.warn("Query Refinement Failed:", e);
+            return userQuery;
+        }
+    };
+
     // --- Hybrid Search Helper ---
     // Uses Gemini Flash to fetch real-time web context 
     const getWebContext = async (query) => {
@@ -366,8 +417,23 @@ export default function UnifiedAssistant() {
                         history: validHistory,
                     });
 
-                    // Construct Message Parts (Text + Images)
+                    // 1. Refine Query for Visual Search (Parallel)
+                    // This fixes context issues (e.g. "which one is best" -> "best padel racket")
+                    let refinedQuery = userText;
+                    if (isSearchEnabled) {
+                        refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                        // Trigger Visual Search with the REFINED query
+                        searchImages(refinedQuery).then(imgs => {
+                            if (imgs && imgs.length > 0) {
+                                updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
+                            }
+                        });
+                    }
+
+                    // Construct Message Parts
                     const messageParts = [{ text: userText }];
+
                     currentAttachments.forEach(att => {
                         // Remove data:image/...;base64, prefix for inlineData
                         const base64Data = att.preview.split(',')[1];
@@ -420,7 +486,7 @@ export default function UnifiedAssistant() {
                     if (selectedModel.provider === 'deepseek' && isThinkingEnabled) {
                         targetModelId = 'deepseek-reasoner';
                     } else if (selectedModel.provider === 'xai' && isThinkingEnabled) {
-                        // targetModelId = 'grok-4-1-reasoning'; // If xAI releases a distinct ID
+                        targetModelId = 'grok-4-1-fast-reasoning';
                     } else if (selectedModel.provider === 'openai' && isThinkingEnabled) {
                         targetModelId = 'gpt-5.2'; // Use base GPT-5.2 for reasoning (Pro is completion-only)
                     }
@@ -435,12 +501,25 @@ export default function UnifiedAssistant() {
                     // Only search if explicitly enabled by the user
                     if (isSearchEnabled) {
                         try {
-                            updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+                            updateMessage(currentSessionId, msgId, " Thinking & Refining Search... 🧠"); // Visual feedback
 
-                            const webContext = await getWebContext(userText);
+                            // 1. Refine the query based on history
+                            const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                            // 2. Fetch Text Context (Google Search)
+                            updateMessage(currentSessionId, msgId, ` Searching: "${refinedQuery}"... 🌍`);
+                            const webContext = await getWebContext(refinedQuery);
+
                             if (webContext) {
-                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
-                                updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search for "${refinedQuery}"):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. Cite your sources INLINE immediately after facts using standard Markdown links in this format: [Domain](URL). Example: "Padel is growing fast [padelusa.com](https://...)". DO NOT append a list of sources at the end.`;
+                                updateMessage(currentSessionId, msgId, " Found info! Generating answer... ⚡");
+
+                                // 3. Trigger Visual Search (Parallel) with REFINED query
+                                searchImages(refinedQuery).then(imgs => {
+                                    if (imgs && imgs.length > 0) {
+                                        updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
+                                    }
+                                });
                             } else {
                                 updateMessage(currentSessionId, msgId, ""); // Clear status
                             }
@@ -470,7 +549,7 @@ export default function UnifiedAssistant() {
                         // OpenAI GPT-5.2 Native Reasoning
                         reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
                         // xAI / Grok Native Reasoning Param
-                        extra_body: (selectedModel.provider === 'xai' && isThinkingEnabled) ? { reasoning: true } : undefined
+                        // extra_body: (selectedModel.provider === 'xai' && isThinkingEnabled) ? { reasoning: true } : undefined
                     });
 
                     let textAccumulator = "";
@@ -515,12 +594,25 @@ export default function UnifiedAssistant() {
                     let finalSystemPrompt = systemPrompt;
                     if (isSearchEnabled) {
                         try {
-                            updateMessage(currentSessionId, msgId, " Searching the web... 🌍"); // Visual feedback
+                            updateMessage(currentSessionId, msgId, " Thinking & Refining Search... 🧠"); // Visual feedback
 
-                            const webContext = await getWebContext(userText);
+                            // 1. Refine the query based on history
+                            const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                            // 2. Fetch Text Context (Google Search)
+                            updateMessage(currentSessionId, msgId, ` Searching: "${refinedQuery}"... 🌍`);
+                            const webContext = await getWebContext(refinedQuery);
+
                             if (webContext) {
-                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. ALWAYS list the sources provided in the context at the end of your response using Markdown format.`;
+                                finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT (from Google Search for "${refinedQuery}"):\n${webContext}\n\nIMPORTANT: You must use the information above to answer. Cite your sources INLINE immediately after facts using standard Markdown links in this format: [Domain](URL). Example: "Padel is growing fast [padelusa.com](https://...)". DO NOT append a list of sources at the end.`;
                                 updateMessage(currentSessionId, msgId, " Found info! Thinking... 🧠"); // Visual feedback
+
+                                // 3. Trigger Visual Search (Parallel) with REFINED query
+                                searchImages(refinedQuery).then(imgs => {
+                                    if (imgs && imgs.length > 0) {
+                                        updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
+                                    }
+                                });
                             } else {
                                 updateMessage(currentSessionId, msgId, ""); // Clear status
                             }
@@ -871,53 +963,50 @@ export default function UnifiedAssistant() {
         <div className="flex h-full w-full bg-transparent font-sans text-white relative overflow-hidden">
 
 
-            {/* --- Left Sidebar: History --- */}
-            <AnimatePresence mode="wait">
-                {isSidebarOpen && (
-                    <motion.aside
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 256, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden"
-                    >
-                        <div className="p-4 border-b border-white/5 flex items-center justify-between bg-black/20">
-                            <span className="text-xs font-semibold text-zinc-500 tracking-wider">HISTORY</span>
-                            <button
-                                onClick={() => createSession()}
-                                className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
-                                title="New Chat"
-                            >
-                                <Plus size={16} />
-                            </button>
-                        </div>
+            {isSidebarOpen && (
+                <motion.aside
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: 256, opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="border-r border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden"
+                >
+                    <div className="p-4 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-black/20 h-[57px]">
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-500 tracking-wider">HISTORY</span>
+                        <button
+                            onClick={() => createSession()}
+                            className="p-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md transition-colors"
+                            title="New Chat"
+                        >
+                            <Plus size={16} />
+                        </button>
+                    </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-                            {sessions.map(session => (
-                                <button
-                                    key={session.id}
-                                    onClick={() => switchSession(session.id)}
-                                    className={`w-full text-left px-3 py-3 text-sm transition-all truncate flex items-center justify-between group border-l-2 ${currentSessionId === session.id
-                                        ? 'border-purple-500 bg-white/5 text-white'
-                                        : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
-                                        }`}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                        {sessions.map(session => (
+                            <button
+                                key={session.id}
+                                onClick={() => switchSession(session.id)}
+                                className={`w-full text-left px-3 py-3 text-sm transition-all truncate flex items-center justify-between group border-l-2 ${currentSessionId === session.id
+                                    ? 'border-purple-500 bg-white dark:bg-white/5 text-zinc-900 dark:text-white shadow-sm dark:shadow-none'
+                                    : 'border-transparent text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'
+                                    }`}
+                            >
+                                <span className="truncate">{session.title}</span>
+                                <div
+                                    onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
+                                    className="opacity-0 group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400 p-1"
                                 >
-                                    <span className="truncate">{session.title}</span>
-                                    <div
-                                        onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
-                                        className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-1"
-                                    >
-                                        <Trash2 size={12} />
-                                    </div>
-                                </button>
-                            ))}
-                            {sessions.length === 0 && (
-                                <div className="text-center text-xs text-zinc-600 mt-4">No history</div>
-                            )}
-                        </div>
-                    </motion.aside>
-                )}
-            </AnimatePresence>
+                                    <Trash2 size={12} />
+                                </div>
+                            </button>
+                        ))}
+                        {sessions.length === 0 && (
+                            <div className="text-center text-xs text-zinc-500 dark:text-zinc-600 mt-4">No history</div>
+                        )}
+                    </div>
+                </motion.aside>
+            )}
 
             {/* --- Main Chat Area --- */}
             <main className="flex-1 flex flex-col relative bg-transparent">
@@ -969,7 +1058,7 @@ export default function UnifiedAssistant() {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6" ref={scrollRef}>
-                    <div className="max-w-3xl mx-auto space-y-8 pb-4">
+                    <div className="max-w-5xl mx-auto space-y-8 pb-4">
                         {/* Show Hero/Empty State ONLY if we just have the initial AI greeting */}
                         {currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && (
                             <div className="flex flex-col items-center justify-center mt-20">
@@ -1071,12 +1160,16 @@ export default function UnifiedAssistant() {
                                         </div>
                                     )}
 
-                                    <div className={`text-sm leading-7 ${msg.role === 'user'
-                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 px-4 py-2 rounded-2xl rounded-tr-sm border border-zinc-200 dark:border-zinc-700'
-                                        : msg.role === 'system'
-                                            ? 'font-mono text-xs text-zinc-500 py-2'
-                                            : 'text-zinc-800 dark:text-zinc-300'
-                                        }`}>
+                                    <div className={`p-4 rounded-2xl ${msg.role === 'user'
+                                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                                        : 'bg-transparent text-zinc-800 dark:text-zinc-300 p-0 pl-0'
+                                        }`}
+                                    >
+                                        {/* Visual Search Carousel */}
+                                        {msg.role === 'ai' && msg.visualResults && (
+                                            <VisualSearchCarousel images={msg.visualResults} />
+                                        )}
+
                                         {msg.content ? (
                                             <FormattedMessage content={msg.content} />
                                         ) : (

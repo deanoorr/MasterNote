@@ -16,6 +16,7 @@ import { ThemeProvider } from '../context/ThemeContext';
 
 function LayoutContent() {
     const [activeTab, setActiveTab] = useState('home');
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-white font-sans overflow-hidden selection:bg-blue-500/30 relative transition-colors duration-300">
@@ -26,8 +27,14 @@ function LayoutContent() {
                 <div className="absolute top-[20%] right-[20%] w-[30%] h-[30%] rounded-full bg-blue-500/5 dark:bg-blue-500/5 blur-[80px]" />
             </div>
 
-            <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-            <main className="flex-1 ml-20 md:ml-64 h-full relative overflow-hidden z-10">
+            <Sidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                isCollapsed={isCollapsed}
+                setIsCollapsed={setIsCollapsed}
+            />
+
+            <main className={`flex-1 h-full relative overflow-hidden z-10 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-20 md:ml-64'}`}>
                 {activeTab === 'home' && <DashboardPage onNavigate={setActiveTab} />}
                 {activeTab === 'workspace' && <Workspace />}
                 {activeTab === 'assistant' && <AssistantView />}

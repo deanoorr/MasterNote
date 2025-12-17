@@ -64,7 +64,7 @@ export function ChatProvider({ children }) {
             if (s.id === id) {
                 return {
                     ...s,
-                    messages: [{ id: Date.now(), role: 'system', content: "Chat history cleared.", timestamp: 'Now' }]
+                    messages: [{ id: Date.now(), role: 'ai', content: "Ready", timestamp: 'Now' }]
                 };
             }
             return s;
@@ -91,14 +91,14 @@ export function ChatProvider({ children }) {
     };
 
     // Updates an existing message in a session (for streaming)
-    const updateMessage = (sessionId, messageId, newContent, isSuccess = undefined) => {
+    const updateMessage = (sessionId, messageId, newContent, extras = null) => {
         setSessions(prev => prev.map(s => {
             if (s.id === sessionId) {
                 return {
                     ...s,
                     messages: s.messages.map(m =>
                         m.id === messageId
-                            ? { ...m, content: newContent, ...(isSuccess !== undefined && { isSuccess }) }
+                            ? { ...m, content: newContent !== null ? newContent : m.content, ...(extras || {}) }
                             : m
                     ),
                     lastUpdated: Date.now()
