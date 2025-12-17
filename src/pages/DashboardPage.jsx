@@ -21,34 +21,33 @@ export default function DashboardPage({ onNavigate }) {
     // Generate Morning Briefing
     useEffect(() => {
         const generateBriefing = async () => {
-            const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-            if (!apiKey) {
-                setBriefing("Welcome back! Ready to conquer the day?");
-                setIsLoadingBriefing(false);
-                return;
-            }
-
             try {
-                const genAI = new GoogleGenerativeAI(apiKey);
+                const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+                if (!apiKey) throw new Error("API Key missing");
+                // Reverting to 2.5-flash for stability (1.5 might be restricted/unavailable)
                 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
                 const prompt = `
                     User: ${userName}
-                    Role: You are an energetic, motivational productivity AI.
-                    Context:
-                    - Pending prioritized tasks: ${pendingTasks.map(t => t.title).join(', ')}
-                    - Active habits: ${todaysHabits.map(h => h.title).join(', ')}
+                    Data Context:
+                    - Top Priority Tasks: ${pendingTasks.map(t => t.title).join(', ')}
+                    - Daily Habits: ${todaysHabits.map(h => h.title).join(', ')}
                     
-                    Task: Write a SHORT, punchy morning briefing (max 3 sentences). 
-                    Greet the user, highlight 1 key task to focus on, and give a quick motivational boost.
-                    Do not use markdown formatting.
+                    Task: Write a short, cool, and personalized daily briefing (max 3 sentences).
+                    Style: Casual, confident, and direct.
+                    Instructions:
+                    1. Mention ONE specific task or habit by name to make it feel personal.
+                    2. Hype the user up to get it done.
+                    3. Keep it under 40 words.
                 `;
 
                 const result = await model.generateContent(prompt);
                 setBriefing(result.response.text());
             } catch (error) {
                 console.error("Briefing Error:", error);
-                setBriefing(`Good day, ${userName}! Let's make it a productive one.`);
+                // Dynamic fallback that still references data if possible
+                const taskName = pendingTasks[0]?.title || "your goals";
+                setBriefing(`Good day, ${userName}! Time to crush ${taskName} and have a great one.`);
             } finally {
                 setIsLoadingBriefing(false);
             }
@@ -113,14 +112,14 @@ export default function DashboardPage({ onNavigate }) {
                             </button>
                         </div>
 
-                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-1 min-h-[200px]">
+                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-2 min-h-[200px]">
                             {pendingTasks.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
                                     <Clock size={32} className="mb-2 opacity-50" />
                                     <p>All caught up!</p>
                                 </div>
                             ) : (
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                     {pendingTasks.map(task => (
                                         <div
                                             key={task.id}
@@ -154,26 +153,26 @@ export default function DashboardPage({ onNavigate }) {
                             </button>
                         </div>
 
-                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-1 min-h-[200px]">
+                        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-2 min-h-[200px]">
                             {todaysHabits.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-zinc-600 p-8">
                                     <Sparkles size={32} className="mb-2 opacity-50" />
                                     <p>No active habits.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-1">
+                                <div className="space-y-3">
                                     {todaysHabits.map(habit => {
                                         const completed = isCompletedToday(habit);
                                         return (
                                             <div
                                                 key={habit.id}
-                                                className="group flex items-center justify-between p-3 hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
+                                                className="group flex items-center justify-between gap-4 p-3 hover:bg-zinc-800/50 rounded-lg transition-colors cursor-pointer"
                                                 onClick={() => toggleHabit(habit.id)}
                                             >
-                                                <span className={`text-sm transition-colors ${completed ? 'text-emerald-500/50 line-through' : 'text-zinc-300'}`}>
+                                                <span className={`text-sm transition-colors flex-1 ${completed ? 'text-emerald-500/50 line-through' : 'text-zinc-300'}`}>
                                                     {habit.title}
                                                 </span>
-                                                <div className={`w-8 h-5 rounded-full flex items-center p-0.5 transition-colors ${completed ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'}`}>
+                                                <div className={`w-8 h-5 rounded-full flex items-center p-0.5 transition-colors shrink-0 ${completed ? 'bg-emerald-500 justify-end' : 'bg-zinc-700 justify-start'}`}>
                                                     <motion.div
                                                         layout
                                                         className="w-4 h-4 bg-white rounded-full shadow-sm"
