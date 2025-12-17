@@ -16,7 +16,7 @@ export const models = [
 ];
 
 export function ModelProvider({ children }) {
-    const [selectedModel, setSelectedModel] = useState(models[0]); // Default to Gemini 2.5 Flash
+    const [selectedModel, setSelectedModel] = useState(models[3]); // Default to Grok 4.1
 
     return (
         <ModelContext.Provider value={{ selectedModel, setSelectedModel, models }}>

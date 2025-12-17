@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTasks } from '../context/TaskContext';
 import { useHabits } from '../context/HabitContext';
 import { useSettings } from '../context/SettingsContext';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import { motion } from 'framer-motion';
 import { Sparkles, CheckCircle2, Circle, Clock, Loader2, ArrowRight, Activity } from 'lucide-react';
 
@@ -22,10 +22,14 @@ export default function DashboardPage({ onNavigate }) {
     useEffect(() => {
         const generateBriefing = async () => {
             try {
-                const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-                if (!apiKey) throw new Error("API Key missing");
-                // Using gemini-3-flash-preview as requested
-                const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+                const xaiKey = import.meta.env.VITE_XAI_API_KEY;
+                if (!xaiKey) throw new Error("xAI API Key missing");
+
+                const client = new OpenAI({
+                    apiKey: xaiKey,
+                    baseURL: "https://api.x.ai/v1",
+                    dangerouslyAllowBrowser: true
+                });
 
                 const prompt = `
                     User: ${userName}
@@ -41,8 +45,15 @@ export default function DashboardPage({ onNavigate }) {
                     3. Keep it under 40 words.
                 `;
 
-                const result = await model.generateContent(prompt);
-                setBriefing(result.response.text());
+                const result = await client.chat.completions.create({
+                    model: "grok-4-1-fast-non-reasoning",
+                    messages: [
+                        { role: "system", content: "You are a direct, cool productivity assistant." },
+                        { role: "user", content: prompt }
+                    ]
+                });
+
+                setBriefing(result.choices[0]?.message?.content || "");
             } catch (error) {
                 console.error("Briefing Error:", error);
                 // Dynamic fallback that still references data if possible
