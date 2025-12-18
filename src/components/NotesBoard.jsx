@@ -3,6 +3,12 @@ import { useNotes } from '../context/NotesContext';
 import NoteCard from './NoteCard';
 import { Plus, FolderPlus, Trash2, Search, LayoutGrid, X, Minimize2, PanelLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import { marked } from 'marked';
+import TurndownService from 'turndown';
+
+const turndownService = new TurndownService();
 
 export default function NotesBoard() {
     const { notes, projects, addNote, updateNote, deleteNote, addProject, deleteProject } = useNotes();
@@ -12,6 +18,33 @@ export default function NotesBoard() {
     const [isAddingProject, setIsAddingProject] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [editorContent, setEditorContent] = useState(''); // Quill HTML state
+
+    // Sync Editor when opening a note
+    React.useEffect(() => {
+        if (selectedNoteId) {
+            const note = notes.find(n => n.id === selectedNoteId);
+            if (note) setEditorContent(marked.parse(note.content));
+        }
+    }, [selectedNoteId]); // Only run when opening/switching notes
+
+    const handleEditorChange = (content) => {
+        setEditorContent(content);
+        if (selectedNoteId) {
+            const markdown = turndownService.turndown(content);
+            updateNote(selectedNoteId, { content: markdown });
+        }
+    };
+
+    const modules = {
+        toolbar: [
+            [{ 'header': [1, 2, false] }],
+            ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+            ['link', 'code-block'],
+            ['clean']
+        ],
+    };
 
     const selectedNote = notes.find(n => n.id === selectedNoteId);
 
@@ -222,14 +255,32 @@ export default function NotesBoard() {
                                 </button>
                             </div>
 
-                            <textarea
-                                value={selectedNote.content}
-                                onChange={(e) => updateNote(selectedNote.id, { content: e.target.value })}
-                                placeholder="Type something..."
-                                className="w-full h-full bg-transparent border-none outline-none resize-none text-lg leading-relaxed text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 custom-scrollbar selection:bg-blue-500/20 dark:selection:bg-white/20 p-2 pr-24"
-                                spellCheck={false}
-                                autoFocus
-                            />
+                            <div className="flex-1 bg-white dark:bg-zinc-900 rounded-xl overflow-hidden flex flex-col">
+                                <ReactQuill
+                                    theme="snow"
+                                    value={editorContent}
+                                    onChange={handleEditorChange}
+                                    modules={modules}
+                                    placeholder="Type something..."
+                                    className="h-full flex flex-col"
+                                />
+                            </div>
+
+                            {/* Styles for Quill Dark Mode Override */}
+                            <style>{`
+                                .quill { display: flex; flex-direction: column; height: 100%; }
+                                .ql-container { flex: 1; overflow-y: auto; font-family: 'Inter', sans-serif; font-size: 1.125rem; }
+                                .ql-toolbar { border-top: none !important; border-left: none !important; border-right: none !important; border-bottom: 1px solid #e4e4e7 !important; background: transparent; padding-top: 0 !important; }
+                                .dark .ql-toolbar { border-bottom-color: rgba(255,255,255,0.1) !important; }
+                                .dark .ql-stroke { stroke: #a1a1aa !important; }
+                                .dark .ql-fill { fill: #a1a1aa !important; }
+                                .dark .ql-picker { color: #a1a1aa !important; }
+                                .dark .ql-editor { color: #e4e4e7; line-height: 1.7; }
+                                .ql-editor.ql-blank::before { color: #a1a1aa; font-style: normal; }
+                                .ql-editor h1 { font-size: 2em; font-weight: 700; margin-bottom: 0.5em; }
+                                .ql-editor h2 { font-size: 1.5em; font-weight: 600; margin-bottom: 0.5em; margin-top: 1em; }
+                                .ql-editor p { margin-bottom: 0.5em; }
+                            `}</style>
 
                             <div className="mt-4 text-xs text-zinc-500 font-mono text-right select-none font-semibold tracking-wider">
                                 {new Date(selectedNote.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

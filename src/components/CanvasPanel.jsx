@@ -13,7 +13,7 @@ import TurndownService from 'turndown';
 
 const turndownService = new TurndownService();
 
-const CanvasPanel = ({ content, type: initialType = 'document', title = 'Untitled', onClose, onUpdate, onSaveToNotes }) => {
+const CanvasPanel = ({ content, type: initialType = 'document', title = 'Untitled', isStreaming = false, onClose, onUpdate, onSaveToNotes }) => {
     // Normalize type to ensure robustness (AI might output 'markdown' or 'text')
     const type = (initialType.toLowerCase() === 'markdown' || initialType.toLowerCase() === 'text') ? 'document' : initialType;
 
@@ -119,12 +119,29 @@ const CanvasPanel = ({ content, type: initialType = 'document', title = 'Untitle
     const renderPreview = () => {
         if (type === 'code') {
             // Auto-run for Web/HTML code
+            if (isStreaming) {
+                return (
+                    <div className="w-full h-full bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 flex flex-col items-center justify-center text-zinc-400 gap-3">
+                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-medium tracking-wide">Generating Code...</span>
+                    </div>
+                );
+            }
+
+            // Inject styles to prevent scrollbars and force full size
+            const fixedContent = `
+                <style>
+                    body { margin: 0; overflow: hidden; width: 100vw; height: 100vh; }
+                </style>
+                ${localContent}
+            `;
+
             return (
-                <div className="w-full h-full bg-white rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700">
+                <div className="w-full h-full bg-white rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 relative">
                     <iframe
-                        srcDoc={localContent}
-                        className="w-full h-full"
-                        sandbox="allow-scripts"
+                        srcDoc={fixedContent}
+                        className="w-full h-full block"
+                        sandbox="allow-scripts allow-modals allow-forms allow-same-origin"
                         title="Canvas Preview"
                     />
                 </div>

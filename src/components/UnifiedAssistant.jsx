@@ -1414,6 +1414,7 @@ You are generating content for a specialized editor.
                                         content={canvasData.content}
                                         type={canvasData.type}
                                         title={canvasData.title}
+                                        isStreaming={isProcessing}
                                         onClose={() => setMode('chat')}
                                         onUpdate={(newContent) => setCanvasData(prev => ({ ...prev, content: newContent }))}
                                         onSaveToNotes={(content) => addNote('inbox', content)}
