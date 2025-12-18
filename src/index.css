@@ -46,5 +46,5 @@ body {
 /* Input Reset */
 textarea,
 input {
-  caret-color: white;
+  @apply caret-zinc-900 dark:caret-white;
 }

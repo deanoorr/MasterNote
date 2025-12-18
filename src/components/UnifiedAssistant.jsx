@@ -17,6 +17,7 @@ import ThinkingProcess from './ThinkingProcess';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import VisualSearchCarousel from './VisualSearchCarousel';
+import CanvasPanel from './CanvasPanel';
 import { searchImages } from '../services/searchService';
 
 // Enhanced Custom Markdown Parser
@@ -167,6 +168,7 @@ const initializeClients = () => {
 export default function UnifiedAssistant() {
     const [mode, setMode] = useState(() => localStorage.getItem('bart_assistant_mode') || 'chat');
     const [sciraMode, setSciraMode] = useState('chat'); // 'chat' | 'x'
+    const [canvasData, setCanvasData] = useState(null); // { type: 'code'|'document', title: string, content: string }
 
     useEffect(() => {
         localStorage.setItem('bart_assistant_mode', mode);
@@ -175,6 +177,36 @@ export default function UnifiedAssistant() {
     useEffect(() => {
         console.log('Bart AI v2.1 - Thinking Fix Loaded');
     }, []);
+
+    const [canvasWidth, setCanvasWidth] = useState(60); // Percentage
+    const [isResizing, setIsResizing] = useState(false);
+    const isResizingRef = useRef(false);
+
+    const handleMouseMove = (e) => {
+        if (!isResizingRef.current) return;
+        const newWidth = ((window.innerWidth - e.clientX) / window.innerWidth) * 100;
+        if (newWidth > 20 && newWidth < 80) {
+            setCanvasWidth(newWidth);
+        }
+    };
+
+    const handleMouseUp = () => {
+        isResizingRef.current = false;
+        setIsResizing(false);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'default';
+        document.body.style.userSelect = 'auto';
+    };
+
+    const startResizing = () => {
+        isResizingRef.current = true;
+        setIsResizing(true);
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
 
     const { selectedModel } = useModel();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -226,8 +258,9 @@ export default function UnifiedAssistant() {
     const scrollRef = useRef(null);
 
     // Contexts
+    // Contexts
     const { addTask, tasks, updateTask, deleteTask, clearTasks, projects } = useTasks();
-    const { notes } = useNotes();
+    const { notes, addNote } = useNotes();
     const { settings } = useSettings();
     const {
         sessions,
@@ -481,11 +514,17 @@ export default function UnifiedAssistant() {
 
     const handleSend = async () => {
         if (!input.trim()) return;
+        // Check if we should switch to canvas mode based on user intent (optional, but requested behavior implies manual switch)
+        // For now, we rely on the manual mode switch or explicit user instruction handled by the LLM
+
         const userText = input;
         setInput('');
         setIsProcessing(true);
+        setIsThinkingEnabled(false); // Reset for new message unless sticky
 
-        if (mode === 'chat') {
+        // Clear canvas if starting new unrelated task? No, keep context.
+
+        if (mode === 'chat' || mode === 'canvas') {
             const userMsg = {
                 id: Date.now(),
                 role: 'user',
@@ -527,6 +566,7 @@ export default function UnifiedAssistant() {
                     : '';
 
                 const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.${userProfileBlock}${aiPreferencesBlock}`;
+
                 const thinkingPrompt = ` IMPORTANT: You are in Extended Thinking Mode.
 You MUST use the following format:
 <think>
@@ -536,9 +576,17 @@ You MUST use the following format:
 
 START YOUR RESPONSE IMMEDIATELY with <think>.`;
 
-                const systemPrompt = (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider))
-                    ? baseSystemPrompt + thinkingPrompt
-                    : baseSystemPrompt;
+                const canvasPrompt = ` IMPORTANT: CANAVS MODE ACTIVE.
+You are generating content for a specialized editor.
+1. You MUST output ONLY the content inside valid <canvas_content> tags.
+2. The tag MUST have 'type' and 'title' attributes.
+3. Example: <canvas_content type="code" title="app.html">...code...</canvas_content>
+4. Do not provide conversational filler before the XML.
+5. If the user asks you to EDIT or ADD to the existing content, you MUST provide the FULL updated content within the tags, not just the changes.`;
+
+                let systemPrompt = baseSystemPrompt;
+                if (mode === 'canvas') systemPrompt += canvasPrompt;
+                if (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider)) systemPrompt += thinkingPrompt;
 
                 if (selectedModel.provider === 'google') {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
@@ -551,8 +599,16 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
 
                     const rawHistory = currentSession.messages.map(m => ({
                         role: m.role === 'ai' ? 'model' : 'user',
-                        parts: [{ text: m.content }],
+                        parts: [{ text: m.content }] // Google doesn't need explicit canvas reminder in history if system prompt works, but let's see.
                     }));
+
+                    // Add Canvas Reminder to last User message for Google as well
+                    if (mode === 'canvas') {
+                        const lastMsg = rawHistory[rawHistory.length - 1];
+                        if (lastMsg && lastMsg.role === 'user') {
+                            lastMsg.parts[0].text += "\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)";
+                        }
+                    }
                     const firstUserIndex = rawHistory.findIndex(m => m.role === 'user');
                     const validHistory = firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : [];
 
@@ -599,6 +655,20 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                     let textAccumulator = searchThoughts;
                     let gatheredSources = new Set();
 
+                    // Canvas Extraction Helper (Google)
+                    const processCanvasUpdates = (fullText) => {
+                        const canvasMatch = fullText.match(/<canvas_content type="([^"]+)" title="([^"]+)">([\s\S]*?)(?:<\/canvas_content>|$)/);
+                        if (canvasMatch) {
+                            const [_, type, title, content] = canvasMatch;
+                            setCanvasData({ type, title, content: content.trim() });
+                            // Optional: Remove canvas tags from chat view if closed, but keeping them might be messy.
+                            // Better: The FormattedMessage component can hide them or we strip them here.
+                            // For stream, we strip them from the displayed message
+                            return fullText.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                        }
+                        return fullText;
+                    };
+
                     for await (const chunk of result.stream) {
                         textAccumulator += chunk.text();
                         const metadata = chunk.candidates?.[0]?.groundingMetadata;
@@ -607,7 +677,9 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                 if (chunk.web?.uri) gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
                             });
                         }
-                        updateMessage(currentSessionId, msgId, textAccumulator);
+
+                        const displayText = processCanvasUpdates(textAccumulator);
+                        updateMessage(currentSessionId, msgId, displayText);
                     }
 
                     if (gatheredSources.size > 0) {
@@ -680,7 +752,7 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                             {
                                 role: "user",
                                 content: [
-                                    { type: "text", text: userText },
+                                    { type: "text", text: userText + (mode === 'canvas' ? `\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)` : "") + (canvasData ? `\n\nCURRENT CANVAS CONTENT (${canvasData.type}):\n${canvasData.content}` : "") },
                                     ...validAttachments.map(att => ({
                                         type: "image_url",
                                         image_url: { url: att.preview }
@@ -712,7 +784,19 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                         if (contentChunk) {
                             if (isThinking) { isThinking = false; textAccumulator += "</think>"; }
                             textAccumulator += contentChunk;
-                            updateMessage(currentSessionId, msgId, textAccumulator);
+
+                            // Canvas Extraction (OpenAI/xAI/Deepseek)
+                            const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
+                            if (canvasMatch) {
+                                const type = canvasMatch[1] || canvasMatch[4];
+                                const title = canvasMatch[2] || canvasMatch[3];
+                                const content = canvasMatch[5];
+                                setCanvasData({ type, title, content: content.trim() });
+                                const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                updateMessage(currentSessionId, msgId, displayText);
+                            } else {
+                                updateMessage(currentSessionId, msgId, textAccumulator);
+                            }
                         }
                     }
                     if (isThinking) {
@@ -777,7 +861,7 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                             {
                                 role: "user",
                                 content: [
-                                    { type: "text", text: userText },
+                                    { type: "text", text: userText + (mode === 'canvas' ? "\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)" : "") },
                                     ...validAttachments.map(att => {
                                         if (att.mimeType === 'application/pdf') {
                                             return {
@@ -825,7 +909,18 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                             updateMessage(currentSessionId, msgId, textAccumulator);
                         } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
                             textAccumulator += chunk.delta.text;
-                            updateMessage(currentSessionId, msgId, textAccumulator);
+                            // Canvas Extraction (Anthropic)
+                            const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
+                            if (canvasMatch) {
+                                const type = canvasMatch[1] || canvasMatch[4];
+                                const title = canvasMatch[2] || canvasMatch[3];
+                                const content = canvasMatch[5];
+                                setCanvasData({ type, title, content: content.trim() });
+                                const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                updateMessage(currentSessionId, msgId, displayText);
+                            } else {
+                                updateMessage(currentSessionId, msgId, textAccumulator);
+                            }
                         }
                     }
                 } else if (selectedModel.provider === 'scira') {
@@ -1172,7 +1267,10 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => createSession()}
+                            onClick={() => {
+                                createSession();
+                                setCanvasData(null); // Reset Canvas on New Chat
+                            }}
                             className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-black/20 hover:shadow-black/30 transition-shadow"
                         >
                             <Plus size={16} /> New Chat
@@ -1188,100 +1286,146 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-6" ref={scrollRef}>
-                    <div className="max-w-5xl mx-auto space-y-8 pb-4">
-                        {/* Show Hero/Empty State ONLY if we just have the initial AI greeting */}
-                        {currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && (
-                            <div className="flex flex-col items-center justify-center mt-20">
-                                <motion.div
-                                    initial={{ opacity: 0, y: 30 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
-                                    className="text-center space-y-8 w-full max-w-2xl"
-                                >
-                                    {/* Premium Nebula Orb Logo */}
-                                    <div className="relative inline-flex items-center justify-center group py-8">
-                                        {/* Ambient Glow */}
-                                        <div className="absolute inset-0 bg-blue-500/20 blur-[60px] rounded-full opacity-50 group-hover:opacity-80 transition-opacity duration-700"></div>
+                <div className="flex-1 flex overflow-hidden">
+                    {/* Chat Area - Resizes when Canvas is open and has content */}
+                    <div
+                        className={`flex-1 overflow-y-auto custom-scrollbar p-6 transition-all duration-300 ${mode === 'canvas' && canvasData ? 'border-r border-zinc-200 dark:border-white/5' : 'max-w-full'}`}
+                        style={{ maxWidth: mode === 'canvas' && canvasData ? `${100 - canvasWidth}%` : '100%' }}
+                        ref={scrollRef}
+                    >
+                        <div className={`mx-auto space-y-8 pb-4 ${mode === 'canvas' ? 'max-w-full' : 'max-w-5xl'}`}>
+                            {/* Show Hero/Empty State ONLY if we just have the initial AI greeting and NOT in canvas mode */}
+                            {currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && mode !== 'canvas' && (
+                                <div className="flex flex-col items-center justify-center mt-20">
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 30 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
+                                        className="text-center space-y-8 w-full max-w-2xl"
+                                    >
+                                        {/* Premium Nebula Orb Logo */}
+                                        <div className="relative inline-flex items-center justify-center group py-8">
+                                            {/* Ambient Glow */}
+                                            <div className="absolute inset-0 bg-blue-500/20 blur-[60px] rounded-full opacity-50 group-hover:opacity-80 transition-opacity duration-700"></div>
 
-                                        <div className="relative">
-                                            {/* Rotating Ring */}
-                                            <motion.div
-                                                animate={{ rotate: 360 }}
-                                                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                                                className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-30 blur-sm"
-                                            />
-
-                                            {/* Core Container */}
-                                            <div className="relative w-24 h-24 rounded-full bg-white dark:bg-zinc-950 flex items-center justify-center border border-zinc-200 dark:border-white/10 shadow-2xl shadow-black/80">
-                                                {/* Inner Gradient */}
-                                                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10"></div>
-
-                                                {/* Icon */}
+                                            <div className="relative">
+                                                {/* Rotating Ring */}
                                                 <motion.div
-                                                    animate={{ scale: [1, 1.1, 1] }}
-                                                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                                >
-                                                    <Sparkles size={40} className="text-zinc-900 dark:text-white drop-shadow-[0_0_15px_rgba(0,0,0,0.2)] dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
-                                                </motion.div>
+                                                    animate={{ rotate: 360 }}
+                                                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                                                    className="absolute inset-[-4px] rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 opacity-30 blur-sm"
+                                                />
+
+                                                {/* Core Container */}
+                                                <div className="relative w-24 h-24 rounded-full bg-white dark:bg-zinc-950 flex items-center justify-center border border-zinc-200 dark:border-white/10 shadow-2xl shadow-black/80">
+                                                    {/* Inner Gradient */}
+                                                    <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-blue-500/10 via-transparent to-purple-500/10"></div>
+
+                                                    {/* Icon */}
+                                                    <motion.div
+                                                        animate={{ scale: [1, 1.1, 1] }}
+                                                        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                                    >
+                                                        <Sparkles size={40} className="text-zinc-900 dark:text-white drop-shadow-[0_0_15px_rgba(0,0,0,0.2)] dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]" strokeWidth={1.5} />
+                                                    </motion.div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <h2 className="text-3xl md:text-4xl font-light text-transparent bg-clip-text bg-gradient-to-b from-zinc-900 to-zinc-500 dark:from-white dark:to-white/40 tracking-tight pb-2">
-                                        How can I help you, Master?
-                                    </h2>
+                                        <h2 className="text-3xl md:text-4xl font-light text-transparent bg-clip-text bg-gradient-to-b from-zinc-900 to-zinc-500 dark:from-white dark:to-white/40 tracking-tight pb-2">
+                                            How can I help you, Master?
+                                        </h2>
 
-                                    {/* Suggestion Grid */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full px-4 pt-8">
-                                        {[
-                                            { icon: <MessageSquare size={20} />, label: "Draft an email", desc: "Professional correspondence", query: "Draft a professional email about..." },
-                                            { icon: <Zap size={20} />, label: "Analyze code", desc: "Debug & optimize snippets", query: "Review this code for bugs..." },
-                                            { icon: <BrainCircuit size={20} />, label: "Brainstorm ideas", desc: "Unlock creativity", query: "Give me 5 creative ideas for..." },
-                                            { icon: <Bot size={20} />, label: "Task planning", desc: "Organize your workflow", query: "Create a plan to launch..." },
-                                        ].map((item, idx) => (
-                                            <motion.button
-                                                whileHover={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.08)" }}
-                                                whileTap={{ scale: 0.98 }}
-                                                key={idx}
-                                                onClick={() => setInput(item.query)}
-                                                className="flex flex-col gap-2 p-5 text-left bg-white dark:bg-white/5 hover:bg-zinc-50 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-sm group shadow-sm hover:shadow-md dark:shadow-none"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <span className="p-2.5 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 group-hover:from-blue-500/10 group-hover:to-purple-500/10 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-all duration-300">
-                                                        {item.icon}
+                                        {/* Suggestion Grid */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full px-4 pt-8">
+                                            {[
+                                                { icon: <MessageSquare size={20} />, label: "Draft an email", desc: "Professional correspondence", query: "Draft a professional email about..." },
+                                                { icon: <Zap size={20} />, label: "Analyze code", desc: "Debug & optimize snippets", query: "Review this code for bugs..." },
+                                                { icon: <BrainCircuit size={20} />, label: "Brainstorm ideas", desc: "Unlock creativity", query: "Give me 5 creative ideas for..." },
+                                                { icon: <Bot size={20} />, label: "Task planning", desc: "Organize your workflow", query: "Create a plan to launch..." },
+                                            ].map((item, idx) => (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02, backgroundColor: "rgba(255,255,255,0.08)" }}
+                                                    whileTap={{ scale: 0.95 }}
+                                                    key={idx}
+                                                    onClick={() => setInput(item.query)}
+                                                    className="flex flex-col gap-2 p-5 text-left bg-white dark:bg-white/5 hover:bg-zinc-50 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-sm group shadow-sm hover:shadow-md dark:shadow-none"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="p-2.5 rounded-xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 group-hover:from-blue-500/10 group-hover:to-purple-500/10 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-all duration-300">
+                                                            {item.icon}
+                                                        </span>
+                                                        <span className="text-zinc-800 dark:text-zinc-200 font-medium">{item.label}</span>
+                                                    </div>
+                                                    <span className="text-xs text-zinc-500 group-hover:text-zinc-400 pl-[3.25rem] transition-colors">
+                                                        {item.desc}
                                                     </span>
-                                                    <span className="text-zinc-800 dark:text-zinc-200 font-medium">{item.label}</span>
-                                                </div>
-                                                <span className="text-xs text-zinc-500 group-hover:text-zinc-400 pl-[3.25rem] transition-colors">
-                                                    {item.desc}
-                                                </span>
-                                            </motion.button>
-                                        ))}
-                                    </div>
-                                </motion.div>
-                            </div>
-                        )}
-
-                        {currentSession.messages.map((msg, idx) => {
-                            // Suppress the initial AI greeting from the chat list to favor the Hero state
-                            if (msg.role === 'ai' && idx === 0) return null;
-
-                            return (
-                                <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    {msg.role !== 'user' && renderAIAvatar(msg, idx)}
-                                    <div className={`max-w-[80%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
-                                        {msg.visualResults && <VisualSearchCarousel images={msg.visualResults} />}
-                                        <FormattedMessage content={msg.content} />
-                                    </div>
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    </motion.div>
                                 </div>
-                            );
-                        })}
+                            )}
+
+                            {/* Canvas Mode Empty State */}
+                            {mode === 'canvas' && currentSession.messages.length <= 1 && currentSession.messages[0]?.role === 'ai' && (
+                                <div className="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-600">
+                                    <Sparkles size={48} className="mb-4 opacity-20" />
+                                    <p>Ask Bart to draft a document or write code to see it here.</p>
+                                </div>
+                            )}
+
+                            {currentSession.messages.map((msg, idx) => {
+                                // Suppress the initial AI greeting from the chat list to favor the Hero state
+                                if (msg.role === 'ai' && idx === 0) return null;
+
+                                return (
+                                    <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        {msg.role !== 'user' && renderAIAvatar(msg, idx)}
+                                        <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
+                                            {msg.visualResults && <VisualSearchCarousel images={msg.visualResults} />}
+                                            <FormattedMessage content={msg.content} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
+
+                    {/* Canvas Panel */}
+                    {/* Canvas Panel */}
+                    <AnimatePresence>
+                        {mode === 'canvas' && canvasData && (
+                            <>
+                                {/* Resize Handle */}
+                                <div
+                                    onMouseDown={startResizing}
+                                    className="w-1 hover:w-2 bg-transparent hover:bg-blue-500/50 cursor-col-resize z-50 transition-all absolute right-0 top-0 bottom-0"
+                                    style={{ right: `${canvasWidth}%`, transform: 'translateX(50%)' }}
+                                />
+                                <motion.div
+                                    initial={{ width: 0, opacity: 0 }}
+                                    animate={{ width: `${canvasWidth}%`, opacity: 1 }}
+                                    exit={{ width: 0, opacity: 0 }}
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    className="flex-1 h-full"
+                                >
+                                    <CanvasPanel
+                                        content={canvasData.content}
+                                        type={canvasData.type}
+                                        title={canvasData.title}
+                                        onClose={() => setMode('chat')}
+                                        onUpdate={(newContent) => setCanvasData(prev => ({ ...prev, content: newContent }))}
+                                        onSaveToNotes={(content) => addNote('inbox', content)}
+                                    />
+                                </motion.div>
+                            </>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Input Area */}
-                <div className="p-6 pt-2">
+                <div className="p-6 pt-2 shrink-0">
                     <div className="max-w-4xl mx-auto relative group">
                         {/* Animated Glow Border */}
                         <div className="absolute -inset-[1px] bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-[22px] blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
@@ -1309,6 +1453,15 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                     >
                                         <Globe size={16} />
                                         <span className="hidden sm:inline">Search</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => setMode(mode === 'canvas' ? 'chat' : 'canvas')}
+                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${mode === 'canvas' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                        title="Toggle Canvas"
+                                    >
+                                        <PanelLeft size={16} />
+                                        <span className="hidden sm:inline">Canvas</span>
                                     </button>
                                 </div>
 
@@ -1385,6 +1538,10 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                         </div>
                     </div>
                 </div>
+                {/* Resize Overlay - Prevents iframe interference */}
+                {isResizing && (
+                    <div className="fixed inset-0 z-[100] cursor-col-resize bg-transparent" />
+                )}
             </main>
         </div>
     );

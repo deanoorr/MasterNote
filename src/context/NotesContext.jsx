@@ -33,10 +33,10 @@ export function NotesProvider({ children }) {
         localStorage.setItem('nexus_projects', JSON.stringify(projects));
     }, [projects]);
 
-    const addNote = (projectId = 'inbox') => {
+    const addNote = (projectId = 'inbox', content = '') => {
         const newNote = {
             id: Date.now(),
-            content: '',
+            content: content,
             projectId,
             timestamp: Date.now()
         };
