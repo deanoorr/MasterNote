@@ -670,7 +670,11 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                 role: "user",
                                 content: [
                                     { type: "text", text: userText },
-                                    ...currentAttachments.map(att => ({
+                                    ...currentAttachments.filter(att => {
+                                        const isImage = att.type === 'image';
+                                        if (!isImage) alert(`Note: ${att.name} was skipped. Only images are supported by this model.`);
+                                        return isImage;
+                                    }).map(att => ({
                                         type: "image_url",
                                         image_url: { url: att.preview }
                                     }))
@@ -755,7 +759,11 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                 role: "user",
                                 content: [
                                     { type: "text", text: userText },
-                                    ...currentAttachments.map(att => ({
+                                    ...currentAttachments.filter(att => {
+                                        const isImage = att.type === 'image';
+                                        if (!isImage) alert(`Note: ${att.name} was skipped. Only images are supported by Claude.`);
+                                        return isImage;
+                                    }).map(att => ({
                                         type: "image",
                                         source: {
                                             type: "base64",
