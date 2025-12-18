@@ -33,12 +33,54 @@ export function TaskProvider({ children }) {
         localStorage.setItem('masternote_projects', JSON.stringify(projects));
     }, [projects]);
 
+    // Auto-delete completed tasks from previous days on mount
+    useEffect(() => {
+        const today = new Date().toLocaleDateString('en-CA');
+
+        setTasks(currentTasks => {
+            const hasCleanup = currentTasks.some(t => {
+                if (t.status !== 'completed') return false;
+                const completionDate = t.completedAt || today; // Assume today for legacy
+                return completionDate !== today;
+            });
+
+            const hasUpdates = currentTasks.some(t => t.status === 'completed' && !t.completedAt);
+
+            if (!hasCleanup && !hasUpdates) return currentTasks;
+
+            return currentTasks.filter(t => {
+                if (t.status !== 'completed') return true;
+                const completionDate = t.completedAt || today;
+                return completionDate === today;
+            }).map(t => {
+                // Retroactively add timestamp to legacy completed tasks so they delete tomorrow
+                if (t.status === 'completed' && !t.completedAt) {
+                    return { ...t, completedAt: today };
+                }
+                return t;
+            });
+        });
+    }, []);
+
     const addTask = (task) => {
         setTasks(prev => [{ ...task, id: Date.now(), status: 'pending', projectId: task.projectId || null }, ...prev]);
     };
 
     const updateTask = (id, updates) => {
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+        setTasks(prev => prev.map(t => {
+            if (t.id !== id) return t;
+
+            const updatedTask = { ...t, ...updates };
+
+            // Handle completion timestamp
+            if (updates.status === 'completed' && t.status !== 'completed') {
+                updatedTask.completedAt = new Date().toLocaleDateString('en-CA');
+            } else if (updates.status === 'pending') {
+                delete updatedTask.completedAt;
+            }
+
+            return updatedTask;
+        }));
     };
 
     const deleteTask = (id) => {

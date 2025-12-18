@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder, PanelLeft } from 'lucide-react';
 
@@ -14,7 +14,12 @@ export default function TaskManager() {
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
     const [newTaskPriority, setNewTaskPriority] = useState('Medium');
-    const [sortBy, setSortBy] = useState('date');
+    const [sortBy, setSortBy] = useState(() => localStorage.getItem('taskSortBy') || 'date');
+
+    // Persist sort preference
+    useEffect(() => {
+        localStorage.setItem('taskSortBy', sortBy);
+    }, [sortBy]);
 
     // Project Logic
     const [showAddProject, setShowAddProject] = useState(false);
@@ -378,7 +383,7 @@ export default function TaskManager() {
                                     className={`p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
                                         ? 'bg-zinc-100 dark:bg-black/20 border-zinc-200 dark:border-white/5 opacity-50'
                                         : overdue
-                                            ? 'border-red-500/30 bg-red-500/10'
+                                            ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm shadow-red-200 dark:shadow-none'
                                             : 'bg-white dark:bg-white/5 backdrop-blur-md border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/20 hover:bg-zinc-50 dark:hover:bg-white/10 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/20'
                                         }`}
                                 >

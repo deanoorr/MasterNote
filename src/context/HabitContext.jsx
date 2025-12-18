@@ -8,6 +8,61 @@ export function HabitProvider({ children }) {
         return saved ? JSON.parse(saved) : [];
     });
 
+    // Helper: Calculate streak based on completed dates
+    const calculateStreak = (completedDates) => {
+        if (!completedDates || completedDates.length === 0) return 0;
+
+        const uniqueDates = [...new Set(completedDates)].sort(); // Ensure sorted ascending
+        const today = new Date().toLocaleDateString('en-CA');
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const yesterday = yesterdayDate.toLocaleDateString('en-CA');
+
+        const lastCompleted = uniqueDates[uniqueDates.length - 1];
+
+        // If the last completion was before yesterday, streak is broken -> 0
+        if (lastCompleted !== today && lastCompleted !== yesterday) {
+            return 0;
+        }
+
+        let streak = 0;
+        let currentCheckDate = new Date();
+
+        // Check backwards from today
+        // If today is completed, streak starts at 1. If not, we check yesterday.
+        // We iterate backwards day by day.
+
+        // Optimization: Loop backwards checking strings
+        while (true) {
+            const checkString = currentCheckDate.toLocaleDateString('en-CA');
+            if (uniqueDates.includes(checkString)) {
+                streak++;
+            } else {
+                // If we miss a day, check if it's today. 
+                // If it's today and we missed it, the streak might still be alive from yesterday.
+                // But if we missed any other day (yesterday or before), streak breaks.
+                if (checkString !== today) {
+                    break;
+                }
+            }
+            // Move back one day
+            currentCheckDate.setDate(currentCheckDate.getDate() - 1);
+
+            // Safety break for infinite loops (though logic shouldn't allow it)
+            if (streak > 9999) break;
+        }
+
+        return streak;
+    };
+
+    // Recalculate streaks on mount (in case day changed while app was closed)
+    useEffect(() => {
+        setHabits(prev => prev.map(h => ({
+            ...h,
+            streak: calculateStreak(h.completedDates)
+        })));
+    }, []);
+
     useEffect(() => {
         localStorage.setItem('bart_habits', JSON.stringify(habits));
     }, [habits]);
@@ -32,28 +87,23 @@ export function HabitProvider({ children }) {
         setHabits(prev => prev.map(h => {
             if (h.id !== id) return h;
 
-            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const today = new Date().toLocaleDateString('en-CA');
             const isCompletedToday = h.completedDates.includes(today);
 
             let newCompletedDates;
-            let newStreak = h.streak;
 
             if (isCompletedToday) {
                 // Untoggle
                 newCompletedDates = h.completedDates.filter(d => d !== today);
-                newStreak = Math.max(0, newStreak - 1); // Simple decrement, real streak logic is complex but this suffices for simple trackers
             } else {
                 // Toggle
                 newCompletedDates = [...h.completedDates, today];
-                // Check if yesterday was completed to increment streak, otherwise reset to 1
-                // For simplicity in this v1, we just increment streak on toggle
-                newStreak = newStreak + 1;
             }
 
             return {
                 ...h,
                 completedDates: newCompletedDates,
-                streak: newStreak
+                streak: calculateStreak(newCompletedDates)
             };
         }));
     };
