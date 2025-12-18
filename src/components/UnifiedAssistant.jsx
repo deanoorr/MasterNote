@@ -1456,6 +1456,18 @@ You are generating content for a specialized editor.
                                         <span className="hidden sm:inline">Search</span>
                                     </button>
 
+                                    {/* Scira X Button */}
+                                    {selectedModel?.provider === 'scira' && (
+                                        <button
+                                            onClick={() => setSciraMode(sciraMode === 'x' ? 'chat' : 'x')}
+                                            className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${sciraMode === 'x' ? 'bg-zinc-900/10 text-zinc-900 dark:bg-white/10 dark:text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                            title="Search X (Twitter)"
+                                        >
+                                            <span className="font-bold font-mono text-sm leading-none">𝕏</span>
+                                            <span className="hidden sm:inline">Search X</span>
+                                        </button>
+                                    )}
+
                                     <button
                                         onClick={() => setMode(mode === 'canvas' ? 'chat' : 'canvas')}
                                         className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${mode === 'canvas' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
