@@ -736,6 +736,198 @@ export default function UnifiedAssistant() {
             } catch (error) {
                 updateMessage(currentSessionId, msgId, `Error: ${error.message}`);
             }
+        } else if (mode === 'agent') {
+            // --- AGENT MODE LOGIC ---
+            const userMsg = {
+                id: Date.now(),
+                role: 'user',
+                content: userText,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            addMessageToSession(currentSessionId, userMsg);
+
+            const msgId = Date.now() + 1;
+            addMessageToSession(currentSessionId, {
+                id: msgId,
+                role: 'ai',
+                content: 'Processing task request...',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+
+            try {
+                // Construct logic to parse task
+                // We provide a simplified task list to the LLM so it can identify which task to update/delete
+                const simplifiedTasks = tasks.map(t => ({ id: t.id, title: t.title, status: t.status }));
+
+                // Get recent conversation history (last 5 messages) to provide context for pronouns like "it"
+                const recentHistory = currentSession.messages
+                    .slice(-5)
+                    .map(m => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.content}`)
+                    .join('\n');
+
+                const prompt = `
+                You are a smart task management agent.
+                Analyze the following user request and determine the user's intent:
+                1. "create_task": Add a new task.
+                2. "list_tasks": Query existing tasks.
+                3. "update_task": Modify existing task(s) (mark done, change priority, rename, etc.).
+                4. "delete_task": Remove task(s).
+
+                User Request: "${userText}"
+                
+                Context:
+                - Available Projects: ${projects.map(p => `${p.id} (${p.name})`).join(', ')}. 
+                - Current Tasks (ID: Title [Status]): 
+                ${JSON.stringify(simplifiedTasks).slice(0, 3000)} ${/* Limit context size */ ""}
+                - Conversation History (Use this to resolve pronouns like "it", "that task", etc.):
+                ${recentHistory}
+
+                IMPORTANT for Update/Delete: 
+                - If the user says "ALL" or "Everything", set "taskIds": ["ALL"].
+                - If specific tasks, find their IDs based on the user's description. YOU MUST use intelligent semantic matching (e.g., "coding task" matches "Fix login bug").
+                - If the user implies a task from context (e.g., "delete it", "move the last one"), use the Conversation History to identify the task.
+                - Return "taskIds": ["id1", "id2"].
+                - Only assign a projectId if explicitly mentioned.
+                
+                Required JSON Structure:
+                {
+                    "action": "create_task" | "list_tasks" | "update_task" | "delete_task",
+                    "taskIds": ["id1", "id2"] OR ["ALL"] (REQUIRED for update/delete),
+                    "taskDetails": {
+                        "title": "Task title",
+                        "priority": "High" | "Medium" | "Low",
+                        "date": "Today" | "Tomorrow" | "Next Week" | "No Date",
+                        "tags": ["Tag1", "Tag2"],
+                        "projectId": "project_id_or_null",
+                        "status": "pending" | "completed" (if marking as done),
+                        "confirmation": "A short, friendly confirmation message."
+                    },
+                    "listQuery": {
+                        "filter": "all" | "today" | "pending" | "completed",
+                        "projectFilter": "project_id_or_null"
+                    }
+                }
+                
+                Output ONLY the JSON object.
+                `;
+
+                let responseText = "";
+
+                // Use "Smartest" available model for this logic task
+                if (clientsRef.current.openai) {
+                    const completion = await clientsRef.current.openai.chat.completions.create({
+                        messages: [{ role: "system", content: prompt }],
+                        model: "gpt-4o",
+                        response_format: { type: "json_object" }
+                    });
+                    responseText = completion.choices[0].message.content;
+                } else if (clientsRef.current.genAI) {
+                    const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp", generationConfig: { responseMimeType: "application/json" } });
+                    const result = await model.generateContent(prompt);
+                    responseText = result.response.text();
+                } else if (clientsRef.current.anthropic) {
+                    // Fallback for Anthropic
+                    const msg = await clientsRef.current.anthropic.messages.create({
+                        model: "claude-3-5-sonnet-20241022",
+                        max_tokens: 1024,
+                        messages: [{ role: "user", content: prompt }]
+                    });
+                    responseText = msg.content[0].text;
+                } else {
+                    throw new Error("No capable AI model available for Agent tasks.");
+                }
+
+                const data = JSON.parse(responseText);
+
+                if (data.action === 'create_task') {
+                    const taskData = data.taskDetails;
+                    addTask({
+                        title: taskData.title,
+                        priority: taskData.priority,
+                        date: taskData.date,
+                        tags: taskData.tags || [],
+                        projectId: taskData.projectId
+                    });
+
+                    const projectObj = projects.find(p => p.id === taskData.projectId);
+                    const projectName = projectObj ? projectObj.name : "Inbox";
+
+                    updateMessage(currentSessionId, msgId, `✅ ${taskData.confirmation}\n\n**Task Created in ${projectName}:**\n*${taskData.title}* (${taskData.priority}) - ${taskData.date}`);
+
+                } else if (data.action === 'list_tasks') {
+                    // Implement listing logic
+                    let filteredTasks = tasks;
+
+                    // Simple filtering based on AI response
+                    if (data.listQuery.filter === 'today') {
+                        filteredTasks = tasks.filter(t => t.date === 'Today');
+                    } else if (data.listQuery.filter === 'pending') {
+                        filteredTasks = tasks.filter(t => t.status === 'pending');
+                    } else if (data.listQuery.filter === 'completed') {
+                        filteredTasks = tasks.filter(t => t.status === 'completed');
+                    }
+
+                    if (data.listQuery.projectFilter) {
+                        filteredTasks = filteredTasks.filter(t => t.projectId === data.listQuery.projectFilter);
+                    }
+
+                    if (filteredTasks.length === 0) {
+                        updateMessage(currentSessionId, msgId, `You have no matching tasks.`);
+                    } else {
+                        const taskList = filteredTasks.map(t => `- [${t.status === 'completed' ? 'x' : ' '}] **${t.title}** (${t.priority}) ${t.date ? `- ${t.date}` : ''}`).join('\n');
+                        updateMessage(currentSessionId, msgId, `Here are your tasks:\n\n${taskList}`);
+                    }
+
+                } else if (data.action === 'update_task') {
+                    if (!data.taskIds || data.taskIds.length === 0) throw new Error("Could not identify tasks to update.");
+
+                    const updateDetails = {};
+                    if (data.taskDetails.title) updateDetails.title = data.taskDetails.title;
+                    if (data.taskDetails.priority) updateDetails.priority = data.taskDetails.priority;
+                    if (data.taskDetails.date) updateDetails.date = data.taskDetails.date;
+                    // Ensure status is normalized if provided
+                    if (data.taskDetails.status) updateDetails.status = data.taskDetails.status.toLowerCase();
+                    if (data.taskDetails.projectId !== undefined) updateDetails.projectId = data.taskDetails.projectId;
+
+                    let count = 0;
+                    if (data.taskIds.includes("ALL")) {
+                        tasks.forEach(t => updateTask(t.id, updateDetails));
+                        count = tasks.length;
+                    } else {
+                        data.taskIds.forEach(rawId => {
+                            // Resolve ID: Handle type mismatch (String vs Number)
+                            const task = tasks.find(t => t.id == rawId);
+                            if (task) {
+                                updateTask(task.id, updateDetails);
+                            }
+                        });
+                        count = data.taskIds.length;
+                    }
+
+                    updateMessage(currentSessionId, msgId, `✅ ${data.taskDetails.confirmation || `${count} task(s) updated.`}`);
+
+                } else if (data.action === 'delete_task') {
+                    if (!data.taskIds || data.taskIds.length === 0) throw new Error("Could not identify tasks to delete.");
+
+                    if (data.taskIds.includes("ALL")) {
+                        clearTasks();
+                        updateMessage(currentSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || "All tasks deleted."}`);
+                    } else {
+                        data.taskIds.forEach(rawId => {
+                            // Resolve ID: Handle type mismatch
+                            const task = tasks.find(t => t.id == rawId);
+                            if (task) {
+                                deleteTask(task.id);
+                            }
+                        });
+                        updateMessage(currentSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || `${data.taskIds.length} task(s) deleted.`}`);
+                    }
+                }
+
+            } catch (error) {
+                console.error("Agent Error:", error);
+                updateMessage(currentSessionId, msgId, `❌ Failed to process request. Error: ${error.message}`);
+            }
         }
         setIsProcessing(false);
     };
