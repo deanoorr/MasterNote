@@ -14,8 +14,11 @@ import TurndownService from 'turndown';
 const turndownService = new TurndownService();
 
 const CanvasPanel = ({ content, type: initialType = 'document', title = 'Untitled', isStreaming = false, onClose, onUpdate, onSaveToNotes }) => {
-    // Normalize type to ensure robustness (AI might output 'markdown' or 'text')
-    const type = (initialType.toLowerCase() === 'markdown' || initialType.toLowerCase() === 'text') ? 'document' : initialType;
+    // Normalize type to ensure robustness (AI might output 'markdown', 'html', etc.)
+    const normalizedType = (initialType || 'document').toLowerCase();
+    const type = (normalizedType === 'markdown' || normalizedType === 'text') ? 'document'
+        : (normalizedType === 'html' || normalizedType === 'javascript' || normalizedType === 'js' || normalizedType === 'react') ? 'code'
+            : (initialType || 'document');
 
     const [isEditing, setIsEditing] = useState(false);
     const [localContent, setLocalContent] = useState(content);
