@@ -630,6 +630,17 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
 
                     let searchThoughts = "";
                     let finalSystemPrompt = systemPrompt;
+                    let skippedFilesWarning = "";
+
+                    // Filter attachments and build warning
+                    const validAttachments = currentAttachments.filter(att => {
+                        const isImage = att.type === 'image';
+                        if (!isImage) {
+                            skippedFilesWarning += `\n⚠️ **skipped ${att.name}**: This model only supports images. For PDFs/Docs, please use **Google Gemini** models.`;
+                        }
+                        return isImage;
+                    });
+
                     if (isSearchEnabled) {
                         if (isThinkingEnabled) {
                             searchThoughts += "<think>🧠 Analyzing request...</think>";
@@ -670,11 +681,7 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                 role: "user",
                                 content: [
                                     { type: "text", text: userText },
-                                    ...currentAttachments.filter(att => {
-                                        const isImage = att.type === 'image';
-                                        if (!isImage) alert(`Note: ${att.name} was skipped. Only images are supported by this model.`);
-                                        return isImage;
-                                    }).map(att => ({
+                                    ...validAttachments.map(att => ({
                                         type: "image_url",
                                         image_url: { url: att.preview }
                                     }))
@@ -686,9 +693,10 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                         reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
                     });
 
+                    let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
+                    // Initial update if we have a warning
+                    if (skippedFilesWarning) updateMessage(currentSessionId, msgId, textAccumulator);
 
-
-                    let textAccumulator = searchThoughts;
                     let isThinking = false;
 
                     for await (const chunk of stream) {
@@ -717,6 +725,17 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
 
                     let searchThoughts = "";
                     let finalSystemPrompt = systemPrompt;
+                    let skippedFilesWarning = "";
+
+                    const validAttachments = currentAttachments.filter(att => {
+                        const isImage = att.type === 'image';
+                        const isPdf = att.mimeType === 'application/pdf';
+                        if (!isImage && !isPdf) {
+                            skippedFilesWarning += `\n⚠️ **skipped ${att.name}**: Claude supports Images and PDFs. For other docs, please use **Google Gemini**.`;
+                        }
+                        return isImage || isPdf;
+                    });
+
                     if (isSearchEnabled) {
                         if (isThinkingEnabled) {
                             searchThoughts += "<think>🧠 Analyzing request...</think>";
@@ -759,18 +778,26 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
                                 role: "user",
                                 content: [
                                     { type: "text", text: userText },
-                                    ...currentAttachments.filter(att => {
-                                        const isImage = att.type === 'image';
-                                        if (!isImage) alert(`Note: ${att.name} was skipped. Only images are supported by Claude.`);
-                                        return isImage;
-                                    }).map(att => ({
-                                        type: "image",
-                                        source: {
-                                            type: "base64",
-                                            media_type: att.mimeType,
-                                            data: att.preview.split(',')[1]
+                                    ...validAttachments.map(att => {
+                                        if (att.mimeType === 'application/pdf') {
+                                            return {
+                                                type: "document",
+                                                source: {
+                                                    type: "base64",
+                                                    media_type: "application/pdf",
+                                                    data: att.preview.split(',')[1]
+                                                }
+                                            };
                                         }
-                                    }))
+                                        return {
+                                            type: "image",
+                                            source: {
+                                                type: "base64",
+                                                media_type: att.mimeType,
+                                                data: att.preview.split(',')[1]
+                                            }
+                                        };
+                                    })
                                 ]
                             }
                         ],
@@ -780,7 +807,9 @@ START YOUR RESPONSE IMMEDIATELY with <think>.`;
 
 
 
-                    let textAccumulator = searchThoughts;
+                    let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
+                    if (skippedFilesWarning) updateMessage(currentSessionId, msgId, textAccumulator);
+
                     let inThinkingBlock = false;
                     for await (const chunk of stream) {
                         if (chunk.type === 'content_block_start' && chunk.content_block.type === 'thinking') {

@@ -16,7 +16,7 @@ import { ThemeProvider } from '../context/ThemeContext';
 
 function LayoutContent() {
     const [activeTab, setActiveTab] = useState('home');
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(true);
 
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-black text-zinc-900 dark:text-white font-sans overflow-hidden selection:bg-blue-500/30 relative transition-colors duration-300">
