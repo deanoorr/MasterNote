@@ -172,6 +172,10 @@ export default function UnifiedAssistant() {
         localStorage.setItem('bart_assistant_mode', mode);
     }, [mode]);
 
+    useEffect(() => {
+        console.log('Bart AI v2.1 - Thinking Fix Loaded');
+    }, []);
+
     const { selectedModel } = useModel();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [input, setInput] = useState('');
