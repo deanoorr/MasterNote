@@ -132,6 +132,42 @@ export default function TaskManager() {
         return false;
     };
 
+    const formatDisplayDate = (dateString) => {
+        if (!dateString) return '';
+
+        // Handle potential existing text values
+        if (['Today', 'Tomorrow'].includes(dateString)) return dateString;
+
+        const date = new Date(dateString);
+        // Create dates at midnight for comparison to avoid time issues
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const inputDate = new Date(dateString);
+        // Adjust for timezone offset if strictly parsing YYYY-MM-DD as UTC
+        // But since we are comparing, let's just stick to string comparison which is safer for YYYY-MM-DD
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        // Calculate tomorrow string safely
+        const nextDay = new Date();
+        nextDay.setDate(nextDay.getDate() + 1);
+        const tomorrowStr = nextDay.toISOString().split('T')[0];
+
+        if (dateString === todayStr) return 'Today';
+        if (dateString === tomorrowStr) return 'Tomorrow';
+
+        // British Format: DD/MM/YYYY
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        return dateString;
+    };
+
     const sortedTasks = getSortedTasks(getFilteredTasks());
     const currentProjectName = selectedProject === 'all' ? 'All Tasks' : selectedProject === 'inbox' ? 'Inbox' : projects.find(p => p.id === selectedProject)?.name || 'Project';
 
@@ -433,7 +469,7 @@ export default function TaskManager() {
                                                     )}
 
                                                     <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-slate-800 text-zinc-600 dark:text-slate-400 border border-zinc-200 dark:border-slate-700">
-                                                        <Calendar size={12} className="mr-1.5" /> {task.date}
+                                                        <Calendar size={12} className="mr-1.5" /> {formatDisplayDate(task.date)}
                                                     </span>
                                                 </div>
                                             </div>

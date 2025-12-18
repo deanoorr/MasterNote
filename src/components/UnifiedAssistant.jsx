@@ -748,7 +748,7 @@ export default function UnifiedAssistant() {
     };
 
     return (
-        <div className="flex h-screen w-full bg-transparent font-sans text-white relative overflow-hidden bg-zinc-950">
+        <div className="flex h-screen w-full bg-transparent font-sans text-zinc-900 dark:text-white relative overflow-hidden">
             {isSidebarOpen && (
                 <motion.aside
                     initial={{ width: 0, opacity: 0 }}
