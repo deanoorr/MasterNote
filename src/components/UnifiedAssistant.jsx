@@ -523,9 +523,16 @@ export default function UnifiedAssistant() {
                     : '';
 
                 const baseSystemPrompt = `You are Bart AI. Current Date: ${currentDate}. Current Time: ${currentTime}. Use Google Search ONLY for real-time information. For all other queries, use your internal knowledge. You are encouraged to use Emojis 🚀 and Markdown formatting.${userProfileBlock}${aiPreferencesBlock}`;
-                const thinkingPrompt = " IMPORTANT: Before answering, ALWAYS explicitly think about your response step-by-step inside <think>...</think> tags. This is required for the user to see your internal reasoning.";
+                const thinkingPrompt = ` IMPORTANT: You are in Extended Thinking Mode.
+You MUST use the following format:
+<think>
+(Your step-by-step reasoning goes here)
+</think>
+(Your final answer goes here)
 
-                const systemPrompt = (isThinkingEnabled && !['anthropic', 'google', 'xai', 'openai'].includes(selectedModel.provider))
+START YOUR RESPONSE IMMEDIATELY with <think>.`;
+
+                const systemPrompt = (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider))
                     ? baseSystemPrompt + thinkingPrompt
                     : baseSystemPrompt;
 
@@ -535,7 +542,7 @@ export default function UnifiedAssistant() {
                         model: selectedModel.id,
                         systemInstruction: systemPrompt,
                         tools: isSearchEnabled ? [{ googleSearch: {} }] : [],
-                        generationConfig: isThinkingEnabled ? { thinkingConfig: { includeThoughts: true } } : undefined
+                        generationConfig: (isThinkingEnabled && selectedModel.id.includes('thinking')) ? { thinkingConfig: { includeThoughts: true } } : undefined
                     });
 
                     const rawHistory = currentSession.messages.map(m => ({
@@ -547,13 +554,31 @@ export default function UnifiedAssistant() {
 
                     const chatSession = model.startChat({ history: validHistory });
 
+                    let searchThoughts = "";
+
                     if (isSearchEnabled) {
+                        if (isThinkingEnabled) {
+                            searchThoughts += "<think>🧠 Analyzing request...</think>";
+                            updateMessage(currentSessionId, msgId, searchThoughts);
+                        }
+
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                        if (isThinkingEnabled) {
+                            searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
+                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                        }
+
                         searchImages(refinedQuery).then(imgs => {
                             if (imgs && imgs.length > 0) {
                                 updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
                             }
                         });
+
+                        if (isThinkingEnabled) {
+                            searchThoughts += "\n✅ Handing off to Google Search Tool.</think>";
+                            updateMessage(currentSessionId, msgId, searchThoughts);
+                        }
                     }
 
                     const messageParts = [{ text: userText }];
@@ -567,7 +592,7 @@ export default function UnifiedAssistant() {
                     });
 
                     const result = await chatSession.sendMessageStream(messageParts);
-                    let textAccumulator = "";
+                    let textAccumulator = searchThoughts;
                     let gatheredSources = new Set();
 
                     for await (const chunk of result.stream) {
@@ -598,15 +623,38 @@ export default function UnifiedAssistant() {
                     else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
                     else if (selectedModel.provider === 'openai' && isThinkingEnabled) targetModelId = 'gpt-5.2';
 
+
+                    let searchThoughts = "";
                     let finalSystemPrompt = systemPrompt;
                     if (isSearchEnabled) {
+                        if (isThinkingEnabled) {
+                            searchThoughts += "<think>🧠 Analyzing request...</think>";
+                            updateMessage(currentSessionId, msgId, searchThoughts);
+                        }
+
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                        if (isThinkingEnabled) {
+                            searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
+                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                        }
+
                         const webContext = await getWebContext(refinedQuery);
                         if (webContext) {
+                            if (isThinkingEnabled) {
+                                searchThoughts += "\n✅ Found relevant search results.</think>";
+                                updateMessage(currentSessionId, msgId, searchThoughts);
+                            }
+
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE: [Domain](URL).`;
                             searchImages(refinedQuery).then(imgs => {
                                 if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
                             });
+                        } else {
+                            if (isThinkingEnabled) {
+                                searchThoughts += "\n❌ No specific results found.</think>";
+                                updateMessage(currentSessionId, msgId, searchThoughts);
+                            }
                         }
                     }
 
@@ -630,7 +678,9 @@ export default function UnifiedAssistant() {
                         reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
                     });
 
-                    let textAccumulator = "";
+
+
+                    let textAccumulator = searchThoughts;
                     let isThinking = false;
 
                     for await (const chunk of stream) {
@@ -657,15 +707,37 @@ export default function UnifiedAssistant() {
                 } else if (selectedModel.provider === 'anthropic') {
                     if (!clientsRef.current.anthropic) throw new Error("Anthropic API Key missing");
 
+                    let searchThoughts = "";
                     let finalSystemPrompt = systemPrompt;
                     if (isSearchEnabled) {
+                        if (isThinkingEnabled) {
+                            searchThoughts += "<think>🧠 Analyzing request...</think>";
+                            updateMessage(currentSessionId, msgId, searchThoughts);
+                        }
+
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+
+                        if (isThinkingEnabled) {
+                            searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
+                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                        }
+
                         const webContext = await getWebContext(refinedQuery);
                         if (webContext) {
+                            if (isThinkingEnabled) {
+                                searchThoughts += "\n✅ Found relevant search results.</think>";
+                                updateMessage(currentSessionId, msgId, searchThoughts);
+                            }
+
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE.`;
                             searchImages(refinedQuery).then(imgs => {
                                 if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
                             });
+                        } else {
+                            if (isThinkingEnabled) {
+                                searchThoughts += "\n❌ No specific results found.</think>";
+                                updateMessage(currentSessionId, msgId, searchThoughts);
+                            }
                         }
                     }
 
@@ -694,7 +766,9 @@ export default function UnifiedAssistant() {
                         thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
                     });
 
-                    let textAccumulator = "";
+
+
+                    let textAccumulator = searchThoughts;
                     let inThinkingBlock = false;
                     for await (const chunk of stream) {
                         if (chunk.type === 'content_block_start' && chunk.content_block.type === 'thinking') {
