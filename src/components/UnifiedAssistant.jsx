@@ -143,6 +143,7 @@ const initializeClients = () => {
     const xaiKey = import.meta.env.VITE_XAI_API_KEY;
 
     const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+    const moonshotKey = import.meta.env.VITE_MOONSHOT_API_KEY || import.meta.env.VITE_KIMI_API_KEY;
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
@@ -150,6 +151,7 @@ const initializeClients = () => {
 
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
         deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: window.location.origin + "/deepseek-api/v1", dangerouslyAllowBrowser: true }) : null,
+        moonshot: moonshotKey ? new OpenAI({ apiKey: moonshotKey, baseURL: window.location.origin + "/moonshot-api/v1", dangerouslyAllowBrowser: true }) : null,
         scira: !!import.meta.env.VITE_SCIRA_API_KEY,
 
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
@@ -159,6 +161,7 @@ const initializeClients = () => {
             xai: !xaiKey,
             deepseek: !import.meta.env.VITE_DEEPSEEK_API_KEY,
             scira: !import.meta.env.VITE_SCIRA_API_KEY,
+            moonshot: !moonshotKey,
 
             anthropic: !anthropicKey
         }
@@ -520,7 +523,7 @@ export default function UnifiedAssistant() {
         const userText = input;
         setInput('');
         setIsProcessing(true);
-        setIsThinkingEnabled(false); // Reset for new message unless sticky
+        setIsProcessing(true);
 
         // Clear canvas if starting new unrelated task? No, keep context.
 
@@ -687,10 +690,11 @@ You are generating content for a specialized editor.
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
-                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek') {
+                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek' || selectedModel.provider === 'moonshot') {
                     const client = selectedModel.provider === 'openai' ? clientsRef.current.openai
                         : selectedModel.provider === 'xai' ? clientsRef.current.xai
-                            : clientsRef.current.deepseek;
+                            : selectedModel.provider === 'deepseek' ? clientsRef.current.deepseek
+                                : clientsRef.current.moonshot;
 
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
 
@@ -698,6 +702,7 @@ You are generating content for a specialized editor.
                     if (selectedModel.provider === 'deepseek' && isThinkingEnabled) targetModelId = 'deepseek-reasoner';
                     else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
                     else if (selectedModel.provider === 'openai' && isThinkingEnabled) targetModelId = 'gpt-5.2';
+                    else if (selectedModel.provider === 'moonshot' && isThinkingEnabled) targetModelId = 'kimi-k2-thinking';
 
 
                     let searchThoughts = "";
@@ -777,13 +782,37 @@ You are generating content for a specialized editor.
                         const contentChunk = delta?.content;
 
                         if (reasoningChunk) {
-                            if (!isThinking) { isThinking = true; textAccumulator += "<think>"; }
-                            textAccumulator += reasoningChunk;
-                            updateMessage(currentSessionId, msgId, textAccumulator);
+                            // Skip manual reasoning extraction for Moonshot (Kimi) as it handles tags natively in content
+                            // or sends duplicate reasoning. For others, wrap in <think>.
+                            if (selectedModel.provider !== 'moonshot') {
+                                if (!isThinking) {
+                                    isThinking = true;
+                                    // Ensure newline if there is preceding text
+                                    if (textAccumulator.length > 0 && !textAccumulator.endsWith('\n')) {
+                                        textAccumulator += "\n";
+                                    }
+                                    textAccumulator += "<think>";
+                                }
+                                // Strip tags from reasoning chunk to prevent doubling
+                                textAccumulator += reasoningChunk.replace(/<\/?think>/g, '');
+                                updateMessage(currentSessionId, msgId, textAccumulator);
+                            }
                         }
                         if (contentChunk) {
-                            if (isThinking) { isThinking = false; textAccumulator += "</think>"; }
-                            textAccumulator += contentChunk;
+                            if (isThinking) {
+                                isThinking = false;
+                                if (!textAccumulator.trim().endsWith('</think>')) {
+                                    textAccumulator += "</think>";
+                                }
+                            }
+
+                            // Strip raw thinking tags from content only for DeepSeek (to prevent duplicates)
+                            // Moonshot (Kimi) is allowed to pass tags through as we ignored its reasoning field
+                            if (selectedModel.provider === 'deepseek') {
+                                textAccumulator += contentChunk.replace(/<\/?think>/g, '');
+                            } else {
+                                textAccumulator += contentChunk;
+                            }
 
                             // Canvas Extraction (OpenAI/xAI/Deepseek)
                             const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
@@ -793,9 +822,9 @@ You are generating content for a specialized editor.
                                 const content = canvasMatch[5];
                                 setCanvasData({ type, title, content: content.trim() });
                                 const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
-                                updateMessage(currentSessionId, msgId, displayText);
+                                updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             } else {
-                                updateMessage(currentSessionId, msgId, textAccumulator);
+                                updateMessage(currentSessionId, msgId, textAccumulator.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             }
                         }
                     }

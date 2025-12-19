@@ -12,6 +12,7 @@ export const models = [
     { id: 'claude-opus-4-5', name: 'Claude 4.5 Opus', icon: BrainCircuit, color: 'text-red-400', provider: 'anthropic', thinking: true },
     { id: 'scira-default', name: 'Scira', icon: Zap, color: 'text-indigo-400', provider: 'scira', thinking: false },
     { id: 'deepseek-chat', name: 'DeepSeek V3', icon: BrainCircuit, color: 'text-cyan-400', provider: 'deepseek', thinking: true },
+    { id: 'kimi-latest', name: 'Kimi k2', icon: Sparkles, color: 'text-pink-400', provider: 'moonshot', thinking: true },
 
 ];
 
