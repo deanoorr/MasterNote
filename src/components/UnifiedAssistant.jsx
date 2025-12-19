@@ -103,9 +103,9 @@ const FormattedMessage = ({ content }) => {
                                         h3: ({ children }) => <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-100 mt-2 mb-1">{children}</h3>,
 
                                         // Lists
-                                        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-2">{children}</ul>,
-                                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-2">{children}</ol>,
-                                        li: ({ children }) => <li className="text-zinc-800 dark:text-zinc-300 [&>p]:mb-1">{children}</li>,
+                                        ul: ({ children }) => <ul className="list-disc list-outside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-5">{children}</ul>,
+                                        ol: ({ children }) => <ol className="list-decimal list-outside space-y-1 my-2 text-zinc-800 dark:text-zinc-300 ml-5">{children}</ol>,
+                                        li: ({ children }) => <li className="text-zinc-800 dark:text-zinc-300 pl-1">{children}</li>,
 
                                         // Blockquotes
                                         blockquote: ({ children }) => <blockquote className="border-l-4 border-zinc-400 dark:border-zinc-600 pl-4 italic text-zinc-600 dark:text-zinc-400 my-2">{children}</blockquote>,
@@ -966,16 +966,42 @@ You are generating content for a specialized editor.
                     let body = {};
                     if (sciraMode === 'x') {
                         endpoint = "/scira-api/api/xsearch";
-                        body = { query: userText };
+                        // Refine query with history for X search to support follow-up questions
+                        let refinedQuery = userText;
+                        if (isThinkingEnabled) {
+                            updateMessage(currentSessionId, msgId, "<think>🧠 Refining search query...</think>");
+                            refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                            updateMessage(currentSessionId, msgId, `<think>🔍 Searching X for: "${refinedQuery}"...</think>`);
+                        } else {
+                            // Silent refinement if thinking is off
+                            refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                        }
+                        body = { query: refinedQuery };
                     } else {
                         body = { messages: [{ role: "user", content: userText }] };
                     }
+
                     const response = await fetch(endpoint, {
                         method: "POST",
                         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}` },
                         body: JSON.stringify(body)
                     });
-                    const data = await response.json();
+
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => 'Unknown error');
+                        throw new Error(`Scira API Error (${response.status}): ${errorText}`);
+                    }
+
+                    const textData = await response.text();
+                    if (!textData) throw new Error("Received empty response from Scira API");
+
+                    let data;
+                    try {
+                        data = JSON.parse(textData);
+                    } catch (e) {
+                        throw new Error("Failed to parse Scira API response: " + textData.substring(0, 100));
+                    }
+
                     let text = data.text || "";
                     if (data.sources) text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
                     updateMessage(currentSessionId, msgId, text);
