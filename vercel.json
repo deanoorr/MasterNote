@@ -13,6 +13,14 @@
             "destination": "https://api.openai.com/:path*"
         },
         {
+            "source": "/moonshot-api/:path*",
+            "destination": "https://api.moonshot.ai/:path*"
+        },
+        {
+            "source": "/openrouter-api/:path*",
+            "destination": "https://openrouter.ai/api/v1/:path*"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }
