@@ -71,7 +71,7 @@ const FormattedMessage = ({ content }) => {
                                         transition={{ duration: 0.3 }}
                                         key={tIndex}
                                     >
-                                        <ThinkingProcess content={content} defaultExpanded={true} isComplete={isComplete} />
+                                        <ThinkingProcess content={content} defaultExpanded={false} isComplete={isComplete} />
                                     </motion.div>
                                 );
                             }
