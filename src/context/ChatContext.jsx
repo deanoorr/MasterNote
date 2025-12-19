@@ -52,17 +52,27 @@ export function ChatProvider({ children }) {
     };
 
     const deleteSession = (id) => {
-        setSessions(prev => {
-            const filtered = prev.filter(s => s.id !== id);
-            // If we deleted the current session, switch to the first available one
-            if (id === currentSessionId && filtered.length > 0) {
-                setCurrentSessionId(filtered[0].id);
-            } else if (filtered.length === 0) {
-                // Always keep at least one session
-                return [DEFAULT_SESSION];
+        // 1. Calculate the new list of sessions
+        const remaining = sessions.filter(s => s.id !== id);
+
+        if (remaining.length === 0) {
+            // Case 1: No sessions left. Create a brand new default session.
+            const newSession = {
+                ...DEFAULT_SESSION,
+                id: Date.now().toString(),
+                lastUpdated: Date.now()
+            };
+            setSessions([newSession]);
+            setCurrentSessionId(newSession.id);
+        } else {
+            // Case 2: Sessions remain.
+            setSessions(remaining);
+
+            // If we deleted the active session, switch to the first available one.
+            if (id === currentSessionId) {
+                setCurrentSessionId(remaining[0].id);
             }
-            return filtered;
-        });
+        }
     };
 
     const renameSession = (id, newTitle) => {
