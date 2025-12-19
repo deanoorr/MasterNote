@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { Sparkles, Zap, BrainCircuit } from 'lucide-react';
+import { Sparkles, Zap, BrainCircuit, Globe } from 'lucide-react';
 
 const ModelContext = createContext();
 
@@ -13,7 +13,7 @@ export const models = [
     { id: 'scira-default', name: 'Scira', icon: Zap, color: 'text-indigo-400', provider: 'scira', thinking: false },
     { id: 'deepseek-chat', name: 'DeepSeek V3', icon: BrainCircuit, color: 'text-cyan-400', provider: 'deepseek', thinking: true },
     { id: 'kimi-latest', name: 'Kimi k2', icon: Sparkles, color: 'text-pink-400', provider: 'moonshot', thinking: true },
-    { id: 'openrouter-auto', name: 'All Models', icon: Zap, color: 'text-violet-400', provider: 'openrouter', thinking: false },
+    { id: 'openrouter-auto', name: 'All Models', icon: Globe, color: 'text-zinc-500 dark:text-zinc-400', provider: 'openrouter', thinking: false },
 ];
 
 export function ModelProvider({ children }) {

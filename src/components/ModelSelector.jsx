@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, Search, Check } from 'lucide-react';
+import { ChevronDown, Search, Check, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useModel } from '../context/ModelContext';
 
@@ -108,24 +108,28 @@ export default function ModelSelector() {
                             className="absolute left-0 bottom-full mb-2 w-52 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-black/80 backdrop-blur-xl shadow-xl overflow-hidden z-20"
                         >
                             <div className="p-1.5 space-y-0.5">
-                                {models.map((model) => (
-                                    <button
-                                        key={model.id}
-                                        onClick={() => {
-                                            setSelectedModel(model);
-                                            setIsOpen(false);
-                                        }}
-                                        className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition-colors ${selectedModel.id === model.id
-                                            ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white'
-                                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5'
-                                            }`}
-                                    >
-                                        <model.icon size={14} className={model.color} />
-                                        <span className="font-medium">{model.name}</span>
-                                        {selectedModel.id === model.id && (
-                                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                {models.map((model, index) => (
+                                    <React.Fragment key={model.id}>
+                                        {model.id === 'openrouter-auto' && index > 0 && (
+                                            <div className="my-1 border-t border-zinc-200 dark:border-white/10 mx-2" />
                                         )}
-                                    </button>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedModel(model);
+                                                setIsOpen(false);
+                                            }}
+                                            className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-xs transition-colors ${selectedModel.id === model.id
+                                                ? 'bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white'
+                                                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5'
+                                                } ${model.id === 'openrouter-auto' ? 'font-semibold text-zinc-600 dark:text-zinc-300' : ''}`}
+                                        >
+                                            <model.icon size={14} className={model.color} />
+                                            <span className="font-medium">{model.name}</span>
+                                            {selectedModel.id === model.id && (
+                                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                                            )}
+                                        </button>
+                                    </React.Fragment>
                                 ))}
                             </div>
                         </motion.div>
@@ -145,6 +149,7 @@ export default function ModelSelector() {
                         }}
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-black/20 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 group"
                     >
+                        <Globe size={14} className="text-zinc-500 dark:text-zinc-400" />
                         <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200 max-w-[150px] truncate">
                             {selectedOpenRouterModel ? selectedOpenRouterModel.name : 'Select Model'}
                         </span>
