@@ -26,6 +26,11 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/moonshot-api/, ''),
             },
+            '/openrouter-api': {
+                target: 'https://openrouter.ai/api/v1',
+                changeOrigin: true,
+                rewrite: (path) => path.replace(/^\/openrouter-api/, ''),
+            },
         },
     },
 });

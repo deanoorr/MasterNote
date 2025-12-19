@@ -13,14 +13,41 @@ export const models = [
     { id: 'scira-default', name: 'Scira', icon: Zap, color: 'text-indigo-400', provider: 'scira', thinking: false },
     { id: 'deepseek-chat', name: 'DeepSeek V3', icon: BrainCircuit, color: 'text-cyan-400', provider: 'deepseek', thinking: true },
     { id: 'kimi-latest', name: 'Kimi k2', icon: Sparkles, color: 'text-pink-400', provider: 'moonshot', thinking: true },
-
+    { id: 'openrouter-auto', name: 'OpenRouter', icon: Zap, color: 'text-violet-400', provider: 'openrouter', thinking: false },
 ];
 
 export function ModelProvider({ children }) {
     const [selectedModel, setSelectedModel] = useState(models[3]); // Default to Grok 4.1
+    const [openRouterModels, setOpenRouterModels] = useState([]);
+    const [selectedOpenRouterModel, setSelectedOpenRouterModel] = useState(null);
+
+    const fetchOpenRouterModels = async () => {
+        try {
+            const response = await fetch('/openrouter-api/models');
+            if (response.ok) {
+                const data = await response.json();
+                setOpenRouterModels(data.data.sort((a, b) => a.name.localeCompare(b.name)));
+                if (!selectedOpenRouterModel && data.data.length > 0) {
+                    // Default to a popular free model or just the first one if not set
+                    const defaultModel = data.data.find(m => m.id === 'google/gemini-2.0-flash-exp:free') || data.data[0];
+                    setSelectedOpenRouterModel(defaultModel);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch OpenRouter models:", error);
+        }
+    };
 
     return (
-        <ModelContext.Provider value={{ selectedModel, setSelectedModel, models }}>
+        <ModelContext.Provider value={{
+            selectedModel,
+            setSelectedModel,
+            models,
+            openRouterModels,
+            selectedOpenRouterModel,
+            setSelectedOpenRouterModel,
+            fetchOpenRouterModels
+        }}>
             {children}
         </ModelContext.Provider>
     );

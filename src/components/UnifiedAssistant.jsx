@@ -144,6 +144,7 @@ const initializeClients = () => {
 
     const anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
     const moonshotKey = import.meta.env.VITE_MOONSHOT_API_KEY || import.meta.env.VITE_KIMI_API_KEY;
+    const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
 
     return {
         genAI: googleKey ? new GoogleGenerativeAI(googleKey) : null,
@@ -152,6 +153,7 @@ const initializeClients = () => {
         xai: xaiKey ? new OpenAI({ apiKey: xaiKey, baseURL: "https://api.x.ai/v1", dangerouslyAllowBrowser: true }) : null,
         deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY ? new OpenAI({ apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY, baseURL: window.location.origin + "/deepseek-api/v1", dangerouslyAllowBrowser: true }) : null,
         moonshot: moonshotKey ? new OpenAI({ apiKey: moonshotKey, baseURL: window.location.origin + "/moonshot-api/v1", dangerouslyAllowBrowser: true }) : null,
+        openrouter: openRouterKey ? new OpenAI({ apiKey: openRouterKey, baseURL: window.location.origin + "/openrouter-api", dangerouslyAllowBrowser: true }) : null,
         scira: !!import.meta.env.VITE_SCIRA_API_KEY,
 
         anthropic: anthropicKey ? new Anthropic({ apiKey: anthropicKey, dangerouslyAllowBrowser: true }) : null,
@@ -162,6 +164,7 @@ const initializeClients = () => {
             deepseek: !import.meta.env.VITE_DEEPSEEK_API_KEY,
             scira: !import.meta.env.VITE_SCIRA_API_KEY,
             moonshot: !moonshotKey,
+            openrouter: !openRouterKey,
 
             anthropic: !anthropicKey
         }
@@ -211,7 +214,7 @@ export default function UnifiedAssistant() {
         document.body.style.userSelect = 'none';
     };
 
-    const { selectedModel } = useModel();
+    const { selectedModel, selectedOpenRouterModel } = useModel();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [input, setInput] = useState('');
 
@@ -690,11 +693,12 @@ You are generating content for a specialized editor.
                         updateMessage(currentSessionId, msgId, textAccumulator);
                     }
 
-                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek' || selectedModel.provider === 'moonshot') {
+                } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek' || selectedModel.provider === 'moonshot' || selectedModel.provider === 'openrouter') {
                     const client = selectedModel.provider === 'openai' ? clientsRef.current.openai
                         : selectedModel.provider === 'xai' ? clientsRef.current.xai
                             : selectedModel.provider === 'deepseek' ? clientsRef.current.deepseek
-                                : clientsRef.current.moonshot;
+                                : selectedModel.provider === 'moonshot' ? clientsRef.current.moonshot
+                                    : clientsRef.current.openrouter;
 
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
 
@@ -703,6 +707,10 @@ You are generating content for a specialized editor.
                     else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
                     else if (selectedModel.provider === 'openai' && isThinkingEnabled) targetModelId = 'gpt-5.2';
                     else if (selectedModel.provider === 'moonshot' && isThinkingEnabled) targetModelId = 'kimi-k2-thinking';
+                    else if (selectedModel.provider === 'openrouter') {
+                        if (!selectedOpenRouterModel) throw new Error("Please select an OpenRouter model");
+                        targetModelId = selectedOpenRouterModel.id;
+                    }
 
 
                     let searchThoughts = "";
