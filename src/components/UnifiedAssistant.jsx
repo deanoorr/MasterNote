@@ -1314,9 +1314,9 @@ You are generating content for a specialized editor.
                         </motion.button>
 
                         <button
-                            onClick={() => clearSession(currentSessionId)}
+                            onClick={() => deleteSession(currentSessionId)}
                             className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                            title="Clear Chat"
+                            title="Delete Chat"
                         >
                             <Trash2 size={18} />
                         </button>

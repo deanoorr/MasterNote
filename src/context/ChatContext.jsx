@@ -6,7 +6,8 @@ const DEFAULT_SESSION = {
     id: 'default',
     title: 'New Chat',
     messages: [{ id: 1, role: 'ai', content: "I'm ready. Switch modes to create tasks or chat with me.", timestamp: 'Now' }],
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
+    folderId: null
 };
 
 export function ChatProvider({ children }) {
@@ -41,7 +42,7 @@ export function ChatProvider({ children }) {
             title: 'New Chat',
             messages: [{ id: Date.now(), role: 'ai', content: "New session started.", timestamp: 'Now' }],
             lastUpdated: Date.now(),
-            folderId: folderId
+            folderId: folderId || null
         };
         setSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
