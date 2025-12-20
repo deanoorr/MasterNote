@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
@@ -21,86 +20,299 @@ export function ChatProvider({ children }) {
     const [chatFolderMap, setChatFolderMap] = useState({}); // { chatId: folderId }
 
     const isHydrated = useRef(false);
+    const sessionsRef = useRef(sessions);
+    const currentSessionIdRef = useRef(currentSessionId);
 
-    // Initial Fetch
+    // Keep refs synced
     useEffect(() => {
-        if (!user) {
-            setSessions([DEFAULT_SESSION]);
-            setFolders([]);
-            return;
-        }
+        sessionsRef.current = sessions;
+    }, [sessions]);
 
-        const fetchChats = async () => {
+    useEffect(() => {
+        currentSessionIdRef.current = currentSessionId;
+    }, [currentSessionId]);
+
+
+    // Initial Fetch (Local Storage for Chats, Supabase for Settings)
+    useEffect(() => {
+        const fetchData = async () => {
+            console.log('DEBUG: fetchData (Local-Only Chats) running...');
             try {
-                // Fetch chats
-                const { data: chatsData, error: chatsError } = await supabase
-                    .from('chats')
-                    .select('*')
-                    .order('updated_at', { ascending: false });
+                // 1. Load Chats from LocalStorage
+                let loadedSessions = [];
+                try {
+                    const saved = localStorage.getItem('bart_chats_backup');
+                    if (saved) {
+                        loadedSessions = JSON.parse(saved);
+                        // Ensure dates are parsed correctly if needed, or just trust the structure
+                        // Sort by lastUpdated
+                        loadedSessions.sort((a, b) => b.lastUpdated - a.lastUpdated);
+                    }
+                } catch (err) {
+                    console.error('Error loading local chats:', err);
+                }
 
-                if (chatsError) throw chatsError;
+                if (loadedSessions.length === 0) {
+                    loadedSessions = [DEFAULT_SESSION];
+                }
 
-                // Fetch folders from settings
-                const { data: settingsData } = await supabase
-                    .from('settings')
-                    .select('preferences')
-                    .eq('user_id', user.id)
-                    .single();
+                setSessions(loadedSessions);
 
-                const prefs = settingsData?.preferences || {};
-                const loadedFolders = prefs.folders || [];
-                const loadedMap = prefs.chatFolderMap || {};
+                // 2. Load Folders/Settings from Supabase (if user exists)
+                // We keep this responsive to the user state for folder sync
+                let loadedFolders = [];
+                let loadedMap = {};
 
-                setFolders(loadedFolders);
-                setChatFolderMap(loadedMap);
+                if (user) {
+                    try {
+                        const { data: settingsData } = await supabase
+                            .from('settings')
+                            .select('preferences')
+                            .eq('user_id', user.id)
+                            .single();
 
-                // Map chats to session format
-                const loadedSessions = chatsData.map(c => ({
-                    id: c.id,
-                    title: c.title || 'New Chat',
-                    messages: c.messages || [],
-                    model: c.model,
-                    lastUpdated: new Date(c.updated_at).getTime(),
-                    folderId: loadedMap[c.id] || null
-                }));
+                        const prefs = settingsData?.preferences || {};
+                        loadedFolders = prefs.folders || [];
+                        loadedMap = prefs.chatFolderMap || {};
 
-                if (loadedSessions.length > 0) {
-                    setSessions(loadedSessions);
-                    // Retrieve last active session from prefs or default to first
-                    const lastId = prefs.lastSessionId;
-                    if (lastId && loadedSessions.find(s => s.id === lastId)) {
-                        setCurrentSessionId(lastId);
-                    } else {
+                        // Check for saved lastSessionId
+                        if (prefs.lastSessionId) {
+                            // Verify it exists in our local sessions
+                            if (loadedSessions.find(s => s.id === prefs.lastSessionId)) {
+                                setCurrentSessionId(prefs.lastSessionId);
+                            } else {
+                                setCurrentSessionId(loadedSessions[0].id);
+                            }
+                        } else {
+                            setCurrentSessionId(loadedSessions[0].id);
+                        }
+
+                    } catch (e) {
+                        console.warn("Settings fetch failed, using defaults", e);
                         setCurrentSessionId(loadedSessions[0].id);
                     }
                 } else {
-                    setSessions([DEFAULT_SESSION]); // Keep default locally until first save? Or empty.
-                    // If empty, creating a new session might be better behavior.
-                    // Let's create one immediately on server? 
-                    // No, let's keep local default and save it when used.
-                    // Actually, for consistency, let's just create one.
-                    // await createSession() ? No, let's just leave it empty logic or local default.
-                    // Using local default for now.
-                    setCurrentSessionId('default');
+                    // No user, just default to first session
+                    setCurrentSessionId(loadedSessions[0].id);
                 }
 
+                setFolders(loadedFolders);
+                setChatFolderMap(loadedMap);
                 isHydrated.current = true;
+
             } catch (error) {
-                console.error("Error loading chats:", error);
+                console.error("Error initializing context:", error);
             }
         };
 
-        fetchChats();
-    }, [user]);
+        fetchData();
+    }, [user?.id]); // Re-run if user changes (mostly for settings)
 
-    // Save current session ID preference
+    // Save Last Session ID Preference (Supabase)
     useEffect(() => {
-        if (!user || !isHydrated.current) return;
-        // Debounce or just save on change?
-        // Let's skip saving every switch to DB to avoid spam.
+        if (!user || !isHydrated.current || currentSessionId === 'default') return;
+
+        const saveLastSession = async () => {
+            // We only save the PREFERENCE of where they were, not the chats themselves.
+            const { data } = await supabase.from('settings').select('preferences').eq('user_id', user.id).single();
+            const currentPrefs = data?.preferences || {};
+            if (currentPrefs.lastSessionId === currentSessionId) return;
+
+            await supabase.from('settings').upsert({
+                user_id: user.id,
+                preferences: { ...currentPrefs, lastSessionId: currentSessionId }
+            });
+        };
+        const timer = setTimeout(saveLastSession, 1000);
+        return () => clearTimeout(timer);
     }, [currentSessionId, user]);
 
-    const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+
+    // Helper: Save Sessions to LocalStorage
+    const saveToLocalStorage = (newSessions) => {
+        try {
+            localStorage.setItem('bart_chats_backup', JSON.stringify(newSessions));
+        } catch (e) {
+            console.error("Failed to save chats locally:", e);
+        }
+    };
+
+    const createSession = async (folderId = null) => {
+        // purely local creation
+        const newSession = {
+            id: Date.now().toString(),
+            title: 'New Chat',
+            messages: [{ id: Date.now(), role: 'ai', content: "New session started.", timestamp: 'Now' }],
+            lastUpdated: Date.now(),
+            folderId: folderId || null
+        };
+
+        setSessions(prev => {
+            const updated = [newSession, ...prev];
+            saveToLocalStorage(updated);
+            return updated;
+        });
+        setCurrentSessionId(newSession.id);
+
+        if (folderId && user) {
+            const newMap = { ...chatFolderMap, [newSession.id]: folderId };
+            setChatFolderMap(newMap);
+            await saveFoldersAndMap(folders, newMap);
+        }
+    };
+
+    const switchSession = (id) => {
+        setCurrentSessionId(id);
+    };
+
+    const deleteSession = async (id) => {
+        let nextId = currentSessionId;
+
+        let updatedSessions = [];
+
+        setSessions(prev => {
+            const remaining = prev.filter(s => s.id !== id);
+
+            if (remaining.length === 0) {
+                const newDefault = { ...DEFAULT_SESSION, id: Date.now().toString(), lastUpdated: Date.now() };
+                updatedSessions = [newDefault];
+                nextId = newDefault.id;
+            } else {
+                updatedSessions = remaining;
+                if (currentSessionId === id) {
+                    nextId = remaining[0].id;
+                }
+            }
+
+            saveToLocalStorage(updatedSessions);
+            return updatedSessions;
+        });
+
+        setCurrentSessionId(nextId);
+
+        // Clean up folder map
+        if (chatFolderMap[id]) {
+            const newMap = { ...chatFolderMap };
+            delete newMap[id];
+            setChatFolderMap(newMap);
+            if (user) await saveFoldersAndMap(folders, newMap);
+        }
+
+        // NO Supabase delete for chats
+    };
+
+    const renameSession = async (id, newTitle) => {
+        setSessions(prev => {
+            const updated = prev.map(s => s.id === id ? { ...s, title: newTitle } : s);
+            saveToLocalStorage(updated);
+            return updated;
+        });
+        // NO Supabase update
+    };
+
+    const clearSession = async (id) => {
+        setSessions(prev => {
+            const updated = prev.map(s => s.id === id ? { ...s, messages: [] } : s);
+            saveToLocalStorage(updated);
+            return updated;
+        });
+        // NO Supabase update
+    };
+
+    const addMessageToSession = async (sessionId, message) => {
+        let activeSessionId = sessionId;
+
+        // 1. Handle "default" session promotion -> Just make it a real local session
+        if (activeSessionId === 'default') {
+            const newId = Date.now().toString();
+            const newSession = {
+                id: newId,
+                title: 'New Chat',
+                messages: [message],
+                lastUpdated: Date.now(),
+                folderId: null
+            };
+
+            setSessions(prev => {
+                const updated = prev.map(s => s.id === 'default' ? newSession : s);
+                saveToLocalStorage(updated);
+                return updated;
+            });
+            setCurrentSessionId(newId);
+            return newId;
+        }
+
+        // 2. Standard Update (Existing Session)
+        setSessions(prev => {
+            const updated = prev.map(s => {
+                if (s.id === activeSessionId) {
+                    return {
+                        ...s,
+                        messages: [...s.messages, message],
+                        lastUpdated: Date.now()
+                    };
+                }
+                return s;
+            });
+            saveToLocalStorage(updated);
+            return updated;
+        });
+
+        // NO Supabase Update
+        return activeSessionId;
+    };
+
+    // Throttled saver to avoid hammering LocalStorage during streaming
+    // WE MUST USE REFS to track pending data, otherwise the closure captures STALE data (the first chunk)
+    const throttledSaveTimer = useRef(null);
+    const pendingSaveData = useRef(null);
+
+    const saveToLocalStorageThrottled = (newSessions) => {
+        // Always update the pending data to the LATEST state
+        pendingSaveData.current = newSessions;
+
+        if (throttledSaveTimer.current) return;
+
+        throttledSaveTimer.current = setTimeout(() => {
+            if (pendingSaveData.current) {
+                saveToLocalStorage(pendingSaveData.current);
+                pendingSaveData.current = null;
+            }
+            throttledSaveTimer.current = null;
+        }, 1000); // Save max once per second
+    };
+
+    const updateMessage = (sessionId, messageId, newContent, extras = null) => {
+        setSessions(prev => {
+            const updated = prev.map(s => {
+                if (s.id === sessionId) {
+                    const newMessages = s.messages.map(m =>
+                        m.id === messageId
+                            ? { ...m, content: newContent !== null ? newContent : m.content, ...(extras || {}) }
+                            : m
+                    );
+                    return { ...s, messages: newMessages, lastUpdated: Date.now() };
+                }
+                return s;
+            });
+
+            // Save periodically during stream
+            saveToLocalStorageThrottled(updated);
+
+            return updated;
+        });
+    };
+
+    // Helper to force save (Called when streaming finishes)
+    const persistSession = async (sessionId) => {
+        // Trigger a save of the current state ref
+        // We use the Ref ensuring we capture the latest state from updateMessage
+        const session = sessionsRef.current.find(s => s.id === sessionId);
+        if (session) {
+            console.log(`DEBUG: Persisting messages count: ${session.messages.length}`);
+            saveToLocalStorage(sessionsRef.current);
+        }
+    };
 
     const saveFoldersAndMap = async (newFolders, newMap) => {
         if (!user) return;
@@ -116,185 +328,9 @@ export function ChatProvider({ children }) {
         });
     };
 
-    const createSession = async (folderId = null) => {
-        if (!user) {
-            const newSession = {
-                id: Date.now().toString(),
-                title: 'New Chat',
-                messages: [{ id: Date.now(), role: 'ai', content: "New session started.", timestamp: 'Now' }],
-                lastUpdated: Date.now(),
-                folderId: folderId || null
-            };
-            setSessions(prev => [newSession, ...prev]);
-            setCurrentSessionId(newSession.id);
-            return;
-        }
-
-        const newMsg = { id: Date.now(), role: 'ai', content: "New session started.", timestamp: 'Now' };
-
-        try {
-            const { data, error } = await supabase.from('chats').insert([{
-                user_id: user.id,
-                title: 'New Chat',
-                messages: [newMsg]
-            }]).select().single();
-
-            if (error) throw error;
-
-            const newSession = {
-                id: data.id,
-                title: data.title,
-                messages: data.messages,
-                lastUpdated: new Date(data.created_at).getTime(),
-                folderId: folderId
-            };
-
-            setSessions(prev => [newSession, ...prev]);
-            setCurrentSessionId(newSession.id);
-
-            if (folderId) {
-                const newMap = { ...chatFolderMap, [data.id]: folderId };
-                setChatFolderMap(newMap);
-                await saveFoldersAndMap(folders, newMap);
-            }
-
-        } catch (e) {
-            console.error("Error creating session:", e);
-        }
-    };
-
-    const switchSession = (id) => {
-        setCurrentSessionId(id);
-    };
-
-    const deleteSession = async (id) => {
-        // Determine the next session ID *before* state updates
-        let nextId = currentSessionId;
-        const remaining = sessions.filter(s => s.id !== id);
-
-        if (remaining.length === 0) {
-            // If deleting the last session, create a new default one
-            const newSession = {
-                ...DEFAULT_SESSION,
-                id: Date.now().toString(),
-                lastUpdated: Date.now()
-            };
-            setSessions([newSession]);
-            nextId = newSession.id;
-        } else {
-            setSessions(remaining);
-            if (currentSessionId === id) {
-                // If we deleted the active session, switch to the first available one
-                nextId = remaining[0].id;
-            }
-        }
-
-        setCurrentSessionId(nextId);
-
-        if (!user) return;
-
-        // Remove from map
-        if (chatFolderMap[id]) {
-            const newMap = { ...chatFolderMap };
-            delete newMap[id];
-            setChatFolderMap(newMap); // Update local state immediately
-            // We can try to save map, but maybe await to avoid race? 
-            // The function implies fire-and-forget for map, wait for delete.
-            await saveFoldersAndMap(folders, newMap);
-        }
-
-        await supabase.from('chats').delete().eq('id', id);
-    };
-
-    const renameSession = async (id, newTitle) => {
-        setSessions(prev => prev.map(s => s.id === id ? { ...s, title: newTitle } : s));
-        if (!user) return;
-        await supabase.from('chats').update({ title: newTitle }).eq('id', id);
-    };
-
-    const clearSession = async (id) => {
-        const clearedMessages = [];
-        setSessions(prev => prev.map(s => s.id === id ? { ...s, messages: clearedMessages } : s));
-        if (!user) return;
-        await supabase.from('chats').update({ messages: clearedMessages }).eq('id', id);
-    };
-
-    const addMessageToSession = async (sessionId, message) => {
-        setSessions(prev => prev.map(s => {
-            if (s.id === sessionId) {
-                return {
-                    ...s,
-                    messages: [...s.messages, message],
-                    lastUpdated: Date.now()
-                };
-            }
-            return s;
-        }));
-
-        if (!user) return;
-
-        // DB update
-        // Need to get current messages? Or rely on state?
-        // State might be slightly ahead/behind logic, but for chats sync it's OK to use updated state
-        // BUT `setSessions` is async. We can't use `s` from map directly easily outside.
-        // Let's update DB with the new array.
-        const session = sessions.find(s => s.id === sessionId);
-        const newMessages = session ? [...session.messages, message] : [message];
-
-        await supabase.from('chats').update({
-            messages: newMessages,
-            updated_at: new Date().toISOString()
-        }).eq('id', sessionId);
-    };
-
-    // Updates an existing message in a session (for streaming)
-    // Debounce this? Streaming updates happen fast.
-    const updateMessage = (sessionId, messageId, newContent, extras = null) => {
-        setSessions(prev => prev.map(s => {
-            if (s.id === sessionId) {
-                const newMessages = s.messages.map(m =>
-                    m.id === messageId
-                        ? { ...m, content: newContent !== null ? newContent : m.content, ...(extras || {}) }
-                        : m
-                );
-
-                // We typically don't await DB on every char update. 
-                // Only save when streaming is "done"? 
-                // The caller typically doesn't signal "done" via this function explicitly.
-                // But for now let's just update local state. Persistence might lag.
-                // Actually, let's create a dedicated "saveSession" function that caller can call, 
-                // OR just debounce the DB save. For now, to ensure correctness, I'll NOT save on every char.
-                // I'll rely on the caller to call `saveAiResponse` or I should implement a debouncer here.
-
-                return {
-                    ...s,
-                    messages: newMessages,
-                    lastUpdated: Date.now()
-                };
-            }
-            return s;
-        }));
-    };
-
-    // Helper to force save (can be used by UI when streaming finishes)
-    const persistSession = async (sessionId) => {
-        if (!user) return;
-        const session = sessions.find(s => s.id === sessionId);
-        if (session) {
-            await supabase.from('chats').update({
-                messages: session.messages,
-                updated_at: new Date().toISOString()
-            }).eq('id', sessionId);
-        }
-    }
-
     // --- Folder Logic ---
     const addFolder = async (name) => {
-        const newFolder = {
-            id: 'folder_' + Date.now(),
-            name: name,
-            createdAt: Date.now()
-        };
+        const newFolder = { id: 'folder_' + Date.now(), name: name, createdAt: Date.now() };
         const newFolders = [...folders, newFolder];
         setFolders(newFolders);
         if (user) await saveFoldersAndMap(newFolders, chatFolderMap);
@@ -302,16 +338,16 @@ export function ChatProvider({ children }) {
 
     const deleteFolder = async (id) => {
         const newFolders = folders.filter(f => f.id !== id);
-
-        // Reset sessions in that folder to null folder locally and in map
         const newMap = { ...chatFolderMap };
-        Object.keys(newMap).forEach(k => {
-            if (newMap[k] === id) delete newMap[k];
-        });
+        Object.keys(newMap).forEach(k => { if (newMap[k] === id) delete newMap[k]; });
 
         setFolders(newFolders);
         setChatFolderMap(newMap);
-        setSessions(prev => prev.map(s => s.folderId === id ? { ...s, folderId: null } : s));
+        setSessions(prev => {
+            const updated = prev.map(s => s.folderId === id ? { ...s, folderId: null } : s);
+            saveToLocalStorage(updated);
+            return updated;
+        });
 
         if (user) await saveFoldersAndMap(newFolders, newMap);
     };
@@ -323,7 +359,11 @@ export function ChatProvider({ children }) {
     };
 
     const moveSessionToFolder = async (sessionId, folderId) => {
-        setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, folderId } : s));
+        setSessions(prev => {
+            const updated = prev.map(s => s.id === sessionId ? { ...s, folderId } : s);
+            saveToLocalStorage(updated);
+            return updated;
+        });
         const newMap = { ...chatFolderMap, [sessionId]: folderId };
         setChatFolderMap(newMap);
         if (user) await saveFoldersAndMap(folders, newMap);
@@ -334,7 +374,7 @@ export function ChatProvider({ children }) {
             sessions,
             folders,
             currentSessionId,
-            currentSession,
+            currentSession: sessions.find(s => s.id === currentSessionId) || sessions[0],
             createSession,
             switchSession,
             deleteSession,

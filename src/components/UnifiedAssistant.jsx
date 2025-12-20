@@ -312,7 +312,8 @@ export default function UnifiedAssistant() {
         deleteFolder,
         renameFolder,
         moveSessionToFolder,
-        renameSession
+        renameSession,
+        persistSession
     } = useChat();
 
     // --- Sidebar State ---
@@ -567,7 +568,18 @@ export default function UnifiedAssistant() {
                 attachments: attachments,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
-            addMessageToSession(currentSessionId, userMsg);
+
+            // Add message and potentially GET NEW SESSION ID if we just promoted 'default'
+            const newSessionId = await addMessageToSession(currentSessionId, userMsg);
+            const activeSessionId = newSessionId || currentSessionId;
+
+            // If the ID changed (e.g. 'default' -> '123' OR 'default' -> 'offline_123')
+            // we MUST ensure subsequent operations in this function use the new ID.
+            // Also, if context didn't update fast enough, we manually switch locally?
+            // Actually, addMessageToSession already called switchSession internally.
+            // But 'currentSessionId' in this closure is stale.
+            // We use 'activeSessionId' variable for rest of function. Good.
+
             const currentAttachments = [...attachments];
             setAttachments([]);
 
@@ -581,7 +593,7 @@ export default function UnifiedAssistant() {
                         const jsonStr = weatherMatch[1].trim();
                         const data = JSON.parse(jsonStr);
                         if (data && data.current) {
-                            updateMessage(currentSessionId, msgId, null, {
+                            updateMessage(activeSessionId, msgId, null, {
                                 weatherData: data,
                                 weatherLocation: data.location || { name: 'Unknown' }
                             });
@@ -599,7 +611,7 @@ export default function UnifiedAssistant() {
                         const jsonStr = financeMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
-                            updateMessage(currentSessionId, msgId, null, {
+                            updateMessage(activeSessionId, msgId, null, {
                                 financeData: data
                             });
                         }
@@ -617,7 +629,7 @@ export default function UnifiedAssistant() {
                         const jsonStr = sportsMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
-                            updateMessage(currentSessionId, msgId, null, {
+                            updateMessage(activeSessionId, msgId, null, {
                                 sportsData: data
                             });
                         }
@@ -635,7 +647,7 @@ export default function UnifiedAssistant() {
                         const jsonStr = techMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
-                            updateMessage(currentSessionId, msgId, null, {
+                            updateMessage(activeSessionId, msgId, null, {
                                 techData: data
                             });
                         }
@@ -644,13 +656,16 @@ export default function UnifiedAssistant() {
                 return fullText.replace(/```json\s*<tech_json>[\s\S]*?<\/tech_json>\s*```/g, '')
                     .replace(/<tech_json>[\s\S]*?(?:<\/tech_json>|$)/g, '');
             };
-
-            addMessageToSession(currentSessionId, {
+            // Add AI Placeholder - using the CORRECT session ID
+            // Note: User message add above handles potential session promotion and returns new ID.
+            const aiPlaceholderMsg = {
                 id: msgId,
                 role: 'ai',
-                content: '',
+                content: '', // Initial empty content
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            });
+            };
+
+            await addMessageToSession(activeSessionId, aiPlaceholderMsg);
 
 
             try {
@@ -781,7 +796,8 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     if (isSearchEnabled) {
                         if (isThinkingEnabled) {
                             searchThoughts += "<think>🧠 Analyzing request...</think>";
-                            updateMessage(currentSessionId, msgId, searchThoughts);
+                            // updateMessage(currentSessionId, msgId, searchThoughts); // Removed duplicate
+                            updateMessage(activeSessionId, msgId, searchThoughts);
                         }
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
@@ -789,12 +805,12 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
 
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
-                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                            updateMessage(activeSessionId, msgId, searchThoughts + "</think>");
                         }
 
                         if (isThinkingEnabled) {
                             searchThoughts += "\n✅ Handing off to Google Search Tool.</think>";
-                            updateMessage(currentSessionId, msgId, searchThoughts);
+                            updateMessage(activeSessionId, msgId, searchThoughts);
                         }
                     }
 
@@ -827,28 +843,38 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         return fullText;
                     };
 
-                    for await (const chunk of result.stream) {
-                        textAccumulator += chunk.text();
-                        const metadata = chunk.candidates?.[0]?.groundingMetadata;
-                        if (metadata?.groundingChunks) {
-                            metadata.groundingChunks.forEach(chunk => {
-                                if (chunk.web?.uri) gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
-                            });
+                    try {
+                        for await (const chunk of result.stream) {
+                            textAccumulator += chunk.text();
+                            const metadata = chunk.candidates?.[0]?.groundingMetadata;
+                            if (metadata?.groundingChunks) {
+                                metadata.groundingChunks.forEach(chunk => {
+                                    if (chunk.web?.uri) gatheredSources.add(`[${chunk.web.title || 'Source'}](${chunk.web.uri})`);
+                                });
+                            }
+
+                            let displayText = processCanvasUpdates(textAccumulator);
+                            displayText = processWeatherUpdates(displayText);
+                            displayText = processFinanceUpdates(displayText);
+                            displayText = processSportsUpdates(displayText);
+                            displayText = processTechUpdates(displayText);
+                            updateMessage(activeSessionId, msgId, displayText);
                         }
 
-                        let displayText = processCanvasUpdates(textAccumulator);
-                        displayText = processWeatherUpdates(displayText);
-                        displayText = processFinanceUpdates(displayText);
-                        displayText = processSportsUpdates(displayText);
-                        displayText = processTechUpdates(displayText);
-                        updateMessage(currentSessionId, msgId, displayText);
-                    }
+                        if (gatheredSources.size > 0) {
+                            textAccumulator += "\n\n**Sources:**\n" + Array.from(gatheredSources).map(s => `- ${s}`).join("\n");
+                            updateMessage(activeSessionId, msgId, textAccumulator);
+                        }
 
-                    if (gatheredSources.size > 0) {
-                        textAccumulator += "\n\n**Sources:**\n" + Array.from(gatheredSources).map(s => `- ${s}`).join("\n");
-                        updateMessage(currentSessionId, msgId, textAccumulator);
+                        // Final Persist to DB once streaming is complete
+                        await persistSession(activeSessionId);
+                        setIsProcessing(false);
+                        setIsThinkingEnabled(false);
+                    } catch (e) {
+                        console.error("Chat Error:", e);
+                        updateMessage(activeSessionId, msgId, "Error generating response. Please try again.");
+                        setIsProcessing(false);
                     }
-
                 } else if (selectedModel.provider === 'openai' || selectedModel.provider === 'xai' || selectedModel.provider === 'deepseek' || selectedModel.provider === 'moonshot' || selectedModel.provider === 'openrouter') {
                     const client = selectedModel.provider === 'openai' ? clientsRef.current.openai
                         : selectedModel.provider === 'xai' ? clientsRef.current.xai
@@ -885,7 +911,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     if (isSearchEnabled) {
                         if (isThinkingEnabled) {
                             searchThoughts += "<think>🧠 Analyzing request...</think>";
-                            updateMessage(currentSessionId, msgId, searchThoughts);
+                            updateMessage(activeSessionId, msgId, searchThoughts);
                         }
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
@@ -893,114 +919,125 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
 
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
-                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                            updateMessage(activeSessionId, msgId, searchThoughts + "</think>");
                         }
 
                         const webContext = await getWebContext(refinedQuery);
                         if (webContext) {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n✅ Found relevant search results.</think>";
-                                updateMessage(currentSessionId, msgId, searchThoughts);
+                                updateMessage(activeSessionId, msgId, searchThoughts);
                             }
 
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE: [Domain](URL).`;
                         } else {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n❌ No specific results found.</think>";
-                                updateMessage(currentSessionId, msgId, searchThoughts);
+                                updateMessage(activeSessionId, msgId, searchThoughts);
                             }
                         }
                     }
 
-                    const stream = await client.chat.completions.create({
-                        messages: [
-                            { role: "system", content: finalSystemPrompt },
-                            ...historyForModel,
-                            {
-                                role: "user",
-                                content: [
-                                    { type: "text", text: userText + (mode === 'canvas' ? `\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)` : "") + (canvasData ? `\n\nCURRENT CANVAS CONTENT (${canvasData.type}):\n${canvasData.content}` : "") },
-                                    ...validAttachments.map(att => ({
-                                        type: "image_url",
-                                        image_url: { url: att.preview }
-                                    }))
-                                ]
-                            }
-                        ],
-                        model: targetModelId,
-                        stream: true,
-                        reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
-                    });
+                    try {
+                        const stream = await client.chat.completions.create({
+                            messages: [
+                                { role: "system", content: finalSystemPrompt },
+                                ...historyForModel,
+                                {
+                                    role: "user",
+                                    content: [
+                                        { type: "text", text: userText + (mode === 'canvas' ? `\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)` : "") + (canvasData ? `\n\nCURRENT CANVAS CONTENT (${canvasData.type}):\n${canvasData.content}` : "") },
+                                        ...validAttachments.map(att => ({
+                                            type: "image_url",
+                                            image_url: { url: att.preview }
+                                        }))
+                                    ]
+                                }
+                            ],
+                            model: targetModelId,
+                            stream: true,
+                            reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
+                        });
 
-                    let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
-                    // Initial update if we have a warning
-                    if (skippedFilesWarning) updateMessage(currentSessionId, msgId, textAccumulator);
+                        let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
+                        // Initial update if we have a warning
+                        if (skippedFilesWarning) updateMessage(activeSessionId, msgId, textAccumulator);
 
-                    let isThinking = false;
+                        let isThinking = false;
 
-                    for await (const chunk of stream) {
-                        const delta = chunk.choices[0]?.delta;
-                        const reasoningChunk = delta?.reasoning_content || delta?.reasoning;
-                        const contentChunk = delta?.content;
+                        for await (const chunk of stream) {
+                            const delta = chunk.choices[0]?.delta;
+                            const reasoningChunk = delta?.reasoning_content || delta?.reasoning;
+                            const contentChunk = delta?.content;
 
-                        if (reasoningChunk) {
-                            // Skip manual reasoning extraction for Moonshot (Kimi) as it handles tags natively in content
-                            // or sends duplicate reasoning. For others, wrap in <think>.
-                            if (selectedModel.provider !== 'moonshot') {
-                                if (!isThinking) {
-                                    isThinking = true;
-                                    // Ensure newline if there is preceding text
-                                    if (textAccumulator.length > 0 && !textAccumulator.endsWith('\n')) {
-                                        textAccumulator += "\n";
+                            if (reasoningChunk) {
+                                // Skip manual reasoning extraction for Moonshot (Kimi) as it handles tags natively in content
+                                // or sends duplicate reasoning. For others, wrap in <think>.
+                                if (selectedModel.provider !== 'moonshot') {
+                                    if (!isThinking) {
+                                        isThinking = true;
+                                        // Ensure newline if there is preceding text
+                                        if (textAccumulator.length > 0 && !textAccumulator.endsWith('\n')) {
+                                            textAccumulator += "\n";
+                                        }
+                                        textAccumulator += "<think>";
                                     }
-                                    textAccumulator += "<think>";
-                                }
-                                // Strip tags from reasoning chunk to prevent doubling
-                                textAccumulator += reasoningChunk.replace(/<\/?think>/g, '');
-                                updateMessage(currentSessionId, msgId, textAccumulator);
-                            }
-                        }
-                        if (contentChunk) {
-                            if (isThinking) {
-                                isThinking = false;
-                                if (!textAccumulator.trim().endsWith('</think>')) {
-                                    textAccumulator += "</think>";
+                                    // Strip tags from reasoning chunk to prevent doubling
+                                    textAccumulator += reasoningChunk.replace(/<\/?think>/g, '');
+                                    updateMessage(activeSessionId, msgId, textAccumulator);
                                 }
                             }
+                            if (contentChunk) {
+                                if (isThinking) {
+                                    isThinking = false;
+                                    if (!textAccumulator.trim().endsWith('</think>')) {
+                                        textAccumulator += "</think>";
+                                    }
+                                }
 
-                            // Strip raw thinking tags from content only for DeepSeek (to prevent duplicates)
-                            // Moonshot (Kimi) is allowed to pass tags through as we ignored its reasoning field
-                            if (selectedModel.provider === 'deepseek') {
-                                textAccumulator += contentChunk.replace(/<\/?think>/g, '');
-                            } else {
-                                textAccumulator += contentChunk;
-                            }
+                                // Strip raw thinking tags from content only for DeepSeek (to prevent duplicates)
+                                // Moonshot (Kimi) is allowed to pass tags through as we ignored its reasoning field
+                                if (selectedModel.provider === 'deepseek') {
+                                    textAccumulator += contentChunk.replace(/<\/?think>/g, '');
+                                } else {
+                                    textAccumulator += contentChunk;
+                                }
 
-                            // Canvas Extraction (OpenAI/xAI/Deepseek)
-                            const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
-                            if (canvasMatch) {
-                                const type = canvasMatch[1] || canvasMatch[4];
-                                const title = canvasMatch[2] || canvasMatch[3];
-                                const content = canvasMatch[5];
-                                setCanvasData({ type, title, content: content.trim() });
-                                let displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
-                                displayText = processWeatherUpdates(displayText);
-                                displayText = processFinanceUpdates(displayText);
-                                displayText = processSportsUpdates(displayText);
-                                displayText = processTechUpdates(displayText);
-                                updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
-                            } else {
-                                let displayText = processWeatherUpdates(textAccumulator);
-                                displayText = processFinanceUpdates(displayText);
-                                displayText = processSportsUpdates(displayText);
-                                displayText = processTechUpdates(displayText);
-                                updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
+                                // Canvas Extraction (OpenAI/xAI/Deepseek)
+                                const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
+                                if (canvasMatch) {
+                                    const type = canvasMatch[1] || canvasMatch[4];
+                                    const title = canvasMatch[2] || canvasMatch[3];
+                                    const content = canvasMatch[5];
+                                    setCanvasData({ type, title, content: content.trim() });
+                                    let displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                    displayText = processWeatherUpdates(displayText);
+                                    displayText = processFinanceUpdates(displayText);
+                                    displayText = processSportsUpdates(displayText);
+                                    displayText = processTechUpdates(displayText);
+                                    updateMessage(activeSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
+                                } else {
+                                    let displayText = processWeatherUpdates(textAccumulator);
+                                    displayText = processFinanceUpdates(displayText);
+                                    displayText = processSportsUpdates(displayText);
+                                    displayText = processTechUpdates(displayText);
+                                    updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
+                                }
                             }
                         }
-                    }
-                    if (isThinking) {
-                        textAccumulator += "</think>";
-                        updateMessage(currentSessionId, msgId, textAccumulator);
+                        if (isThinking) {
+                            textAccumulator += "</think>";
+                            updateMessage(activeSessionId, msgId, textAccumulator);
+                        }
+
+                        // Final Persist to DB
+                        await persistSession(activeSessionId);
+
+                    } catch (e) {
+                        console.error("OpenAI Error:", e);
+                        updateMessage(activeSessionId, msgId, "Error: " + e.message);
+                    } finally {
+                        setIsProcessing(false);
                     }
 
                 } else if (selectedModel.provider === 'anthropic') {
@@ -1022,7 +1059,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     if (isSearchEnabled) {
                         if (isThinkingEnabled) {
                             searchThoughts += "<think>🧠 Analyzing request...</think>";
-                            updateMessage(currentSessionId, msgId, searchThoughts);
+                            updateMessage(activeSessionId, msgId, searchThoughts);
                         }
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
@@ -1030,103 +1067,113 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
 
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
-                            updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
+                            updateMessage(activeSessionId, msgId, searchThoughts + "</think>");
                         }
 
                         const webContext = await getWebContext(refinedQuery);
                         if (webContext) {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n✅ Found relevant search results.</think>";
-                                updateMessage(currentSessionId, msgId, searchThoughts);
+                                updateMessage(activeSessionId, msgId, searchThoughts);
                             }
 
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE.`;
                         } else {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n❌ No specific results found.</think>";
-                                updateMessage(currentSessionId, msgId, searchThoughts);
+                                updateMessage(activeSessionId, msgId, searchThoughts);
                             }
                         }
                     }
 
-                    const stream = await clientsRef.current.anthropic.messages.create({
-                        model: selectedModel.id,
-                        max_tokens: 40000,
-                        system: finalSystemPrompt,
-                        messages: [
-                            ...historyForModel,
-                            {
-                                role: "user",
-                                content: [
-                                    { type: "text", text: userText + (mode === 'canvas' ? "\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)" : "") },
-                                    ...validAttachments.map(att => {
-                                        if (att.mimeType === 'application/pdf') {
+                    try {
+                        const stream = await clientsRef.current.anthropic.messages.create({
+                            model: selectedModel.id,
+                            max_tokens: 40000,
+                            system: finalSystemPrompt,
+                            messages: [
+                                ...historyForModel,
+                                {
+                                    role: "user",
+                                    content: [
+                                        { type: "text", text: userText + (mode === 'canvas' ? "\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)" : "") },
+                                        ...validAttachments.map(att => {
+                                            if (att.mimeType === 'application/pdf') {
+                                                return {
+                                                    type: "document",
+                                                    source: {
+                                                        type: "base64",
+                                                        media_type: "application/pdf",
+                                                        data: att.preview.split(',')[1]
+                                                    }
+                                                };
+                                            }
                                             return {
-                                                type: "document",
+                                                type: "image",
                                                 source: {
                                                     type: "base64",
-                                                    media_type: "application/pdf",
+                                                    media_type: att.mimeType,
                                                     data: att.preview.split(',')[1]
                                                 }
                                             };
-                                        }
-                                        return {
-                                            type: "image",
-                                            source: {
-                                                type: "base64",
-                                                media_type: att.mimeType,
-                                                data: att.preview.split(',')[1]
-                                            }
-                                        };
-                                    })
-                                ]
-                            }
-                        ],
-                        stream: true,
-                        thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
-                    });
+                                        })
+                                    ]
+                                }
+                            ],
+                            stream: true,
+                            thinking: isThinkingEnabled ? { type: "enabled", budget_tokens: 16000 } : undefined
+                        });
 
 
 
-                    let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
-                    if (skippedFilesWarning) updateMessage(currentSessionId, msgId, textAccumulator);
+                        let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
+                        if (skippedFilesWarning) updateMessage(activeSessionId, msgId, textAccumulator);
 
-                    let inThinkingBlock = false;
-                    for await (const chunk of stream) {
-                        if (chunk.type === 'content_block_start' && chunk.content_block.type === 'thinking') {
-                            inThinkingBlock = true;
-                            textAccumulator += "<think>";
-                            updateMessage(currentSessionId, msgId, textAccumulator);
-                        } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'thinking_delta') {
-                            textAccumulator += chunk.delta.thinking;
-                            updateMessage(currentSessionId, msgId, textAccumulator);
-                        } else if (chunk.type === 'content_block_stop' && inThinkingBlock) {
-                            inThinkingBlock = false;
-                            textAccumulator += "</think>";
-                            updateMessage(currentSessionId, msgId, textAccumulator);
-                        } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-                            textAccumulator += chunk.delta.text;
-                            // Canvas Extraction (Anthropic)
-                            const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
-                            if (canvasMatch) {
-                                const type = canvasMatch[1] || canvasMatch[4];
-                                const title = canvasMatch[2] || canvasMatch[3];
-                                const content = canvasMatch[5];
-                                setCanvasData({ type, title, content: content.trim() });
-                                const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
-                                updateMessage(currentSessionId, msgId, displayText);
-                            } else {
-                                let displayText = processWeatherUpdates(textAccumulator);
-                                displayText = processFinanceUpdates(displayText);
-                                displayText = processSportsUpdates(displayText);
-                                displayText = processTechUpdates(displayText);
-                                if (displayText !== textAccumulator) {
-                                    updateMessage(currentSessionId, msgId, displayText);
+                        let inThinkingBlock = false;
+                        for await (const chunk of stream) {
+                            if (chunk.type === 'content_block_start' && chunk.content_block.type === 'thinking') {
+                                inThinkingBlock = true;
+                                textAccumulator += "<think>";
+                                updateMessage(activeSessionId, msgId, textAccumulator);
+                            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'thinking_delta') {
+                                textAccumulator += chunk.delta.thinking;
+                                updateMessage(activeSessionId, msgId, textAccumulator);
+                            } else if (chunk.type === 'content_block_stop' && inThinkingBlock) {
+                                inThinkingBlock = false;
+                                textAccumulator += "</think>";
+                                updateMessage(activeSessionId, msgId, textAccumulator);
+                            } else if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                                textAccumulator += chunk.delta.text;
+                                // Canvas Extraction (Anthropic)
+                                const canvasMatch = textAccumulator.match(/<canvas_content\s+(?:type="([^"]+)"\s+title="([^"]+)"|title="([^"]+)"\s+type="([^"]+)")>([\s\S]*?)(?:<\/canvas_content>|$)/);
+                                if (canvasMatch) {
+                                    const type = canvasMatch[1] || canvasMatch[4];
+                                    const title = canvasMatch[2] || canvasMatch[3];
+                                    const content = canvasMatch[5];
+                                    setCanvasData({ type, title, content: content.trim() });
+                                    const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                    updateMessage(activeSessionId, msgId, displayText);
                                 } else {
-                                    updateMessage(currentSessionId, msgId, textAccumulator);
+                                    let displayText = processWeatherUpdates(textAccumulator);
+                                    displayText = processFinanceUpdates(displayText);
+                                    displayText = processSportsUpdates(displayText);
+                                    displayText = processTechUpdates(displayText);
+                                    if (displayText !== textAccumulator) {
+                                        updateMessage(activeSessionId, msgId, displayText);
+                                    } else {
+                                        updateMessage(activeSessionId, msgId, textAccumulator);
+                                    }
                                 }
                             }
                         }
+                        // Final Persist
+                        await persistSession(activeSessionId);
+
+                    } catch (e) {
+                        console.error("Anthropic Error:", e);
+                        updateMessage(activeSessionId, msgId, "Error: " + e.message);
+                    } finally {
+                        setIsProcessing(false);
                     }
                 } else if (selectedModel.provider === 'scira') {
                     if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
@@ -1137,9 +1184,9 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         // Refine query with history for X search to support follow-up questions
                         let refinedQuery = userText;
                         if (isThinkingEnabled) {
-                            updateMessage(currentSessionId, msgId, "<think>🧠 Refining search query...</think>");
+                            updateMessage(activeSessionId, msgId, "<think>🧠 Refining search query...</think>");
                             refinedQuery = await refineSearchQuery(userText, currentSession.messages);
-                            updateMessage(currentSessionId, msgId, `<think>🔍 Searching X for: "${refinedQuery}"...</think>`);
+                            updateMessage(activeSessionId, msgId, `<think>🔍 Searching X for: "${refinedQuery}"...</think>`);
                         } else {
                             // Silent refinement if thinking is off
                             refinedQuery = await refineSearchQuery(userText, currentSession.messages);
@@ -1172,10 +1219,10 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
 
                     let text = data.text || "";
                     if (data.sources) text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
-                    updateMessage(currentSessionId, msgId, text);
+                    updateMessage(activeSessionId, msgId, text);
                 }
             } catch (error) {
-                updateMessage(currentSessionId, msgId, `Error: ${error.message}`);
+                updateMessage(activeSessionId, msgId, `Error: ${error.message}`);
             }
         } else if (mode === 'agent') {
             // --- AGENT MODE LOGIC ---
@@ -1185,10 +1232,11 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                 content: userText,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
-            addMessageToSession(currentSessionId, userMsg);
+            const newSessionId = await addMessageToSession(currentSessionId, userMsg);
+            const activeSessionId = newSessionId || currentSessionId;
 
             const msgId = Date.now() + 1;
-            addMessageToSession(currentSessionId, {
+            await addMessageToSession(activeSessionId, {
                 id: msgId,
                 role: 'ai',
                 content: 'Processing task request...',
@@ -1293,7 +1341,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     const projectObj = projects.find(p => p.id === taskData.projectId);
                     const projectName = projectObj ? projectObj.name : "Inbox";
 
-                    updateMessage(currentSessionId, msgId, `✅ ${taskData.confirmation}\n\n**Task Created in ${projectName}:**\n*${taskData.title}* (${taskData.priority}) - ${taskData.date}`);
+                    updateMessage(activeSessionId, msgId, `✅ ${taskData.confirmation}\n\n**Task Created in ${projectName}:**\n*${taskData.title}* (${taskData.priority}) - ${taskData.date}`);
 
                 } else if (data.action === 'list_tasks') {
                     // Implement listing logic
@@ -1313,10 +1361,10 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     }
 
                     if (filteredTasks.length === 0) {
-                        updateMessage(currentSessionId, msgId, `You have no matching tasks.`);
+                        updateMessage(activeSessionId, msgId, `You have no matching tasks.`);
                     } else {
                         const taskList = filteredTasks.map(t => `- [${t.status === 'completed' ? 'x' : ' '}] **${t.title}** (${t.priority}) ${t.date ? `- ${t.date}` : ''}`).join('\n');
-                        updateMessage(currentSessionId, msgId, `Here are your tasks:\n\n${taskList}`);
+                        updateMessage(activeSessionId, msgId, `Here are your tasks:\n\n${taskList}`);
                     }
 
                 } else if (data.action === 'update_task') {
@@ -1345,14 +1393,14 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         count = data.taskIds.length;
                     }
 
-                    updateMessage(currentSessionId, msgId, `✅ ${data.taskDetails.confirmation || `${count} task(s) updated.`}`);
+                    updateMessage(activeSessionId, msgId, `✅ ${data.taskDetails.confirmation || `${count} task(s) updated.`}`);
 
                 } else if (data.action === 'delete_task') {
                     if (!data.taskIds || data.taskIds.length === 0) throw new Error("Could not identify tasks to delete.");
 
                     if (data.taskIds.includes("ALL")) {
                         clearTasks();
-                        updateMessage(currentSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || "All tasks deleted."}`);
+                        updateMessage(activeSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || "All tasks deleted."}`);
                     } else {
                         data.taskIds.forEach(rawId => {
                             // Resolve ID: Handle type mismatch
@@ -1361,13 +1409,13 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                                 deleteTask(task.id);
                             }
                         });
-                        updateMessage(currentSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || `${data.taskIds.length} task(s) deleted.`}`);
+                        updateMessage(activeSessionId, msgId, `🗑️ ${data.taskDetails.confirmation || `${data.taskIds.length} task(s) deleted.`}`);
                     }
                 }
 
             } catch (error) {
                 console.error("Agent Error:", error);
-                updateMessage(currentSessionId, msgId, `❌ Failed to process request. Error: ${error.message}`);
+                updateMessage(activeSessionId, msgId, `❌ Failed to process request. Error: ${error.message}`);
             }
         }
         setIsProcessing(false);
