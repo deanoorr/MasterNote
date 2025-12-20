@@ -685,9 +685,12 @@ ALWAYS convert prices to Euros (€) if possible.
 3. SPORTS (<sports_json>): For scores, game results, schedules.
 {
   "league": "Premier League", "status": "Live 88'", "venue": "Stadium",
-  "home_team": { "name": "Team A", "score": 2, "logo_color": "from-red-700 to-red-900" },
-  "away_team": { "name": "Team B", "score": 1, "logo_color": "from-blue-700 to-blue-900" }
+  "home_team": { "name": "Team A", "score": 2, "logo_color": "from-red-700 to-red-900", "logo_url": "https://..." },
+  "away_team": { "name": "Team B", "score": 1, "logo_color": "from-blue-700 to-blue-900", "logo_url": "https://..." }
 }
+(For "status", extract the EXACT current match minute. CRITICAL: If score is not explicitly found, set score to null. DO NOT GUESS "0".)
+CRITICAL: EXTRACT DATA *ONLY* FROM SEARCH RESULTS. Check for Goal Scorers to verify score.
+If the search result is old match or unsure, set status to "Check Source".
 
 4. TECH/PRODUCT (<tech_json>): For specs, reviews, "best of" lists.
 ALWAYS convert prices to Euros (€).

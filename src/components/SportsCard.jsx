@@ -8,8 +8,8 @@ export default function SportsCard({ data }) {
     const {
         league = 'League',
         status = 'Scheduled',
-        home_team = { name: 'Home', score: 0, logo_color: 'from-gray-700 to-gray-900' },
-        away_team = { name: 'Away', score: 0, logo_color: 'from-gray-700 to-gray-900' },
+        home_team = { name: 'Home', score: '-', logo_color: 'from-gray-700 to-gray-900', logo_url: null },
+        away_team = { name: 'Away', score: '-', logo_color: 'from-gray-700 to-gray-900', logo_url: null },
         venue = 'Unknown Venue'
     } = data;
 
@@ -65,7 +65,18 @@ export default function SportsCard({ data }) {
                             whileHover={{ scale: 1.05 }}
                             className={`w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br ${getGradient(home_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
                             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/icon:opacity-100 transition-opacity" />
-                            {home_team.name.substring(0, 3).toUpperCase()}
+                            {home_team.logo_url ? (
+                                <img
+                                    src={home_team.logo_url}
+                                    alt={home_team.name}
+                                    className="w-full h-full object-cover p-2"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                    }}
+                                />
+                            ) : null}
+                            <span className={`relative z-10 ${home_team.logo_url ? 'hidden' : 'block'}`}>{home_team.name.substring(0, 3).toUpperCase()}</span>
                         </motion.div>
                         <h3 className="font-extrabold text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{home_team.name}</h3>
                         <span className="text-[9px] opacity-60 uppercase font-bold tracking-[0.2em]">Home</span>
@@ -74,12 +85,12 @@ export default function SportsCard({ data }) {
                     {/* VS / Score Widget */}
                     <div className="flex flex-col items-center px-2 z-20">
                         <div className="bg-black/40 backdrop-blur-xl rounded-3xl px-6 py-3 border border-white/10 flex items-center gap-5 shadow-2xl min-w-[140px] justify-center">
-                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{home_team.score}</span>
+                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{home_team.score ?? '-'}</span>
                             <div className="flex flex-col gap-0.5 opacity-50">
                                 <div className="w-1 h-1 bg-white rounded-full" />
                                 <div className="w-1 h-1 bg-white rounded-full" />
                             </div>
-                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{away_team.score}</span>
+                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{away_team.score ?? '-'}</span>
                         </div>
 
                         {/* Status Pill */}
@@ -94,7 +105,18 @@ export default function SportsCard({ data }) {
                             whileHover={{ scale: 1.05 }}
                             className={`w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br ${getGradient(away_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
                             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/icon:opacity-100 transition-opacity" />
-                            {away_team.name.substring(0, 3).toUpperCase()}
+                            {away_team.logo_url ? (
+                                <img
+                                    src={away_team.logo_url}
+                                    alt={away_team.name}
+                                    className="w-full h-full object-cover p-2"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'block';
+                                    }}
+                                />
+                            ) : null}
+                            <span className={`relative z-10 ${away_team.logo_url ? 'hidden' : 'block'}`}>{away_team.name.substring(0, 3).toUpperCase()}</span>
                         </motion.div>
                         <h3 className="font-extrabold text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{away_team.name}</h3>
                         <span className="text-[9px] opacity-60 uppercase font-bold tracking-[0.2em]">Away</span>
