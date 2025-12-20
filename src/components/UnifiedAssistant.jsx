@@ -569,7 +569,7 @@ export default function UnifiedAssistant() {
                 const financeMatch = fullText.match(/<finance_json>([\s\S]*?)(?:<\/finance_json>|$)/);
                 if (financeMatch && financeMatch[1].includes('}')) {
                     try {
-                        const jsonStr = financeMatch[1].trim();
+                        const jsonStr = financeMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
                             updateMessage(currentSessionId, msgId, null, {
@@ -578,7 +578,8 @@ export default function UnifiedAssistant() {
                         }
                     } catch (e) { /* Partial JSON */ }
                 }
-                return fullText.replace(/<finance_json>[\s\S]*?(?:<\/finance_json>|$)/, '');
+                return fullText.replace(/```json\s*<finance_json>[\s\S]*?<\/finance_json>\s*```/g, '')
+                    .replace(/<finance_json>[\s\S]*?(?:<\/finance_json>|$)/g, '');
             };
 
             // Sports Extraction Helper
@@ -586,7 +587,7 @@ export default function UnifiedAssistant() {
                 const sportsMatch = fullText.match(/<sports_json>([\s\S]*?)(?:<\/sports_json>|$)/);
                 if (sportsMatch && sportsMatch[1].includes('}')) {
                     try {
-                        const jsonStr = sportsMatch[1].trim();
+                        const jsonStr = sportsMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
                             updateMessage(currentSessionId, msgId, null, {
@@ -595,7 +596,8 @@ export default function UnifiedAssistant() {
                         }
                     } catch (e) { /* Partial JSON */ }
                 }
-                return fullText.replace(/<sports_json>[\s\S]*?(?:<\/sports_json>|$)/, '');
+                return fullText.replace(/```json\s*<sports_json>[\s\S]*?<\/sports_json>\s*```/g, '')
+                    .replace(/<sports_json>[\s\S]*?(?:<\/sports_json>|$)/g, '');
             };
 
             // Tech Spec Extraction Helper
@@ -603,7 +605,7 @@ export default function UnifiedAssistant() {
                 const techMatch = fullText.match(/<tech_json>([\s\S]*?)(?:<\/tech_json>|$)/);
                 if (techMatch && techMatch[1].includes('}')) {
                     try {
-                        const jsonStr = techMatch[1].trim();
+                        const jsonStr = techMatch[1].trim().replace(/^```json\s*/, '').replace(/```$/, '');
                         const data = JSON.parse(jsonStr);
                         if (data) {
                             updateMessage(currentSessionId, msgId, null, {
@@ -612,7 +614,8 @@ export default function UnifiedAssistant() {
                         }
                     } catch (e) { /* Partial JSON */ }
                 }
-                return fullText.replace(/<tech_json>[\s\S]*?(?:<\/tech_json>|$)/, '');
+                return fullText.replace(/```json\s*<tech_json>[\s\S]*?<\/tech_json>\s*```/g, '')
+                    .replace(/<tech_json>[\s\S]*?(?:<\/tech_json>|$)/g, '');
             };
 
             addMessageToSession(currentSessionId, {
@@ -666,34 +669,42 @@ You are generating content for a specialized editor.
                 const adaptiveUIPrompt = `
 IMPORTANT: VISUAL UI GENERATION
 Analyze the search results. If they match one of the following categories, you MUST output the corresponding JSON block at the end.
+CRITICAL: You MUST wrap your JSON response in the specific tags shown below (e.g. <weather_json>...</weather_json>). Do not output raw JSON without these tags.
 
 1. WEATHER (<weather_json>): For forecasts, current conditions.
+<weather_json>
 {
   "location": { "name": "City", "country": "Country" },
   "current": { "temperature_2m": 20, "weather_code": 0, "is_day": 1, "precipitation": 0 },
   "daily": { "time": ["2024-01-01"], "weather_code": [0], "temperature_2m_max": [25], "temperature_2m_min": [15] }
-} (WMO codes: 0=Clear, 1-3=Cloud, 50+=Rain/Snow)
+}
+</weather_json> (WMO codes: 0=Clear, 1-3=Cloud, 50+=Rain/Snow)
 
 2. FINANCE (<finance_json>): For stocks, crypto, market trends.
 ALWAYS convert prices to Euros (€) if possible.
+<finance_json>
 {
   "symbol": "BTC", "name": "Bitcoin", "price": "100.000", "currency": "EUR", 
   "change_percent": 5.2, "change_amount": 5000, "is_positive": true, 
   "market_cap": "2T", "volume": "50B", "data_points": [95000, 98000, 100000]
 }
+</finance_json>
 
 3. SPORTS (<sports_json>): For scores, game results, schedules.
+<sports_json>
 {
   "league": "Premier League", "status": "Live 88'", "venue": "Stadium",
   "home_team": { "name": "Team A", "score": 2, "logo_color": "from-red-700 to-red-900", "logo_url": "https://..." },
   "away_team": { "name": "Team B", "score": 1, "logo_color": "from-blue-700 to-blue-900", "logo_url": "https://..." }
 }
+</sports_json>
 (For "status", extract the EXACT current match minute. CRITICAL: If score is not explicitly found, set score to null. DO NOT GUESS "0".)
 CRITICAL: EXTRACT DATA *ONLY* FROM SEARCH RESULTS. Check for Goal Scorers to verify score.
 If the search result is old match or unsure, set status to "Check Source".
 
 4. TECH/PRODUCT (<tech_json>): For specs, reviews, "best of" lists.
 ALWAYS convert prices to Euros (€).
+<tech_json>
 {
   "product_name": "Product Name", "price": "€999", "rating": 4.8,
   "specs": { "Spec1": "Value", "Spec2": "Value" },
@@ -701,6 +712,7 @@ ALWAYS convert prices to Euros (€).
   "cons": ["Con 1", "Con 2"],
   "image_url": "https://example.com/image.jpg"
 }
+</tech_json>
 
 RULE: Pick ONLY ONE most relevant category. If none match strongly, do not output JSON.`;
 
