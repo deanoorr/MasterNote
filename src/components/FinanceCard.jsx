@@ -134,7 +134,9 @@ export default function FinanceCard({ data }) {
                 <div className="flex items-end justify-between mb-8">
                     <div className="flex flex-col">
                         <span className="text-sm font-medium opacity-60 mb-1">Current Price</span>
-                        <h2 className="text-5xl font-black tracking-tighter drop-shadow-xl">{currency === 'USD' ? '$' : ''}{price}</h2>
+                        <h2 className="text-5xl font-black tracking-tighter drop-shadow-xl">
+                            {currency === 'USD' || currency === 'EUR' ? '€' : ''}{price}
+                        </h2>
                     </div>
 
                     {/* Sparkline placed strategically */}

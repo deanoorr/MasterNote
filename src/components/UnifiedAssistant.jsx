@@ -20,6 +20,7 @@ import CanvasPanel from './CanvasPanel';
 import WeatherCard from './WeatherCard';
 import FinanceCard from './FinanceCard';
 import SportsCard from './SportsCard';
+import TechCard from './TechCard';
 
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
@@ -597,6 +598,23 @@ export default function UnifiedAssistant() {
                 return fullText.replace(/<sports_json>[\s\S]*?(?:<\/sports_json>|$)/, '');
             };
 
+            // Tech Spec Extraction Helper
+            const processTechUpdates = (fullText) => {
+                const techMatch = fullText.match(/<tech_json>([\s\S]*?)(?:<\/tech_json>|$)/);
+                if (techMatch && techMatch[1].includes('}')) {
+                    try {
+                        const jsonStr = techMatch[1].trim();
+                        const data = JSON.parse(jsonStr);
+                        if (data) {
+                            updateMessage(currentSessionId, msgId, null, {
+                                techData: data
+                            });
+                        }
+                    } catch (e) { /* Partial JSON */ }
+                }
+                return fullText.replace(/<tech_json>[\s\S]*?(?:<\/tech_json>|$)/, '');
+            };
+
             addMessageToSession(currentSessionId, {
                 id: msgId,
                 role: 'ai',
@@ -645,48 +663,49 @@ You are generating content for a specialized editor.
 4. Do not provide conversational filler before the XML.
 5. If the user asks you to EDIT or ADD to the existing content, you MUST provide the FULL updated content within the tags, not just the changes.`;
 
-                const weatherPrompt = `
-IMPORTANT: WEATHER QUERIES.
-If search results contain weather info, you MUST output a structured JSON block at the end of your response inside <weather_json> tags.
-Follow this structure:
-{
-  "location": { "name": "City Name", "country": "Country", "admin1": "State/Region" },
-  "current": { "temperature_2m": 20, "weather_code": 0, "is_day": 1, "relative_humidity_2m": 50, "apparent_temperature": 18, "wind_speed_10m": 10, "precipitation": 0 },
-  "daily": {
-    "time": ["2024-01-01", ...],
-    "weather_code": [0, ...],
-    "temperature_2m_max": [25, ...],
-    "temperature_2m_min": [15, ...]
-  }
-}
-    "temperature_2m_min": [15, ...]
-  }
-}
-WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=Storm. Always provide a 7-day forecast if possible.`;
+                const adaptiveUIPrompt = `
+IMPORTANT: VISUAL UI GENERATION
+Analyze the search results. If they match one of the following categories, you MUST output the corresponding JSON block at the end.
 
-                const financePrompt = `
-IMPORTANT: FINANCE QUERIES.
-If search results contain stock/crypto info, output <finance_json>:
+1. WEATHER (<weather_json>): For forecasts, current conditions.
 {
-"symbol": "BTC-USD", "name": "Bitcoin", "price": "100,000", "currency": "USD", "change_percent": 5.2, "change_amount": 5000, "is_positive": true, "market_cap": "2T", "volume": "50B", "data_points": [95000, 98000, 100000]
-}`;
+  "location": { "name": "City", "country": "Country" },
+  "current": { "temperature_2m": 20, "weather_code": 0, "is_day": 1, "precipitation": 0 },
+  "daily": { "time": ["2024-01-01"], "weather_code": [0], "temperature_2m_max": [25], "temperature_2m_min": [15] }
+} (WMO codes: 0=Clear, 1-3=Cloud, 50+=Rain/Snow)
 
-                const sportsPrompt = `
-IMPORTANT: SPORTS QUERIES.
-If search results contain sports scores/results, output <sports_json>:
+2. FINANCE (<finance_json>): For stocks, crypto, market trends.
+ALWAYS convert prices to Euros (€) if possible.
 {
-"league": "Premier League", "status": "Live 88'", "venue": "Anfield",
-"home_team": { "name": "Liverpool", "score": 2, "logo_color": "from-red-700 to-red-900" },
-"away_team": { "name": "Chelsea", "score": 1, "logo_color": "from-blue-700 to-blue-900" }
-}`;
+  "symbol": "BTC", "name": "Bitcoin", "price": "100.000", "currency": "EUR", 
+  "change_percent": 5.2, "change_amount": 5000, "is_positive": true, 
+  "market_cap": "2T", "volume": "50B", "data_points": [95000, 98000, 100000]
+}
+
+3. SPORTS (<sports_json>): For scores, game results, schedules.
+{
+  "league": "Premier League", "status": "Live 88'", "venue": "Stadium",
+  "home_team": { "name": "Team A", "score": 2, "logo_color": "from-red-700 to-red-900" },
+  "away_team": { "name": "Team B", "score": 1, "logo_color": "from-blue-700 to-blue-900" }
+}
+
+4. TECH/PRODUCT (<tech_json>): For specs, reviews, "best of" lists.
+ALWAYS convert prices to Euros (€).
+{
+  "product_name": "Product Name", "price": "€999", "rating": 4.8,
+  "specs": { "Spec1": "Value", "Spec2": "Value" },
+  "pros": ["Pro 1", "Pro 2"],
+  "cons": ["Con 1", "Con 2"],
+  "image_url": "https://example.com/image.jpg"
+}
+
+RULE: Pick ONLY ONE most relevant category. If none match strongly, do not output JSON.`;
 
                 let systemPrompt = baseSystemPrompt;
                 if (mode === 'canvas') systemPrompt += canvasPrompt;
                 if (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider)) systemPrompt += thinkingPrompt;
                 if (isSearchEnabled) {
-                    systemPrompt += weatherPrompt;
-                    systemPrompt += financePrompt;
-                    systemPrompt += sportsPrompt;
+                    systemPrompt += adaptiveUIPrompt;
                 }
 
                 if (selectedModel.provider === 'google') {
@@ -779,6 +798,7 @@ If search results contain sports scores/results, output <sports_json>:
                         displayText = processWeatherUpdates(displayText);
                         displayText = processFinanceUpdates(displayText);
                         displayText = processSportsUpdates(displayText);
+                        displayText = processTechUpdates(displayText);
                         updateMessage(currentSessionId, msgId, displayText);
                     }
 
@@ -925,11 +945,13 @@ If search results contain sports scores/results, output <sports_json>:
                                 displayText = processWeatherUpdates(displayText);
                                 displayText = processFinanceUpdates(displayText);
                                 displayText = processSportsUpdates(displayText);
+                                displayText = processTechUpdates(displayText);
                                 updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             } else {
                                 let displayText = processWeatherUpdates(textAccumulator);
                                 displayText = processFinanceUpdates(displayText);
                                 displayText = processSportsUpdates(displayText);
+                                displayText = processTechUpdates(displayText);
                                 updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             }
                         }
@@ -1055,6 +1077,7 @@ If search results contain sports scores/results, output <sports_json>:
                                 let displayText = processWeatherUpdates(textAccumulator);
                                 displayText = processFinanceUpdates(displayText);
                                 displayText = processSportsUpdates(displayText);
+                                displayText = processTechUpdates(displayText);
                                 if (displayText !== textAccumulator) {
                                     updateMessage(currentSessionId, msgId, displayText);
                                 } else {
@@ -1552,6 +1575,7 @@ If search results contain sports scores/results, output <sports_json>:
                                             {msg.weatherData && <WeatherCard data={msg.weatherData} location={msg.weatherLocation} />}
                                             {msg.financeData && <FinanceCard data={msg.financeData} />}
                                             {msg.sportsData && <SportsCard data={msg.sportsData} />}
+                                            {msg.techData && <TechCard data={msg.techData} />}
                                             <FormattedMessage content={msg.content} />
                                         </div>
                                     </div>
