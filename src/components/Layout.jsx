@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Workspace from '../pages/Workspace';
@@ -6,15 +7,8 @@ import NotesPage from '../pages/NotesPage';
 import SettingsPage from '../pages/SettingsPage';
 import HabitsPage from '../pages/HabitsPage';
 import DashboardPage from '../pages/DashboardPage';
-import { ModelProvider } from '../context/ModelContext';
-import { TaskProvider } from '../context/TaskContext';
-import { ChatProvider } from '../context/ChatContext';
-import { NotesProvider } from '../context/NotesContext';
-import { SettingsProvider } from '../context/SettingsContext';
-import { HabitProvider } from '../context/HabitContext';
-import { ThemeProvider } from '../context/ThemeContext';
 
-function LayoutContent() {
+export default function Layout() {
     const [activeTab, setActiveTab] = useState('home');
     const [isCollapsed, setIsCollapsed] = useState(true);
 
@@ -43,25 +37,5 @@ function LayoutContent() {
                 {activeTab === 'settings' && <SettingsPage />}
             </main>
         </div>
-    );
-}
-
-export default function Layout() {
-    return (
-        <ThemeProvider>
-            <ModelProvider>
-                <SettingsProvider>
-                    <TaskProvider>
-                        <ChatProvider>
-                            <NotesProvider>
-                                <HabitProvider>
-                                    <LayoutContent />
-                                </HabitProvider>
-                            </NotesProvider>
-                        </ChatProvider>
-                    </TaskProvider>
-                </SettingsProvider>
-            </ModelProvider>
-        </ThemeProvider>
     );
 }

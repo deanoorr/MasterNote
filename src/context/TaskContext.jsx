@@ -1,116 +1,254 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../services/supabase';
+import { useAuth } from './AuthContext';
 
 const TaskContext = createContext();
 
-// Initial dummy data to make the app look populated
-const INITIAL_TASKS = [
-    { id: 1, title: 'Finalize Q4 Report', tags: ['Work', 'Urgent'], date: 'Today', priority: 'High', status: 'pending', projectId: 'work' },
-    { id: 2, title: 'Email Sarah re: Design Specs', tags: ['Work'], date: 'Tomorrow', priority: 'Medium', status: 'pending', projectId: 'work' },
-    { id: 3, title: 'Book dentist appointment', tags: ['Personal'], date: 'Fri 24th', priority: 'Low', status: 'pending', projectId: 'personal' },
-];
-
+// Initial dummy data to make the app look populated (only if no user)
+const INITIAL_TASKS = [];
 const INITIAL_PROJECTS = [
     { id: 'work', name: 'Work', color: 'blue', icon: 'briefcase' },
     { id: 'personal', name: 'Personal', color: 'green', icon: 'user' },
 ];
 
 export function TaskProvider({ children }) {
-    const [tasks, setTasks] = useState(() => {
-        const saved = localStorage.getItem('masternote_tasks');
-        return saved ? JSON.parse(saved) : INITIAL_TASKS;
-    });
+    const { user } = useAuth();
+    const [tasks, setTasks] = useState([]);
+    const [projects, setProjects] = useState(INITIAL_PROJECTS);
+    const [loading, setLoading] = useState(true);
 
-    const [projects, setProjects] = useState(() => {
-        const saved = localStorage.getItem('masternote_projects');
-        return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
-    });
-
+    // Fetch data when user changes
     useEffect(() => {
-        localStorage.setItem('masternote_tasks', JSON.stringify(tasks));
-    }, [tasks]);
+        if (!user) {
+            setTasks([]);
+            setProjects(INITIAL_PROJECTS);
+            setLoading(false);
+            return;
+        }
 
-    useEffect(() => {
-        localStorage.setItem('masternote_projects', JSON.stringify(projects));
-    }, [projects]);
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                // Fetch Tasks
+                const { data: tasksData, error: tasksError } = await supabase
+                    .from('tasks')
+                    .select('*')
+                    .order('created_at', { ascending: false });
 
-    // Auto-delete completed tasks from previous days on mount
-    useEffect(() => {
-        const today = new Date().toLocaleDateString('en-CA');
+                if (tasksError) throw tasksError;
 
-        setTasks(currentTasks => {
-            const hasCleanup = currentTasks.some(t => {
-                if (t.status !== 'completed') return false;
-                const completionDate = t.completedAt || today; // Assume today for legacy
-                return completionDate !== today;
-            });
+                const formattedTasks = tasksData.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    description: t.description,
+                    status: t.completed ? 'completed' : 'pending',
+                    priority: t.priority,
+                    date: t.meta?.date_display || null, // Retrieve display date
+                    tags: t.tags || [],
+                    projectId: t.project_id,
+                    completedAt: t.meta?.completedAt || null,
+                    ...t.meta // Spread other meta
+                }));
+                setTasks(formattedTasks);
 
-            const hasUpdates = currentTasks.some(t => t.status === 'completed' && !t.completedAt);
+                // Fetch Projects from Settings
+                const { data: settingsData, error: settingsError } = await supabase
+                    .from('settings')
+                    .select('preferences')
+                    .eq('user_id', user.id)
+                    .single();
 
-            if (!hasCleanup && !hasUpdates) return currentTasks;
-
-            return currentTasks.filter(t => {
-                if (t.status !== 'completed') return true;
-                const completionDate = t.completedAt || today;
-                return completionDate === today;
-            }).map(t => {
-                // Retroactively add timestamp to legacy completed tasks so they delete tomorrow
-                if (t.status === 'completed' && !t.completedAt) {
-                    return { ...t, completedAt: today };
+                if (settingsData?.preferences?.projects) {
+                    setProjects(settingsData.preferences.projects);
+                } else {
+                    // Initialize default projects if not found
+                    await saveProjectsToSettings(INITIAL_PROJECTS);
+                    setProjects(INITIAL_PROJECTS);
                 }
-                return t;
-            });
-        });
-    }, []);
 
-    const addTask = (task) => {
-        setTasks(prev => [{ ...task, id: Date.now(), status: 'pending', projectId: task.projectId || null }, ...prev]);
-    };
-
-    const updateTask = (id, updates) => {
-        setTasks(prev => prev.map(t => {
-            if (t.id !== id) return t;
-
-            const updatedTask = { ...t, ...updates };
-
-            // Handle completion timestamp
-            if (updates.status === 'completed' && t.status !== 'completed') {
-                updatedTask.completedAt = new Date().toLocaleDateString('en-CA');
-            } else if (updates.status === 'pending') {
-                delete updatedTask.completedAt;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            } finally {
+                setLoading(false);
             }
+        };
 
-            return updatedTask;
-        }));
+        fetchData();
+    }, [user]);
+
+    const saveProjectsToSettings = async (newProjects) => {
+        if (!user) return;
+        // Get current preferences first to avoid overwriting other settings
+        const { data } = await supabase.from('settings').select('preferences').eq('user_id', user.id).single();
+        const currentPrefs = data?.preferences || {};
+
+        await supabase
+            .from('settings')
+            .upsert({ user_id: user.id, preferences: { ...currentPrefs, projects: newProjects } });
     };
 
-    const deleteTask = (id) => {
+    const addTask = async (task) => {
+        if (!user) return;
+
+        const newTaskPayload = {
+            user_id: user.id,
+            title: task.title,
+            description: task.description || '',
+            completed: task.status === 'completed',
+            priority: task.priority,
+            tags: task.tags,
+            project_id: task.projectId || null,
+            meta: {
+                date_display: task.date,
+                ...task
+            }
+        };
+        // Remove known fields from meta to avoid duplication if spreading
+        delete newTaskPayload.meta.title;
+        delete newTaskPayload.meta.priority;
+        delete newTaskPayload.meta.tags;
+        delete newTaskPayload.meta.projectId;
+        delete newTaskPayload.meta.status;
+
+        try {
+            const { data, error } = await supabase
+                .from('tasks')
+                .insert([newTaskPayload])
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            const formattedTask = {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                status: data.completed ? 'completed' : 'pending',
+                priority: data.priority,
+                date: data.meta?.date_display,
+                tags: data.tags || [],
+                projectId: data.project_id,
+                ...data.meta
+            };
+
+            setTasks(prev => [formattedTask, ...prev]);
+        } catch (error) {
+            console.error('Error adding task:', error);
+        }
+    };
+
+    const updateTask = async (id, updates) => {
+        if (!user) return;
+
+        // Optimistic update
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+
+        const updatePayload = {};
+        if (updates.title !== undefined) updatePayload.title = updates.title;
+        if (updates.priority !== undefined) updatePayload.priority = updates.priority;
+        if (updates.tags !== undefined) updatePayload.tags = updates.tags;
+        if (updates.projectId !== undefined) updatePayload.project_id = updates.projectId;
+        if (updates.status !== undefined) {
+            updatePayload.completed = updates.status === 'completed';
+            // Handle completedAt in meta
+            if (updates.status === 'completed') {
+                const today = new Date().toLocaleDateString('en-CA');
+                // We need to fetch current meta to update it safely, or just patch it?
+                // Supabase generic update doesn't support deep merge on jsonb easily without getting it first or using logic
+                // For now, simpler to just assume we might overwrite meta or need to be careful.
+                // Let's rely on the fact that we have the task state locally.
+            }
+        }
+
+        // Construct meta update if needed
+        const metaUpdates = {};
+        if (updates.date) metaUpdates.date_display = updates.date;
+        if (updates.completedAt) metaUpdates.completedAt = updates.completedAt;
+
+        // If status became completed, set completedAt if not present
+        if (updates.status === 'completed') {
+            metaUpdates.completedAt = new Date().toLocaleDateString('en-CA');
+        } else if (updates.status === 'pending') {
+            metaUpdates.completedAt = null;
+        }
+
+        if (Object.keys(metaUpdates).length > 0) {
+            // We need to merge existing meta. 
+            // Ideally we get the current task from state
+            const currentTask = tasks.find(t => t.id === id);
+            updatePayload.meta = { ...currentTask?.meta, ...currentTask, ...metaUpdates };
+            // Cleaning up the meta payload to not include top level keys again is annoying but safer
+            // Let's just store the specific fields we care about in meta for display
+            updatePayload.meta = { ...currentTask?.meta, ...metaUpdates };
+        }
+
+        try {
+            const { error } = await supabase
+                .from('tasks')
+                .update(updatePayload)
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (error) {
+            console.error('Error updating task:', error);
+            // Revert on error?
+        }
+    };
+
+    const deleteTask = async (id) => {
+        if (!user) return;
         setTasks(prev => prev.filter(t => t.id !== id));
+        try {
+            await supabase.from('tasks').delete().eq('id', id);
+        } catch (error) {
+            console.error('Error deleting task:', error);
+        }
     };
 
-    const clearTasks = () => {
+    const clearTasks = async () => {
+        if (!user) return;
         setTasks([]);
+        // Dangerous: delete all for user?
+        // Implementation:
+        // await supabase.from('tasks').delete().eq('user_id', user.id);
+        // For safety, maybe just clear completed? 
+        // The original code `setTasks([])` cleared local state.
+        // Let's implement delete all
+        try {
+            await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all matches
+        } catch (e) { console.error(e) }
     };
 
     // --- Project Actions ---
-    const addProject = (project) => {
-        setProjects(prev => [...prev, { ...project, id: Date.now().toString() }]);
+    const addProject = async (project) => {
+        const newProject = { ...project, id: Date.now().toString() };
+        const newProjects = [...projects, newProject];
+        setProjects(newProjects);
+        await saveProjectsToSettings(newProjects);
     };
 
-    const updateProject = (id, updates) => {
-        setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    const updateProject = async (id, updates) => {
+        const newProjects = projects.map(p => p.id === id ? { ...p, ...updates } : p);
+        setProjects(newProjects);
+        await saveProjectsToSettings(newProjects);
     };
 
-    const deleteProject = (id) => {
-        setProjects(prev => prev.filter(p => p.id !== id));
-        // Optional: Also delete tasks in this project? Or move to inbox?
-        // For now, let's keep them and set their projectId to null (move to Inbox)
-        setTasks(prev => prev.map(t => t.projectId === id ? { ...t, projectId: null } : t));
+    const deleteProject = async (id) => {
+        const newProjects = projects.filter(p => p.id !== id);
+        setProjects(newProjects);
+        await saveProjectsToSettings(newProjects);
+
+        // Also update tasks locally and on server
+        const tasksToUpdate = tasks.filter(t => t.projectId === id);
+        tasksToUpdate.forEach(t => updateTask(t.id, { projectId: null }));
     };
 
     return (
         <TaskContext.Provider value={{
             tasks, addTask, updateTask, deleteTask, clearTasks,
-            projects, addProject, updateProject, deleteProject
+            projects, addProject, updateProject, deleteProject,
+            loading
         }}>
             {children}
         </TaskContext.Provider>

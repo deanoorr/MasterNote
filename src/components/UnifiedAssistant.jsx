@@ -10,6 +10,8 @@ import { useTasks } from '../context/TaskContext';
 import { useNotes } from '../context/NotesContext';
 import { useChat } from '../context/ChatContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
@@ -174,13 +176,38 @@ const initializeClients = () => {
 };
 
 export default function UnifiedAssistant() {
-    const [mode, setMode] = useState(() => localStorage.getItem('bart_assistant_mode') || 'chat');
-    const [sciraMode, setSciraMode] = useState('chat'); // 'chat' | 'x'
-    const [canvasData, setCanvasData] = useState(null); // { type: 'code'|'document', title: string, content: string }
+    const { user } = useAuth();
+    const [mode, setMode] = useState('chat');
 
     useEffect(() => {
+        if (!user) {
+            setMode(localStorage.getItem('bart_assistant_mode') || 'chat');
+            return;
+        }
+        supabase.from('settings').select('preferences').eq('user_id', user.id).single()
+            .then(({ data }) => {
+                if (data?.preferences?.mode) {
+                    setMode(data.preferences.mode);
+                }
+            });
+    }, [user]);
+
+    useEffect(() => {
+        if (user) {
+            const saveMode = async () => {
+                const { data } = await supabase.from('settings').select('preferences').eq('user_id', user.id).single();
+                const current = data?.preferences || {};
+                if (current.mode === mode) return;
+                await supabase.from('settings').update({
+                    preferences: { ...current, mode }
+                }).eq('user_id', user.id);
+            };
+            saveMode();
+        }
         localStorage.setItem('bart_assistant_mode', mode);
-    }, [mode]);
+    }, [mode, user]);
+    const [sciraMode, setSciraMode] = useState('chat'); // 'chat' | 'x'
+    const [canvasData, setCanvasData] = useState(null); // { type: 'code'|'document', title: string, content: string }
 
     useEffect(() => {
         console.log('Bart AI v2.1 - Thinking Fix Loaded');

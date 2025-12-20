@@ -3,23 +3,47 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder, PanelLeft } from 'lucide-react';
 
 import { useTasks } from '../context/TaskContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../services/supabase';
 
 export default function TaskManager() {
     const { tasks, addTask, updateTask, deleteTask, projects, addProject, deleteProject } = useTasks();
     const [selectedProject, setSelectedProject] = useState('all'); // 'all', 'inbox', or projectId
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+    const { user } = useAuth();
     // Task Logic
     const [showAdd, setShowAdd] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
     const [newTaskPriority, setNewTaskPriority] = useState('Medium');
-    const [sortBy, setSortBy] = useState(() => localStorage.getItem('taskSortBy') || 'date');
+    const [sortBy, setSortBy] = useState('date');
+
+    // Load sort preference
+    useEffect(() => {
+        if (!user) return;
+        supabase.from('settings').select('preferences').eq('user_id', user.id).single()
+            .then(({ data }) => {
+                if (data?.preferences?.taskSortBy) {
+                    setSortBy(data.preferences.taskSortBy);
+                }
+            });
+    }, [user]);
 
     // Persist sort preference
     useEffect(() => {
-        localStorage.setItem('taskSortBy', sortBy);
-    }, [sortBy]);
+        if (!user) return;
+        const saveSort = async () => {
+            const { data } = await supabase.from('settings').select('preferences').eq('user_id', user.id).single();
+            const current = data?.preferences || {};
+            if (current.taskSortBy === sortBy) return;
+
+            await supabase.from('settings').update({
+                preferences: { ...current, taskSortBy: sortBy }
+            }).eq('user_id', user.id);
+        };
+        saveSort();
+    }, [sortBy, user]);
 
     // Project Logic
     const [showAddProject, setShowAddProject] = useState(false);
