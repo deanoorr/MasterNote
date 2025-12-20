@@ -13,11 +13,20 @@ export default function TaskManager() {
 
     const { user } = useAuth();
     // Task Logic
+    // Task Logic
     const [showAdd, setShowAdd] = useState(false);
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
     const [newTaskPriority, setNewTaskPriority] = useState('Medium');
+    const [newTaskProjectId, setNewTaskProjectId] = useState('inbox');
     const [sortBy, setSortBy] = useState('date');
+
+    // Sync new task project with selected view when opening form
+    useEffect(() => {
+        if (showAdd) {
+            setNewTaskProjectId(selectedProject === 'all' ? 'inbox' : selectedProject);
+        }
+    }, [showAdd, selectedProject]);
 
     // Load sort preference
     useEffect(() => {
@@ -69,7 +78,7 @@ export default function TaskManager() {
             tags: ['Manual'],
             date: newTaskDate,
             priority: newTaskPriority,
-            projectId: selectedProject === 'all' || selectedProject === 'inbox' ? null : selectedProject
+            projectId: newTaskProjectId === 'inbox' ? null : newTaskProjectId
         });
         setNewTaskTitle('');
         setNewTaskDate(new Date().toISOString().split('T')[0]);
@@ -288,19 +297,19 @@ export default function TaskManager() {
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col p-4 md:p-8 max-w-4xl mx-auto w-full">
-                <header className="mb-8 flex justify-between items-end border-b border-zinc-200 dark:border-zinc-900 pb-6">
-                    <div>
+                <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end border-b border-zinc-200 dark:border-zinc-900 pb-6 gap-4">
+                    <div className="min-w-0">
                         <div className="flex items-center gap-3 mb-2">
                             {!isSidebarOpen && (
                                 <button
                                     onClick={() => setIsSidebarOpen(true)}
-                                    className="text-zinc-500 hover:text-white transition-colors"
+                                    className="text-zinc-500 hover:text-white transition-colors shrink-0"
                                     title="Open Sidebar"
                                 >
                                     <PanelLeft size={20} />
                                 </button>
                             )}
-                            <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-900 to-zinc-500 dark:from-white dark:to-white/60">
+                            <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-zinc-900 to-zinc-500 dark:from-white dark:to-white/60 truncate">
                                 {currentProjectName}
                             </h1>
                         </div>
@@ -308,13 +317,13 @@ export default function TaskManager() {
                             {sortedTasks.length} {sortedTasks.length === 1 ? 'task' : 'tasks'}
                         </p>
                     </div>
-                    <div className="flex gap-3">
-                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10">
-                            <ListFilter size={16} className="text-slate-500 dark:text-slate-400" />
+                    <div className="flex gap-3 w-full md:w-auto">
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 flex-1 md:flex-initial min-w-0">
+                            <ListFilter size={16} className="text-slate-500 dark:text-slate-400 shrink-0" />
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="bg-transparent border-none outline-none text-sm text-slate-500 dark:text-slate-300 cursor-pointer"
+                                className="bg-transparent border-none outline-none text-sm text-slate-500 dark:text-slate-300 cursor-pointer w-full"
                             >
                                 <option value="date">Sort by Date</option>
                                 <option value="priority">Sort by Priority</option>
@@ -323,7 +332,7 @@ export default function TaskManager() {
 
                         <button
                             onClick={() => setShowAdd(!showAdd)}
-                            className="flex items-center gap-2 bg-zinc-100 text-black hover:bg-white px-4 py-2 rounded-md transition-all font-medium text-sm shadow-sm"
+                            className="flex items-center justify-center gap-2 bg-zinc-100 text-black hover:bg-white px-4 py-2 rounded-md transition-all font-medium text-sm shadow-sm shrink-0 whitespace-nowrap"
                         >
                             {showAdd ? <X size={16} /> : <Plus size={16} />}
                             {showAdd ? 'Cancel' : 'New Task'}
@@ -340,7 +349,7 @@ export default function TaskManager() {
                             onSubmit={handleManualAdd}
                             className="overflow-hidden mb-6"
                         >
-                            <div className="p-4 bg-white dark:bg-white/5 backdrop-blur-md rounded-xl border border-zinc-200 dark:border-white/10 shadow-lg flex flex-col gap-3">
+                            <div className="p-4 bg-white dark:bg-white/5 backdrop-blur-md rounded-xl border border-zinc-200 dark:border-white/10 shadow-lg flex flex-col gap-4">
                                 <input
                                     autoFocus
                                     type="text"
@@ -350,35 +359,58 @@ export default function TaskManager() {
                                     className="w-full bg-transparent border-none outline-none text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-slate-500 text-lg"
                                 />
 
-                                <div className="flex items-center gap-3 pt-2 border-t border-zinc-200 dark:border-white/5">
-                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
-                                        <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
-                                        <input
-                                            value={newTaskDate}
-                                            onChange={(e) => setNewTaskDate(e.target.value)}
-                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
-                                        />
+                                <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-zinc-100 dark:border-white/5">
+                                    <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                                        <div className="relative flex-1 sm:flex-initial min-w-[130px]">
+                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                                <Calendar size={14} className="text-zinc-400" />
+                                            </div>
+                                            <input
+                                                type="date"
+                                                value={newTaskDate}
+                                                onChange={(e) => setNewTaskDate(e.target.value)}
+                                                className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400"
+                                            />
+                                        </div>
+
+                                        <div className="relative flex-1 sm:flex-initial min-w-[110px]">
+                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                                <AlertCircle size={14} className="text-zinc-400" />
+                                            </div>
+                                            <select
+                                                value={newTaskPriority}
+                                                onChange={(e) => setNewTaskPriority(e.target.value)}
+                                                className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg py-2 pl-9 pr-8 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400 appearance-none"
+                                            >
+                                                <option>High</option>
+                                                <option>Medium</option>
+                                                <option>Low</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="relative flex-1 sm:flex-initial min-w-[120px]">
+                                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                                <Folder size={14} className="text-zinc-400" />
+                                            </div>
+                                            <select
+                                                value={newTaskProjectId}
+                                                onChange={(e) => setNewTaskProjectId(e.target.value)}
+                                                className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg py-2 pl-9 pr-8 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400 appearance-none"
+                                            >
+                                                <option value="inbox">Inbox</option>
+                                                {projects.map(p => (
+                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
-                                        <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
-                                        <select
-                                            value={newTaskPriority}
-                                            onChange={(e) => setNewTaskPriority(e.target.value)}
-                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
-                                        >
-                                            <option value="High">High</option>
-                                            <option value="Medium">Medium</option>
-                                            <option value="Low">Low</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="flex-1"></div>
+                                    <div className="flex-1" />
 
                                     <button
                                         type="submit"
                                         disabled={!newTaskTitle.trim()}
-                                        className="bg-primary-600 hover:bg-primary-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                                        className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-2 rounded-lg font-medium text-sm transition-colors disabled:opacity-50 shadow-lg shadow-primary-500/20 w-full sm:w-auto"
                                     >
                                         Add Task
                                     </button>
@@ -420,7 +452,7 @@ export default function TaskManager() {
                                         }`}
                                 >
                                     {editingId === task.id ? (
-                                        <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-4">
                                             <input
                                                 autoFocus
                                                 type="text"
@@ -428,46 +460,50 @@ export default function TaskManager() {
                                                 onChange={(e) => setEditTitle(e.target.value)}
                                                 className="w-full bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 outline-none text-zinc-900 dark:text-white"
                                             />
-                                            <div className="flex gap-3">
-                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
-                                                    <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                    <input
-                                                        type="date"
-                                                        value={editDate}
-                                                        onChange={(e) => setEditDate(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
-                                                    />
-                                                </div>
-                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
-                                                    <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                    <select
-                                                        value={editPriority}
-                                                        onChange={(e) => setEditPriority(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
-                                                    >
-                                                        <option value="High">High</option>
-                                                        <option value="Medium">Medium</option>
-                                                        <option value="Low">Low</option>
-                                                    </select>
-                                                </div>
-                                                <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10">
-                                                    <Folder size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                    <select
-                                                        value={editProjectId}
-                                                        onChange={(e) => setEditProjectId(e.target.value)}
-                                                        className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 max-w-[100px]"
-                                                    >
-                                                        <option value="inbox">Inbox</option>
-                                                        {projects.map(p => (
-                                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                                        ))}
-                                                    </select>
+                                            <div className="flex flex-col sm:flex-row gap-3">
+                                                <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                        <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                        <input
+                                                            type="date"
+                                                            value={editDate}
+                                                            onChange={(e) => setEditDate(e.target.value)}
+                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                        <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                        <select
+                                                            value={editPriority}
+                                                            onChange={(e) => setEditPriority(e.target.value)}
+                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
+                                                        >
+                                                            <option value="High">High</option>
+                                                            <option value="Medium">Medium</option>
+                                                            <option value="Low">Low</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                        <Folder size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                        <select
+                                                            value={editProjectId}
+                                                            onChange={(e) => setEditProjectId(e.target.value)}
+                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 max-w-[100px]"
+                                                        >
+                                                            <option value="inbox">Inbox</option>
+                                                            {projects.map(p => (
+                                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                                 <div className="flex-1"></div>
-                                                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-slate-400 dark:hover:text-white">Cancel</button>
-                                                <button onClick={saveEdit} className="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
-                                                    <Save size={14} /> Save
-                                                </button>
+                                                <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
+                                                    <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-slate-400 dark:hover:text-white">Cancel</button>
+                                                    <button onClick={saveEdit} className="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
+                                                        <Save size={14} /> Save
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ) : (

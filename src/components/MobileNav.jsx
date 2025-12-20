@@ -8,6 +8,7 @@ export default function MobileNav({ activeTab, onTabChange }) {
         { id: 'assistant', label: 'AI', icon: Sparkles },
         { id: 'notes', label: 'Notes', icon: StickyNote },
         { id: 'habits', label: 'Habits', icon: Activity },
+        { id: 'settings', label: 'Settings', icon: Settings },
     ];
 
     return (

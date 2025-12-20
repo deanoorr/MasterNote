@@ -158,20 +158,20 @@ export default function NotesBoard() {
             </AnimatePresence>
 
             {/* Main Content - Grid */}
-            <div className="flex-1 flex flex-col p-8 overflow-hidden">
+            <div className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
                 {/* Toolbar */}
-                <div className="flex items-center justify-between mb-8 shrink-0">
-                    <div className="flex items-center gap-4 flex-1">
+                <div className="flex flex-col-reverse md:flex-row md:items-center justify-between mb-8 shrink-0 gap-4">
+                    <div className="flex items-center gap-4 flex-1 w-full">
                         {!isSidebarOpen && (
                             <button
                                 onClick={() => setIsSidebarOpen(true)}
-                                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors shrink-0"
                                 title="Open Sidebar"
                             >
                                 <PanelLeft size={20} />
                             </button>
                         )}
-                        <div className="relative w-64">
+                        <div className="relative flex-1 md:max-w-xs">
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
                             <input
                                 type="text"
@@ -184,7 +184,7 @@ export default function NotesBoard() {
                     </div>
                     <button
                         onClick={() => addNote(selectedProject === 'all' ? 'inbox' : selectedProject)}
-                        className="flex items-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-full text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-lg shadow-black/5 dark:shadow-white/5"
+                        className="flex items-center justify-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-full text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shadow-lg shadow-black/5 dark:shadow-white/5 w-full md:w-auto"
                     >
                         <Plus size={16} /> New Note
                     </button>
