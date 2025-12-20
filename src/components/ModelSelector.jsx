@@ -94,7 +94,7 @@ export default function ModelSelector() {
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-black/20 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20"
                 >
                     <selectedModel.icon size={14} className={selectedModel.color} />
-                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200">{selectedModel.name}</span>
+                    <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200 max-w-[80px] sm:max-w-[150px] truncate">{selectedModel.name}</span>
                     <ChevronDown size={12} className={`text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </motion.button>
 

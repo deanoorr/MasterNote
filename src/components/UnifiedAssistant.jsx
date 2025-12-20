@@ -1430,13 +1430,21 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
 
     return (
         <div className="flex h-screen w-full bg-transparent font-sans text-zinc-900 dark:text-white relative overflow-hidden">
+            {/* Mobile Sidebar Backdrop */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {isSidebarOpen && (
                 <motion.aside
                     initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: 256, opacity: 1 }}
+                    animate={{ width: window.innerWidth < 768 ? '85vw' : 256, opacity: 1 }}
                     exit={{ width: 0, opacity: 0 }}
                     transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="border-r border-zinc-200 dark:border-white/5 bg-white/80 dark:bg-black/40 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden"
+                    className="fixed md:relative z-[60] h-full border-r border-zinc-200 dark:border-white/5 bg-white/95 dark:bg-black/90 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden shadow-2xl md:shadow-none"
                 >
                     <div className="p-4 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-black/20 h-[57px]">
                         <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-500 tracking-wider uppercase">Folders & History</span>
@@ -1514,8 +1522,8 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                 </motion.aside>
             )}
 
-            <main className="flex-1 flex flex-col relative bg-transparent h-screen overflow-hidden">
-                <header className="h-[60px] border-b border-zinc-200 dark:border-white/5 bg-white/70 dark:bg-zinc-950/60 backdrop-blur-xl flex items-center justify-between px-6 shrink-0 sticky top-0 z-30">
+            <main className="flex-1 flex flex-col relative bg-transparent h-screen overflow-hidden w-full">
+                <header className="h-[60px] border-b border-zinc-200 dark:border-white/5 bg-white/70 dark:bg-zinc-950/60 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-30">
                     <div className="flex items-center gap-4">
                         <motion.button
                             whileHover={{ scale: 1.05 }}
@@ -1568,7 +1576,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                 <div className="flex-1 flex overflow-hidden">
                     {/* Chat Area - Resizes when Canvas is open and has content */}
                     <div
-                        className={`flex-1 overflow-y-auto custom-scrollbar p-6 transition-all duration-300 ${mode === 'canvas' && canvasData ? 'border-r border-zinc-200 dark:border-white/5' : 'max-w-full'}`}
+                        className={`flex-1 overflow-y-auto custom-scrollbar p-3 md:p-6 transition-all duration-300 ${mode === 'canvas' && canvasData ? 'border-r border-zinc-200 dark:border-white/5' : 'max-w-full'}`}
                         style={{ maxWidth: mode === 'canvas' && canvasData ? `${100 - canvasWidth}%` : '100%' }}
                         ref={scrollRef}
                     >
@@ -1708,59 +1716,63 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                 </div>
 
                 {/* Input Area */}
-                <div className="p-6 pt-2 shrink-0">
+                <div className="p-3 md:p-6 md:pt-2 pt-2 shrink-0 z-20">
                     <div className="max-w-4xl mx-auto relative group">
                         {/* Animated Glow Border */}
                         <div className="absolute -inset-[1px] bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-[22px] blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
 
                         <div className="relative bg-white/80 dark:bg-zinc-950/80 backdrop-blur-2xl border border-zinc-200 dark:border-white/10 rounded-[21px] flex flex-col p-2 transition-all duration-300 shadow-2xl shadow-black/20 group-focus-within:ring-1 group-focus-within:ring-blue-500/20">
                             {/* Toolbar */}
-                            <div className="px-2 pb-1 flex items-center justify-between border-b border-zinc-100 dark:border-white/5 mb-1">
-                                <div className="flex items-center gap-1 py-1">
-                                    <ModelSelector />
-                                    <div className="w-[1px] h-4 bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" />
+                            <div className="px-2 pb-1 flex items-center justify-between border-b border-zinc-100 dark:border-white/5 mb-1 gap-2">
+                                <div className="flex items-center gap-1 py-1 min-w-0 w-full">
+                                    <div className="shrink-0 flex items-center gap-1 z-20 relative">
+                                        <ModelSelector />
+                                        <div className="w-[1px] h-4 bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" />
+                                    </div>
 
-                                    <button
-                                        onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
-                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${isThinkingEnabled ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-                                        title="Deep Thinking"
-                                    >
-                                        <BrainCircuit size={16} />
-                                        <span className="hidden sm:inline">Thinking</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => setIsSearchEnabled(!isSearchEnabled)}
-                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${isSearchEnabled ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-                                        title="Web Search"
-                                    >
-                                        <Globe size={16} />
-                                        <span className="hidden sm:inline">Search</span>
-                                    </button>
-
-                                    {/* Scira X Button */}
-                                    {selectedModel?.provider === 'scira' && (
+                                    <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-fade flex-1">
                                         <button
-                                            onClick={() => setSciraMode(sciraMode === 'x' ? 'chat' : 'x')}
-                                            className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${sciraMode === 'x' ? 'bg-zinc-900/10 text-zinc-900 dark:bg-white/10 dark:text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-                                            title="Search X (Twitter)"
+                                            onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
+                                            className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${isThinkingEnabled ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                            title="Deep Thinking"
                                         >
-                                            <span className="font-bold font-mono text-sm leading-none">𝕏</span>
-                                            <span className="hidden sm:inline">Search X</span>
+                                            <BrainCircuit size={16} />
+                                            <span className="hidden sm:inline">Thinking</span>
                                         </button>
-                                    )}
 
-                                    <button
-                                        onClick={() => setMode(mode === 'canvas' ? 'chat' : 'canvas')}
-                                        className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all ${mode === 'canvas' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-                                        title="Toggle Canvas"
-                                    >
-                                        <PanelLeft size={16} />
-                                        <span className="hidden sm:inline">Canvas</span>
-                                    </button>
+                                        <button
+                                            onClick={() => setIsSearchEnabled(!isSearchEnabled)}
+                                            className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${isSearchEnabled ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                            title="Web Search"
+                                        >
+                                            <Globe size={16} />
+                                            <span className="hidden sm:inline">Search</span>
+                                        </button>
+
+                                        {/* Scira X Button */}
+                                        {selectedModel?.provider === 'scira' && (
+                                            <button
+                                                onClick={() => setSciraMode(sciraMode === 'x' ? 'chat' : 'x')}
+                                                className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${sciraMode === 'x' ? 'bg-zinc-900/10 text-zinc-900 dark:bg-white/10 dark:text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                                title="Search X (Twitter)"
+                                            >
+                                                <span className="font-bold font-mono text-sm leading-none">𝕏</span>
+                                                <span className="hidden sm:inline">Search X</span>
+                                            </button>
+                                        )}
+
+                                        <button
+                                            onClick={() => setMode(mode === 'canvas' ? 'chat' : 'canvas')}
+                                            className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${mode === 'canvas' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+                                            title="Toggle Canvas"
+                                        >
+                                            <PanelLeft size={16} />
+                                            <span className="hidden sm:inline">Canvas</span>
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 shrink-0 bg-white dark:bg-zinc-950 pl-2 shadow-[-10px_0_10px_-5px_rgba(0,0,0,0.1)] dark:shadow-[-10px_0_10px_-5px_rgba(0,0,0,1)] z-10">
                                     <button
                                         onClick={() => fileInputRef.current?.click()}
                                         className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-all"

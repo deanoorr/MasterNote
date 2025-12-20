@@ -202,6 +202,14 @@ export default function TaskManager() {
 
     return (
         <div className="h-full flex overflow-hidden">
+            {/* Mobile Sidebar Backdrop */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
             <AnimatePresence mode="wait">
                 {isSidebarOpen && (
@@ -210,7 +218,7 @@ export default function TaskManager() {
                         animate={{ width: 256, opacity: 1 }}
                         exit={{ width: 0, opacity: 0 }}
                         transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-xl flex flex-col overflow-hidden whitespace-nowrap"
+                        className="fixed md:relative z-40 h-full border-r border-zinc-200 dark:border-white/5 bg-white/95 dark:bg-black/90 backdrop-blur-xl flex flex-col overflow-hidden whitespace-nowrap shadow-2xl md:shadow-none"
                     >
                         <div className="p-4 w-64">
                             <div className="flex justify-between items-center mb-4">
@@ -279,7 +287,7 @@ export default function TaskManager() {
             </AnimatePresence>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full">
+            <main className="flex-1 flex flex-col p-4 md:p-8 max-w-4xl mx-auto w-full">
                 <header className="mb-8 flex justify-between items-end border-b border-zinc-200 dark:border-zinc-900 pb-6">
                     <div>
                         <div className="flex items-center gap-3 mb-2">

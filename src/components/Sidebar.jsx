@@ -13,7 +13,7 @@ const navItems = [
 
 export default function Sidebar({ activeTab, onTabChange, isCollapsed, setIsCollapsed }) {
     return (
-        <aside className={`fixed left-0 top-0 h-full ${isCollapsed ? 'w-20' : 'w-20 md:w-64'} z-50 flex flex-col pb-6 border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-xl transition-all duration-300 group/sidebar rounded-r-3xl`}>
+        <aside className={`fixed left-0 top-0 h-full ${isCollapsed ? 'w-20' : 'w-20 md:w-64'} z-50 hidden md:flex flex-col pb-6 border-r border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-xl transition-all duration-300 group/sidebar rounded-r-3xl`}>
 
             {/* Logo Area */}
             <div className={`h-14 flex items-center shrink-0 border-b border-transparent ${isCollapsed ? 'justify-center mx-auto' : 'justify-start px-6'}`}>

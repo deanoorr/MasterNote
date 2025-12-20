@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
+import MobileNav from './MobileNav';
 import Workspace from '../pages/Workspace';
 import AssistantView from '../pages/AssistantView';
 import NotesPage from '../pages/NotesPage';
@@ -28,7 +29,7 @@ export default function Layout() {
                 setIsCollapsed={setIsCollapsed}
             />
 
-            <main className={`flex-1 h-full relative overflow-hidden z-10 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-20 md:ml-64'}`}>
+            <main className={`flex-1 h-full relative overflow-hidden z-10 transition-all duration-300 ml-0 md:ml-20 ${!isCollapsed ? 'md:ml-64' : ''} pb-[60px] md:pb-0`}>
                 {activeTab === 'home' && <DashboardPage onNavigate={setActiveTab} />}
                 {activeTab === 'workspace' && <Workspace />}
                 {activeTab === 'assistant' && <AssistantView />}
@@ -36,6 +37,8 @@ export default function Layout() {
                 {activeTab === 'habits' && <HabitsPage />}
                 {activeTab === 'settings' && <SettingsPage />}
             </main>
+
+            <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
     );
 }
