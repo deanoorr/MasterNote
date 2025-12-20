@@ -168,12 +168,28 @@ export function ChatProvider({ children }) {
     };
 
     const deleteSession = async (id) => {
-        setSessions(prev => prev.filter(s => s.id !== id));
-        if (currentSessionId === id && sessions.length > 1) {
-            // Switch to next
-            const next = sessions.find(s => s.id !== id);
-            setCurrentSessionId(next ? next.id : 'default');
+        // Determine the next session ID *before* state updates
+        let nextId = currentSessionId;
+        const remaining = sessions.filter(s => s.id !== id);
+
+        if (remaining.length === 0) {
+            // If deleting the last session, create a new default one
+            const newSession = {
+                ...DEFAULT_SESSION,
+                id: Date.now().toString(),
+                lastUpdated: Date.now()
+            };
+            setSessions([newSession]);
+            nextId = newSession.id;
+        } else {
+            setSessions(remaining);
+            if (currentSessionId === id) {
+                // If we deleted the active session, switch to the first available one
+                nextId = remaining[0].id;
+            }
         }
+
+        setCurrentSessionId(nextId);
 
         if (!user) return;
 
@@ -181,7 +197,9 @@ export function ChatProvider({ children }) {
         if (chatFolderMap[id]) {
             const newMap = { ...chatFolderMap };
             delete newMap[id];
-            setChatFolderMap(newMap);
+            setChatFolderMap(newMap); // Update local state immediately
+            // We can try to save map, but maybe await to avoid race? 
+            // The function implies fire-and-forget for map, wait for delete.
             await saveFoldersAndMap(folders, newMap);
         }
 
