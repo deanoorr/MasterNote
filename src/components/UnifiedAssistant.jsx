@@ -258,6 +258,46 @@ export default function UnifiedAssistant() {
     const [attachments, setAttachments] = useState([]);
     const fileInputRef = useRef(null);
 
+    const generateChatTitle = async (sessionId, userMessage, aiMessage) => {
+        try {
+            const prompt = `
+            Summarize the following conversation start into a short, descriptive title (max 5 words).
+            User: ${userMessage.substring(0, 500)}
+            AI: ${aiMessage.substring(0, 500)}
+            
+            Return ONLY the title, no quotes or preamble.
+            `;
+
+            let title = "New Conversation";
+
+            if (clientsRef.current.openai) {
+                const completion = await clientsRef.current.openai.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "gpt-4o-mini", // fast and cheap
+                    max_tokens: 15
+                });
+                title = completion.choices[0].message.content;
+            } else if (clientsRef.current.genAI) {
+                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const result = await model.generateContent(prompt);
+                title = result.response.text();
+            } else if (clientsRef.current.anthropic) {
+                const msg = await clientsRef.current.anthropic.messages.create({
+                    model: "claude-3-haiku-20240307",
+                    max_tokens: 15,
+                    messages: [{ role: "user", content: prompt }]
+                });
+                title = msg.content[0].text;
+            }
+
+            title = title.replace(/^["']|["']$/g, '').trim();
+            renameSession(sessionId, title);
+
+        } catch (e) {
+            console.error("Auto-titling failed:", e);
+        }
+    };
+
     const handleFileSelect = (e) => {
         const files = Array.from(e.target.files);
         if (files.length + attachments.length > 4) {
@@ -1169,6 +1209,11 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         // Final Persist
                         await persistSession(activeSessionId);
 
+                        // Auto-Titling Logic
+                        if (currentSession.title === 'New Chat' && currentSession.messages.length <= 3) {
+                            generateChatTitle(activeSessionId, userText, textAccumulator);
+                        }
+
                     } catch (e) {
                         console.error("Anthropic Error:", e);
                         updateMessage(activeSessionId, msgId, "Error: " + e.message);
@@ -1220,6 +1265,12 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     let text = data.text || "";
                     if (data.sources) text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
                     updateMessage(activeSessionId, msgId, text);
+
+                    // Auto-Titling Logic for Scira
+                    if (currentSession.title === 'New Chat' && currentSession.messages.length <= 3) {
+                        generateChatTitle(activeSessionId, userText, text);
+                    }
+
                 }
             } catch (error) {
                 updateMessage(activeSessionId, msgId, `Error: ${error.message}`);
@@ -1522,7 +1573,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                 </motion.aside>
             )}
 
-            <main className="flex-1 flex flex-col relative bg-transparent h-screen overflow-hidden w-full">
+            <main className="flex-1 flex flex-col relative bg-transparent h-screen overflow-hidden w-full pb-[80px] md:pb-0">
                 <header className="h-[60px] border-b border-zinc-200 dark:border-white/5 bg-white/70 dark:bg-zinc-950/60 backdrop-blur-xl flex items-center justify-between px-4 md:px-6 shrink-0 sticky top-0 z-30">
                     <div className="flex items-center gap-4">
                         <motion.button
