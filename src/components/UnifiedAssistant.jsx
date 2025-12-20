@@ -18,6 +18,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CanvasPanel from './CanvasPanel';
 import WeatherCard from './WeatherCard';
+import FinanceCard from './FinanceCard';
+import SportsCard from './SportsCard';
 
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
@@ -558,8 +560,41 @@ export default function UnifiedAssistant() {
                         }
                     } catch (e) { /* Partial JSON */ }
                 }
-                // Always return text with weather tags hidden during stream
                 return fullText.replace(/<weather_json>[\s\S]*?(?:<\/weather_json>|$)/, '');
+            };
+
+            // Finance Extraction Helper
+            const processFinanceUpdates = (fullText) => {
+                const financeMatch = fullText.match(/<finance_json>([\s\S]*?)(?:<\/finance_json>|$)/);
+                if (financeMatch && financeMatch[1].includes('}')) {
+                    try {
+                        const jsonStr = financeMatch[1].trim();
+                        const data = JSON.parse(jsonStr);
+                        if (data) {
+                            updateMessage(currentSessionId, msgId, null, {
+                                financeData: data
+                            });
+                        }
+                    } catch (e) { /* Partial JSON */ }
+                }
+                return fullText.replace(/<finance_json>[\s\S]*?(?:<\/finance_json>|$)/, '');
+            };
+
+            // Sports Extraction Helper
+            const processSportsUpdates = (fullText) => {
+                const sportsMatch = fullText.match(/<sports_json>([\s\S]*?)(?:<\/sports_json>|$)/);
+                if (sportsMatch && sportsMatch[1].includes('}')) {
+                    try {
+                        const jsonStr = sportsMatch[1].trim();
+                        const data = JSON.parse(jsonStr);
+                        if (data) {
+                            updateMessage(currentSessionId, msgId, null, {
+                                sportsData: data
+                            });
+                        }
+                    } catch (e) { /* Partial JSON */ }
+                }
+                return fullText.replace(/<sports_json>[\s\S]*?(?:<\/sports_json>|$)/, '');
             };
 
             addMessageToSession(currentSessionId, {
@@ -624,12 +659,35 @@ Follow this structure:
     "temperature_2m_min": [15, ...]
   }
 }
+    "temperature_2m_min": [15, ...]
+  }
+}
 WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=Storm. Always provide a 7-day forecast if possible.`;
+
+                const financePrompt = `
+IMPORTANT: FINANCE QUERIES.
+If search results contain stock/crypto info, output <finance_json>:
+{
+"symbol": "BTC-USD", "name": "Bitcoin", "price": "100,000", "currency": "USD", "change_percent": 5.2, "change_amount": 5000, "is_positive": true, "market_cap": "2T", "volume": "50B", "data_points": [95000, 98000, 100000]
+}`;
+
+                const sportsPrompt = `
+IMPORTANT: SPORTS QUERIES.
+If search results contain sports scores/results, output <sports_json>:
+{
+"league": "Premier League", "status": "Live 88'", "venue": "Anfield",
+"home_team": { "name": "Liverpool", "score": 2, "logo_color": "from-red-700 to-red-900" },
+"away_team": { "name": "Chelsea", "score": 1, "logo_color": "from-blue-700 to-blue-900" }
+}`;
 
                 let systemPrompt = baseSystemPrompt;
                 if (mode === 'canvas') systemPrompt += canvasPrompt;
                 if (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider)) systemPrompt += thinkingPrompt;
-                if (isSearchEnabled) systemPrompt += weatherPrompt;
+                if (isSearchEnabled) {
+                    systemPrompt += weatherPrompt;
+                    systemPrompt += financePrompt;
+                    systemPrompt += sportsPrompt;
+                }
 
                 if (selectedModel.provider === 'google') {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
@@ -719,6 +777,8 @@ WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=St
 
                         let displayText = processCanvasUpdates(textAccumulator);
                         displayText = processWeatherUpdates(displayText);
+                        displayText = processFinanceUpdates(displayText);
+                        displayText = processSportsUpdates(displayText);
                         updateMessage(currentSessionId, msgId, displayText);
                     }
 
@@ -863,9 +923,13 @@ WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=St
                                 setCanvasData({ type, title, content: content.trim() });
                                 let displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
                                 displayText = processWeatherUpdates(displayText);
+                                displayText = processFinanceUpdates(displayText);
+                                displayText = processSportsUpdates(displayText);
                                 updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             } else {
-                                const displayText = processWeatherUpdates(textAccumulator);
+                                let displayText = processWeatherUpdates(textAccumulator);
+                                displayText = processFinanceUpdates(displayText);
+                                displayText = processSportsUpdates(displayText);
                                 updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             }
                         }
@@ -988,7 +1052,9 @@ WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=St
                                 const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
                                 updateMessage(currentSessionId, msgId, displayText);
                             } else {
-                                const displayText = processWeatherUpdates(textAccumulator);
+                                let displayText = processWeatherUpdates(textAccumulator);
+                                displayText = processFinanceUpdates(displayText);
+                                displayText = processSportsUpdates(displayText);
                                 if (displayText !== textAccumulator) {
                                     updateMessage(currentSessionId, msgId, displayText);
                                 } else {
@@ -1484,6 +1550,8 @@ WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=St
                                         {msg.role !== 'user' && renderAIAvatar(msg, idx)}
                                         <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
                                             {msg.weatherData && <WeatherCard data={msg.weatherData} location={msg.weatherLocation} />}
+                                            {msg.financeData && <FinanceCard data={msg.financeData} />}
+                                            {msg.sportsData && <SportsCard data={msg.sportsData} />}
                                             <FormattedMessage content={msg.content} />
                                         </div>
                                     </div>
