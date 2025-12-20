@@ -16,9 +16,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import ThinkingProcess from './ThinkingProcess';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import VisualSearchCarousel from './VisualSearchCarousel';
 import CanvasPanel from './CanvasPanel';
-import { searchImages } from '../services/searchService';
+import WeatherCard from './WeatherCard';
 
 // Enhanced Custom Markdown Parser
 const FormattedMessage = ({ content }) => {
@@ -543,12 +542,33 @@ export default function UnifiedAssistant() {
             setAttachments([]);
 
             const msgId = Date.now() + 1;
+
+            // Weather Extraction Helper (Universal)
+            const processWeatherUpdates = (fullText) => {
+                const weatherMatch = fullText.match(/<weather_json>([\s\S]*?)(?:<\/weather_json>|$)/);
+                if (weatherMatch && weatherMatch[1].includes('}')) { // Ensure we have at least closing brace before trying to parse
+                    try {
+                        const jsonStr = weatherMatch[1].trim();
+                        const data = JSON.parse(jsonStr);
+                        if (data && data.current) {
+                            updateMessage(currentSessionId, msgId, null, {
+                                weatherData: data,
+                                weatherLocation: data.location || { name: 'Unknown' }
+                            });
+                        }
+                    } catch (e) { /* Partial JSON */ }
+                }
+                // Always return text with weather tags hidden during stream
+                return fullText.replace(/<weather_json>[\s\S]*?(?:<\/weather_json>|$)/, '');
+            };
+
             addMessageToSession(currentSessionId, {
                 id: msgId,
                 role: 'ai',
                 content: '',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             });
+
 
             try {
                 const historyForModel = [
@@ -590,9 +610,26 @@ You are generating content for a specialized editor.
 4. Do not provide conversational filler before the XML.
 5. If the user asks you to EDIT or ADD to the existing content, you MUST provide the FULL updated content within the tags, not just the changes.`;
 
+                const weatherPrompt = `
+IMPORTANT: WEATHER QUERIES.
+If search results contain weather info, you MUST output a structured JSON block at the end of your response inside <weather_json> tags.
+Follow this structure:
+{
+  "location": { "name": "City Name", "country": "Country", "admin1": "State/Region" },
+  "current": { "temperature_2m": 20, "weather_code": 0, "is_day": 1, "relative_humidity_2m": 50, "apparent_temperature": 18, "wind_speed_10m": 10, "precipitation": 0 },
+  "daily": {
+    "time": ["2024-01-01", ...],
+    "weather_code": [0, ...],
+    "temperature_2m_max": [25, ...],
+    "temperature_2m_min": [15, ...]
+  }
+}
+WMO code guide: 0=Clear, 1-3=Cloudy, 45-48=Fog, 51-67=Rain, 71-77=Snow, 95-99=Storm. Always provide a 7-day forecast if possible.`;
+
                 let systemPrompt = baseSystemPrompt;
                 if (mode === 'canvas') systemPrompt += canvasPrompt;
                 if (isThinkingEnabled && !['anthropic'].includes(selectedModel.provider)) systemPrompt += thinkingPrompt;
+                if (isSearchEnabled) systemPrompt += weatherPrompt;
 
                 if (selectedModel.provider === 'google') {
                     if (!clientsRef.current.genAI) throw new Error("Google API Key missing");
@@ -630,16 +667,11 @@ You are generating content for a specialized editor.
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
 
+
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
                             updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
                         }
-
-                        searchImages(refinedQuery).then(imgs => {
-                            if (imgs && imgs.length > 0) {
-                                updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
-                            }
-                        });
 
                         if (isThinkingEnabled) {
                             searchThoughts += "\n✅ Handing off to Google Search Tool.</think>";
@@ -662,6 +694,7 @@ You are generating content for a specialized editor.
                     let gatheredSources = new Set();
 
                     // Canvas Extraction Helper (Google)
+
                     const processCanvasUpdates = (fullText) => {
                         const canvasMatch = fullText.match(/<canvas_content type="([^"]+)" title="([^"]+)">([\s\S]*?)(?:<\/canvas_content>|$)/);
                         if (canvasMatch) {
@@ -684,7 +717,8 @@ You are generating content for a specialized editor.
                             });
                         }
 
-                        const displayText = processCanvasUpdates(textAccumulator);
+                        let displayText = processCanvasUpdates(textAccumulator);
+                        displayText = processWeatherUpdates(displayText);
                         updateMessage(currentSessionId, msgId, displayText);
                     }
 
@@ -734,6 +768,7 @@ You are generating content for a specialized editor.
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
 
+
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
                             updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
@@ -747,9 +782,6 @@ You are generating content for a specialized editor.
                             }
 
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE: [Domain](URL).`;
-                            searchImages(refinedQuery).then(imgs => {
-                                if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
-                            });
                         } else {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n❌ No specific results found.</think>";
@@ -829,10 +861,12 @@ You are generating content for a specialized editor.
                                 const title = canvasMatch[2] || canvasMatch[3];
                                 const content = canvasMatch[5];
                                 setCanvasData({ type, title, content: content.trim() });
-                                const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                let displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
+                                displayText = processWeatherUpdates(displayText);
                                 updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             } else {
-                                updateMessage(currentSessionId, msgId, textAccumulator.replace(/(<\/think>\s*)+/g, "<\/think>"));
+                                const displayText = processWeatherUpdates(textAccumulator);
+                                updateMessage(currentSessionId, msgId, displayText.replace(/(<\/think>\s*)+/g, "<\/think>"));
                             }
                         }
                     }
@@ -865,6 +899,7 @@ You are generating content for a specialized editor.
 
                         const refinedQuery = await refineSearchQuery(userText, currentSession.messages);
 
+
                         if (isThinkingEnabled) {
                             searchThoughts = searchThoughts.replace("</think>", `\n🔍 Searching Google for: "${refinedQuery}"...`);
                             updateMessage(currentSessionId, msgId, searchThoughts + "</think>");
@@ -878,9 +913,6 @@ You are generating content for a specialized editor.
                             }
 
                             finalSystemPrompt += `\n\nREAL-TIME WEB CONTEXT:\n${webContext}\n\nCite sources INLINE.`;
-                            searchImages(refinedQuery).then(imgs => {
-                                if (imgs && imgs.length > 0) updateMessage(currentSessionId, msgId, null, { visualResults: imgs });
-                            });
                         } else {
                             if (isThinkingEnabled) {
                                 searchThoughts += "\n❌ No specific results found.</think>";
@@ -956,7 +988,12 @@ You are generating content for a specialized editor.
                                 const displayText = textAccumulator.replace(/<canvas_content[\s\S]*?(?:<\/canvas_content>|$)/, '_[Updated Canvas Content]_');
                                 updateMessage(currentSessionId, msgId, displayText);
                             } else {
-                                updateMessage(currentSessionId, msgId, textAccumulator);
+                                const displayText = processWeatherUpdates(textAccumulator);
+                                if (displayText !== textAccumulator) {
+                                    updateMessage(currentSessionId, msgId, displayText);
+                                } else {
+                                    updateMessage(currentSessionId, msgId, textAccumulator);
+                                }
                             }
                         }
                     }
@@ -1446,7 +1483,7 @@ You are generating content for a specialized editor.
                                     <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         {msg.role !== 'user' && renderAIAvatar(msg, idx)}
                                         <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
-                                            {msg.visualResults && <VisualSearchCarousel images={msg.visualResults} />}
+                                            {msg.weatherData && <WeatherCard data={msg.weatherData} location={msg.weatherLocation} />}
                                             <FormattedMessage content={msg.content} />
                                         </div>
                                     </div>
