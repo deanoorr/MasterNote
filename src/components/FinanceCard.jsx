@@ -116,7 +116,7 @@ export default function FinanceCard({ data }) {
             {/* Glass Shine */}
             <div className="absolute -top-20 -right-20 w-40 h-40 bg-white/10 rounded-full blur-[50px] pointer-events-none group-hover:bg-white/20 transition-colors" />
 
-            <div className="relative z-10 p-6 text-white">
+            <div className="relative z-10 p-4 md:p-6 text-white">
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center gap-3.5">
@@ -131,7 +131,7 @@ export default function FinanceCard({ data }) {
                 </div>
 
                 {/* Main Price & Sparkline Row */}
-                <div className="flex items-end justify-between mb-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-8 gap-4 sm:gap-0">
                     <div className="flex flex-col">
                         <span className="text-sm font-medium opacity-60 mb-1">Current Price</span>
                         <h2 className="text-5xl font-black tracking-tighter drop-shadow-xl">

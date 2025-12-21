@@ -91,7 +91,7 @@ export default function WeatherCard({ data, location }) {
         <motion.div
             initial={{ opacity: 0, scale: 0.98, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className={`my-4 relative overflow-hidden rounded-3xl border border-white/20 shadow-xl transition-all duration-500 max-w-xl`}
+            className={`my-4 relative overflow-hidden rounded-3xl border border-white/20 shadow-xl transition-all duration-500 w-full max-w-xl`}
         >
             {/* Dynamic Background Gradient */}
             <div className={`absolute inset-0 bg-gradient-to-br ${theme.gradient} transition-colors duration-1000`} />
@@ -101,7 +101,7 @@ export default function WeatherCard({ data, location }) {
             <div className="absolute inset-0 bg-black/10 dark:bg-transparent" />
 
             {/* Content Wrapper */}
-            <div className="relative z-10 p-5 text-white">
+            <div className="relative z-10 p-3 md:p-5 text-white">
 
                 {/* Header: Location & Status */}
                 <div className="flex justify-between items-start mb-4">
@@ -112,7 +112,7 @@ export default function WeatherCard({ data, location }) {
                             className="flex items-center gap-1.5"
                         >
                             <Navigation size={12} className="opacity-80 rotate-45" />
-                            <h3 className="text-base font-bold tracking-tight">{location.name || 'Unknown'}</h3>
+                            <h3 className="text-base font-bold tracking-tight truncate max-w-[200px] sm:max-w-none">{location.name || 'Unknown'}</h3>
                         </motion.div>
                         <p className="text-[10px] font-medium opacity-70 flex items-center gap-1 pl-0.5">
                             {location.admin1 ? `${location.admin1}, ` : ''}{location.country || ''} • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -127,9 +127,9 @@ export default function WeatherCard({ data, location }) {
                 </div>
 
                 {/* Main Content: Temp + Grid */}
-                <div className="flex items-center gap-4 mb-5">
+                <div className="flex flex-col sm:flex-row items-center gap-4 mb-5">
                     {/* Big Temp */}
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-center sm:items-start">
                         <motion.h2
                             className="text-5xl font-black tracking-tighter drop-shadow-lg leading-none"
                         >
@@ -148,10 +148,10 @@ export default function WeatherCard({ data, location }) {
                     </div>
 
                     {/* Divider */}
-                    <div className="w-px h-12 bg-white/20 rounded-full" />
+                    <div className="hidden sm:block w-px h-12 bg-white/20 rounded-full" />
 
                     {/* Metrics Grid */}
-                    <div className="grid grid-cols-4 gap-2 flex-1">
+                    <div className="grid grid-cols-4 gap-2 w-full sm:flex-1">
                         {[
                             { icon: <Droplets size={12} />, label: 'Hum', value: `${current.relative_humidity_2m}%` },
                             { icon: <Wind size={12} />, label: 'Wind', value: `${Math.round(current.wind_speed_10m)}` },

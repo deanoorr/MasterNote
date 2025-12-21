@@ -1720,7 +1720,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                                 return (
                                     <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         {msg.role !== 'user' && renderAIAvatar(msg, idx)}
-                                        <div className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
+                                        <div className={`max-w-[85%] p-2 md:p-4 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white' : 'text-zinc-800 dark:text-zinc-300'}`}>
                                             {msg.weatherData && <WeatherCard data={msg.weatherData} location={msg.weatherLocation} />}
                                             {msg.financeData && <FinanceCard data={msg.financeData} />}
                                             {msg.sportsData && <SportsCard data={msg.sportsData} />}
@@ -1775,7 +1775,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         <div className="relative bg-white/80 dark:bg-zinc-950/80 backdrop-blur-2xl border border-zinc-200 dark:border-white/10 rounded-[21px] flex flex-col p-2 transition-all duration-300 shadow-2xl shadow-black/20 group-focus-within:ring-1 group-focus-within:ring-blue-500/20">
                             {/* Toolbar */}
                             <div className="px-2 pb-1 flex items-center justify-between border-b border-zinc-100 dark:border-white/5 mb-1 gap-2">
-                                <div className="flex items-center gap-1 py-1 min-w-0 w-full">
+                                <div className="flex items-center gap-1 py-1 min-w-0 flex-1">
                                     <div className="shrink-0 flex items-center gap-1 z-20 relative">
                                         <ModelSelector />
                                         <div className="w-[1px] h-4 bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" />

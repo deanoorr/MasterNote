@@ -150,7 +150,7 @@ export default function ModelSelector() {
                         className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-black/20 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 group"
                     >
                         <Globe size={14} className="text-zinc-500 dark:text-zinc-400" />
-                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200 max-w-[150px] truncate">
+                        <span className="text-xs font-medium text-zinc-900 dark:text-zinc-200 max-w-[80px] sm:max-w-[150px] truncate">
                             {selectedOpenRouterModel ? selectedOpenRouterModel.name : 'Select Model'}
                         </span>
                         <ChevronDown size={12} className={`text-zinc-500 transition-transform ${isOpenRouterOpen ? 'rotate-180' : ''}`} />

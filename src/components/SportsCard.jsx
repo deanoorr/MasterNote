@@ -39,31 +39,31 @@ export default function SportsCard({ data }) {
             {/* Texture */}
             <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/10 to-transparent blur-xl pointer-events-none" />
 
-            <div className="relative z-10 text-white p-6 pb-8">
+            <div className="relative z-10 text-white p-3 md:p-6 pb-4 md:pb-8">
 
                 {/* Header Pill */}
-                <div className="flex justify-center mb-6">
-                    <div className="px-3 py-1 bg-black/30 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-3 shadow-lg">
-                        <div className="flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase text-white/90">
+                <div className="flex justify-center mb-3 md:mb-6">
+                    <div className="px-3 py-1 bg-black/30 backdrop-blur-md rounded-2xl md:rounded-full border border-white/10 flex flex-wrap justify-center items-center gap-2 md:gap-3 shadow-lg max-w-full">
+                        <div className="flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase text-white/90 whitespace-nowrap">
                             <Trophy size={10} className="text-yellow-400" />
                             {league}
                         </div>
-                        <div className="w-px h-3 bg-white/20" />
-                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-white/70">
-                            <MapPin size={10} />
+                        <div className="hidden md:block w-px h-3 bg-white/20" />
+                        <div className="flex items-center gap-1.5 text-[10px] font-medium text-white/70 text-center leading-tight">
+                            <MapPin size={10} className="shrink-0" />
                             {venue}
                         </div>
                     </div>
                 </div>
 
                 {/* Main Scoreboard */}
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-1 md:gap-2">
 
                     {/* Home Team */}
                     <div className="flex flex-col items-center flex-1">
                         <motion.div
                             whileHover={{ scale: 1.05 }}
-                            className={`w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br ${getGradient(home_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
+                            className={`w-12 h-12 md:w-16 md:h-16 mb-2 md:mb-4 rounded-2xl bg-gradient-to-br ${getGradient(home_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
                             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/icon:opacity-100 transition-opacity" />
                             {home_team.logo_url ? (
                                 <img
@@ -78,23 +78,23 @@ export default function SportsCard({ data }) {
                             ) : null}
                             <span className={`relative z-10 ${home_team.logo_url ? 'hidden' : 'block'}`}>{home_team.name.substring(0, 3).toUpperCase()}</span>
                         </motion.div>
-                        <h3 className="font-extrabold text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{home_team.name}</h3>
+                        <h3 className="font-extrabold text-sm md:text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{home_team.name}</h3>
                         <span className="text-[9px] opacity-60 uppercase font-bold tracking-[0.2em]">Home</span>
                     </div>
 
                     {/* VS / Score Widget */}
-                    <div className="flex flex-col items-center px-2 z-20">
-                        <div className="bg-black/40 backdrop-blur-xl rounded-3xl px-6 py-3 border border-white/10 flex items-center gap-5 shadow-2xl min-w-[140px] justify-center">
-                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{home_team.score ?? '-'}</span>
+                    <div className="flex flex-col items-center px-0 md:px-2 z-20 shrink-0">
+                        <div className="bg-black/40 backdrop-blur-xl rounded-2xl md:rounded-3xl px-2 py-1.5 md:px-6 md:py-3 border border-white/10 flex items-center gap-2 md:gap-5 shadow-2xl min-w-[80px] md:min-w-[140px] justify-center">
+                            <span className="text-2xl md:text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{home_team.score ?? '-'}</span>
                             <div className="flex flex-col gap-0.5 opacity-50">
-                                <div className="w-1 h-1 bg-white rounded-full" />
-                                <div className="w-1 h-1 bg-white rounded-full" />
+                                <div className="w-0.5 h-0.5 md:w-1 md:h-1 bg-white rounded-full" />
+                                <div className="w-0.5 h-0.5 md:w-1 md:h-1 bg-white rounded-full" />
                             </div>
-                            <span className="text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{away_team.score ?? '-'}</span>
+                            <span className="text-2xl md:text-5xl font-black tracking-tighter tabular-nums drop-shadow-2xl">{away_team.score ?? '-'}</span>
                         </div>
 
                         {/* Status Pill */}
-                        <div className={`mt-[-12px] px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-lg z-10 ${isLive ? 'bg-red-600 border-red-500 text-white animate-pulse shadow-red-500/30' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+                        <div className={`mt-[-12px] px-2 py-0.5 md:px-4 md:py-1.5 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest border shadow-lg z-10 ${isLive ? 'bg-red-600 border-red-500 text-white animate-pulse shadow-red-500/30' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
                             {status}
                         </div>
                     </div>
@@ -103,7 +103,7 @@ export default function SportsCard({ data }) {
                     <div className="flex flex-col items-center flex-1">
                         <motion.div
                             whileHover={{ scale: 1.05 }}
-                            className={`w-16 h-16 mb-4 rounded-2xl bg-gradient-to-br ${getGradient(away_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
+                            className={`w-12 h-12 md:w-16 md:h-16 mb-2 md:mb-4 rounded-2xl bg-gradient-to-br ${getGradient(away_team.logo_color)} shadow-[0_8px_16px_rgba(0,0,0,0.3)] border border-white/20 flex items-center justify-center text-sm font-black overflow-hidden relative group/icon`}>
                             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/icon:opacity-100 transition-opacity" />
                             {away_team.logo_url ? (
                                 <img
@@ -118,7 +118,7 @@ export default function SportsCard({ data }) {
                             ) : null}
                             <span className={`relative z-10 ${away_team.logo_url ? 'hidden' : 'block'}`}>{away_team.name.substring(0, 3).toUpperCase()}</span>
                         </motion.div>
-                        <h3 className="font-extrabold text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{away_team.name}</h3>
+                        <h3 className="font-extrabold text-sm md:text-xl leading-none text-center tracking-tight mb-1 drop-shadow-md">{away_team.name}</h3>
                         <span className="text-[9px] opacity-60 uppercase font-bold tracking-[0.2em]">Away</span>
                     </div>
                 </div>
