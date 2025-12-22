@@ -989,7 +989,6 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     let targetModelId = selectedModel.id;
                     if (selectedModel.provider === 'deepseek' && isThinkingEnabled) targetModelId = 'deepseek-reasoner';
                     else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
-                    else if (selectedModel.provider === 'openai' && isThinkingEnabled) targetModelId = 'gpt-5.2';
                     else if (selectedModel.provider === 'moonshot' && isThinkingEnabled) targetModelId = 'kimi-k2-thinking';
                     else if (selectedModel.provider === 'openrouter') {
                         if (!selectedOpenRouterModel) throw new Error("Please select an OpenRouter model");

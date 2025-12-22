@@ -369,7 +369,8 @@ export default function TaskManager() {
                                                 type="date"
                                                 value={newTaskDate}
                                                 onChange={(e) => setNewTaskDate(e.target.value)}
-                                                className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400"
+                                                onClick={(e) => e.target.showPicker()}
+                                                className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-400 relative z-10 cursor-pointer"
                                             />
                                         </div>
 
@@ -468,7 +469,8 @@ export default function TaskManager() {
                                                             type="date"
                                                             value={editDate}
                                                             onChange={(e) => setEditDate(e.target.value)}
-                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark]"
+                                                            onClick={(e) => e.target.showPicker()}
+                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
                                                         />
                                                     </div>
                                                     <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
