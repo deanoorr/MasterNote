@@ -922,6 +922,68 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                                 : selectedModel.provider === 'moonshot' ? clientsRef.current.moonshot
                                     : clientsRef.current.openrouter;
 
+                    // --- INTERCEPT: Scira X Search for Grok ---
+                    if (selectedModel.provider === 'xai' && sciraMode === 'x') {
+                        if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
+
+                        let refinedQuery = userText;
+                        if (isThinkingEnabled) {
+                            updateMessage(activeSessionId, msgId, "<think>🧠 Refining search query for X...</think>");
+                            refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                            updateMessage(activeSessionId, msgId, `<think>🔍 Searching X for: "${refinedQuery}"...</think>`);
+                        } else {
+                            refinedQuery = await refineSearchQuery(userText, currentSession.messages);
+                        }
+
+                        const endpoint = "/scira-api/api/xsearch";
+                        const body = { query: refinedQuery };
+
+                        try {
+                            const response = await fetch(endpoint, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${import.meta.env.VITE_SCIRA_API_KEY}` },
+                                body: JSON.stringify(body)
+                            });
+
+                            if (!response.ok) {
+                                const errorText = await response.text().catch(() => 'Unknown error');
+                                throw new Error(`Scira API Error (${response.status}): ${errorText}`);
+                            }
+
+                            const textData = await response.text();
+                            if (!textData) throw new Error("Received empty response from Scira API");
+
+                            let data;
+                            try {
+                                data = JSON.parse(textData);
+                            } catch (e) {
+                                throw new Error("Failed to parse Scira API response: " + textData.substring(0, 100));
+                            }
+
+
+                            let text = data.text || "";
+                            if (data.sources && data.sources.length > 0) {
+                                text += "\n\n**Sources:**\n";
+                                data.sources.forEach((s, i) => {
+                                    text += `\n${i + 1}. [X Post ${i + 1}](${s})`;
+                                });
+                            }
+                            updateMessage(activeSessionId, msgId, text);
+
+                            // Final Persist
+                            await persistSession(activeSessionId);
+                            setIsProcessing(false);
+                            setIsThinkingEnabled(false);
+                            return; // EXIT EARLY to skip standard Grok call
+                        } catch (e) {
+                            console.error("Scira X Search Error:", e);
+                            updateMessage(activeSessionId, msgId, "Error performing X search: " + e.message);
+                            setIsProcessing(false);
+                            return;
+                        }
+                    }
+                    // ------------------------------------------
+
                     if (!client) throw new Error(`${selectedModel.provider} API Key missing`);
 
                     let targetModelId = selectedModel.id;
@@ -1263,7 +1325,12 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     }
 
                     let text = data.text || "";
-                    if (data.sources) text += "\n\n**Sources:**\n" + data.sources.map(s => `- [${s}](${s})`).join("\n");
+                    if (data.sources && data.sources.length > 0) {
+                        text += "\n\n**Sources:**\n";
+                        data.sources.forEach((s, i) => {
+                            text += `\n${i + 1}. [Source ${i + 1}](${s})`;
+                        });
+                    }
                     updateMessage(activeSessionId, msgId, text);
 
                     // Auto-Titling Logic for Scira
@@ -1800,8 +1867,8 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                                             <span className="hidden sm:inline">Search</span>
                                         </button>
 
-                                        {/* Scira X Button */}
-                                        {selectedModel?.provider === 'scira' && (
+                                        {/* Scira X Button (Enabled for both Scira and xAI/Grok) */}
+                                        {(selectedModel?.provider === 'scira' || selectedModel?.provider === 'xai') && (
                                             <button
                                                 onClick={() => setSciraMode(sciraMode === 'x' ? 'chat' : 'x')}
                                                 className={`p-2 rounded-lg flex items-center gap-2 text-xs font-medium transition-all shrink-0 whitespace-nowrap ${sciraMode === 'x' ? 'bg-zinc-900/10 text-zinc-900 dark:bg-white/10 dark:text-white' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
