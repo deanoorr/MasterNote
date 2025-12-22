@@ -152,7 +152,7 @@ export default function TaskManager() {
                     }
                     return d;
                 };
-                return dateValue(a.date).localeCompare(dateValue(b.date));
+                return (dateValue(a.date) || "").localeCompare(dateValue(b.date) || "");
             }
             return 0;
         });
