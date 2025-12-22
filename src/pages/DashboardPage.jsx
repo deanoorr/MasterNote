@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTasks } from '../context/TaskContext';
 import { useHabits } from '../context/HabitContext';
 import { useSettings } from '../context/SettingsContext';
-import OpenAI from 'openai';
+
 import { motion } from 'framer-motion';
 import { Sparkles, CheckCircle2, Circle, Clock, Loader2, ArrowRight, Activity } from 'lucide-react';
 
@@ -12,7 +12,7 @@ export default function DashboardPage({ onNavigate }) {
     const { settings } = useSettings();
 
     const [briefing, setBriefing] = useState('');
-    const [isLoadingBriefing, setIsLoadingBriefing] = useState(true);
+
 
     const userName = settings?.userProfile?.name || 'User';
     const pendingTasks = tasks.filter(t => t.status !== 'completed').slice(0, 5);
@@ -20,52 +20,9 @@ export default function DashboardPage({ onNavigate }) {
 
     // Generate Morning Briefing
     useEffect(() => {
-        const generateBriefing = async () => {
-            try {
-                const xaiKey = import.meta.env.VITE_XAI_API_KEY;
-                if (!xaiKey) throw new Error("xAI API Key missing");
-
-                const client = new OpenAI({
-                    apiKey: xaiKey,
-                    baseURL: "https://api.x.ai/v1",
-                    dangerouslyAllowBrowser: true
-                });
-
-                const prompt = `
-                    User: ${userName}
-                    Data Context:
-                    - Top Priority Tasks: ${pendingTasks.map(t => t.title).join(', ')}
-                    - Daily Habits: ${todaysHabits.map(h => h.title).join(', ')}
-                    
-                    Task: Write a short, cool, and personalized daily briefing (max 3 sentences).
-                    Style: Casual, confident, and direct.
-                    Instructions:
-                    1. Mention ONE specific task or habit by name to make it feel personal.
-                    2. Hype the user up to get it done.
-                    3. Keep it under 40 words.
-                `;
-
-                const result = await client.chat.completions.create({
-                    model: "grok-4-1-fast-non-reasoning",
-                    messages: [
-                        { role: "system", content: "You are a direct, cool productivity assistant." },
-                        { role: "user", content: prompt }
-                    ]
-                });
-
-                setBriefing(result.choices[0]?.message?.content || "");
-            } catch (error) {
-                console.error("Briefing Error:", error);
-                // Dynamic fallback that still references data if possible
-                const taskName = pendingTasks[0]?.title || "your goals";
-                setBriefing(`Good day, ${userName}! Time to crush ${taskName} and have a great one.`);
-            } finally {
-                setIsLoadingBriefing(false);
-            }
-        };
-
-        generateBriefing();
-    }, [userName]); // Only run on mount/user change
+        const taskName = pendingTasks[0]?.title || "your goals";
+        setBriefing(`Good day, ${userName}! Time to crush ${taskName} and have a great one.`);
+    }, [userName, pendingTasks]);
 
     const isCompletedToday = (habit) => {
         const today = new Date().toLocaleDateString('en-CA');
@@ -93,16 +50,9 @@ export default function DashboardPage({ onNavigate }) {
 
                     <div className="relative z-10">
                         <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-4">Command Center</h1>
-                        {isLoadingBriefing ? (
-                            <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 animate-pulse">
-                                <Loader2 size={18} className="animate-spin" />
-                                <span>Generating briefing...</span>
-                            </div>
-                        ) : (
-                            <p className="text-xl text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-3xl">
-                                {briefing}
-                            </p>
-                        )}
+                        <p className="text-xl text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-3xl">
+                            {briefing}
+                        </p>
                     </div>
                 </motion.div>
 
