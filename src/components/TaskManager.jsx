@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X, Edit2, Save, ListFilter, Box, Folder, PanelLeft } from 'lucide-react';
+import {
+    Calendar, Tag, AlertCircle, Check, Trash2, Clock, Plus, X,
+    Edit2, Save, ListFilter, Box, Folder, PanelLeft, LayoutGrid, List
+} from 'lucide-react';
 
 import { useTasks } from '../context/TaskContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../services/supabase';
+import KanbanBoard from './KanbanBoard';
 
 export default function TaskManager() {
     const { tasks, addTask, updateTask, deleteTask, projects, addProject, deleteProject } = useTasks();
     const [selectedProject, setSelectedProject] = useState('all'); // 'all', 'inbox', or projectId
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'board'
 
     const { user } = useAuth();
     // Task Logic
@@ -318,7 +323,25 @@ export default function TaskManager() {
                         </p>
                     </div>
                     <div className="flex gap-3 w-full md:w-auto">
-                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 flex-1 md:flex-initial min-w-0">
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-800/50 rounded-lg px-2 py-2 border border-zinc-200 dark:border-white/10 flex-1 md:flex-initial min-w-0">
+                            {/* View Toggle */}
+                            <div className="flex bg-zinc-100 dark:bg-zinc-700/50 rounded-md p-0.5 mr-2">
+                                <button
+                                    onClick={() => setViewMode('list')}
+                                    className={`p-1 rounded transition-all ${viewMode === 'list' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-500' : 'text-zinc-400 hover:text-zinc-600'}`}
+                                    title="List View"
+                                >
+                                    <List size={14} />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('board')}
+                                    className={`p-1 rounded transition-all ${viewMode === 'board' ? 'bg-white dark:bg-zinc-600 shadow-sm text-blue-500' : 'text-zinc-400 hover:text-zinc-600'}`}
+                                    title="Board View"
+                                >
+                                    <LayoutGrid size={14} />
+                                </button>
+                            </div>
+
                             <ListFilter size={16} className="text-slate-500 dark:text-slate-400 shrink-0" />
                             <select
                                 value={sortBy}
@@ -422,155 +445,167 @@ export default function TaskManager() {
                 </AnimatePresence>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                    <AnimatePresence mode="popLayout">
-                        {sortedTasks.length === 0 && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="text-center text-slate-500 py-20"
-                            >
-                                No tasks in {currentProjectName}. <br />
-                                <span className="text-sm">Use the Agent to create one!</span>
-                            </motion.div>
-                        )}
-
-                        {sortedTasks.map((task, index) => {
-                            const project = projects.find(p => p.id === task.projectId);
-                            const overdue = isOverdue(task.date);
-                            return (
+                    {viewMode === 'board' ? (
+                        <div className="h-full">
+                            <KanbanBoard
+                                tasks={sortedTasks}
+                                projects={projects}
+                                onUpdateStatus={(id, status) => updateTask(id, { status })}
+                                onEdit={startEditing}
+                                onDelete={deleteTask}
+                            />
+                        </div>
+                    ) : (
+                        <AnimatePresence mode="popLayout">
+                            {sortedTasks.length === 0 && (
                                 <motion.div
-                                    key={task.id}
-                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95, x: -20 }}
-                                    layout
-                                    transition={{ duration: 0.2 }}
-                                    className={`p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
-                                        ? 'bg-zinc-100 dark:bg-black/20 border-zinc-200 dark:border-white/5 opacity-50'
-                                        : overdue
-                                            ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm shadow-red-200 dark:shadow-none'
-                                            : 'bg-white dark:bg-white/5 backdrop-blur-md border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/20 hover:bg-zinc-50 dark:hover:bg-white/10 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/20'
-                                        }`}
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="text-center text-slate-500 py-20"
                                 >
-                                    {editingId === task.id ? (
-                                        <div className="flex flex-col gap-4">
-                                            <input
-                                                autoFocus
-                                                type="text"
-                                                value={editTitle}
-                                                onChange={(e) => setEditTitle(e.target.value)}
-                                                className="w-full bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 outline-none text-zinc-900 dark:text-white"
-                                            />
-                                            <div className="flex flex-col sm:flex-row gap-3">
-                                                <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
-                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
-                                                        <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                        <input
-                                                            type="date"
-                                                            value={editDate}
-                                                            onChange={(e) => setEditDate(e.target.value)}
-                                                            onClick={(e) => e.target.showPicker()}
-                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
-                                                        />
+                                    No tasks in {currentProjectName}. <br />
+                                    <span className="text-sm">Use the Agent to create one!</span>
+                                </motion.div>
+                            )}
+
+                            {sortedTasks.map((task, index) => {
+                                const project = projects.find(p => p.id === task.projectId);
+                                const overdue = isOverdue(task.date);
+                                return (
+                                    <motion.div
+                                        key={task.id}
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, x: -20 }}
+                                        layout
+                                        transition={{ duration: 0.2 }}
+                                        className={`p-5 rounded-xl border group relative transition-all ${task.status === 'completed'
+                                            ? 'bg-zinc-100 dark:bg-black/20 border-zinc-200 dark:border-white/5 opacity-50'
+                                            : overdue
+                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20 shadow-sm shadow-red-200 dark:shadow-none'
+                                                : 'bg-white dark:bg-white/5 backdrop-blur-md border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/20 hover:bg-zinc-50 dark:hover:bg-white/10 hover:shadow-xl hover:shadow-black/5 dark:hover:shadow-black/20'
+                                            }`}
+                                    >
+                                        {editingId === task.id ? (
+                                            <div className="flex flex-col gap-4">
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    value={editTitle}
+                                                    onChange={(e) => setEditTitle(e.target.value)}
+                                                    className="w-full bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-zinc-200 dark:border-white/10 outline-none text-zinc-900 dark:text-white"
+                                                />
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <div className="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                                                        <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                            <Clock size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                            <input
+                                                                type="date"
+                                                                value={editDate}
+                                                                onChange={(e) => setEditDate(e.target.value)}
+                                                                onClick={(e) => e.target.showPicker()}
+                                                                className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 [color-scheme:light] dark:[color-scheme:dark] cursor-pointer"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                            <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                            <select
+                                                                value={editPriority}
+                                                                onChange={(e) => setEditPriority(e.target.value)}
+                                                                className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
+                                                            >
+                                                                <option value="High">High</option>
+                                                                <option value="Medium">Medium</option>
+                                                                <option value="Low">Low</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                                                            <Folder size={14} className="text-zinc-500 dark:text-slate-400" />
+                                                            <select
+                                                                value={editProjectId}
+                                                                onChange={(e) => setEditProjectId(e.target.value)}
+                                                                className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 max-w-[100px]"
+                                                            >
+                                                                <option value="inbox">Inbox</option>
+                                                                {projects.map(p => (
+                                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
-                                                        <AlertCircle size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                        <select
-                                                            value={editPriority}
-                                                            onChange={(e) => setEditPriority(e.target.value)}
-                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300"
-                                                        >
-                                                            <option value="High">High</option>
-                                                            <option value="Medium">Medium</option>
-                                                            <option value="Low">Low</option>
-                                                        </select>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 bg-zinc-100 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-zinc-200 dark:border-white/10 flex-shrink-0">
-                                                        <Folder size={14} className="text-zinc-500 dark:text-slate-400" />
-                                                        <select
-                                                            value={editProjectId}
-                                                            onChange={(e) => setEditProjectId(e.target.value)}
-                                                            className="bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-slate-300 max-w-[100px]"
-                                                        >
-                                                            <option value="inbox">Inbox</option>
-                                                            {projects.map(p => (
-                                                                <option key={p.id} value={p.id}>{p.name}</option>
-                                                            ))}
-                                                        </select>
+                                                    <div className="flex-1"></div>
+                                                    <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
+                                                        <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-slate-400 dark:hover:text-white">Cancel</button>
+                                                        <button onClick={saveEdit} className="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
+                                                            <Save size={14} /> Save
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex-1"></div>
-                                                <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
-                                                    <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-slate-400 dark:hover:text-white">Cancel</button>
-                                                    <button onClick={saveEdit} className="bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
-                                                        <Save size={14} /> Save
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-start gap-4">
+                                                <button
+                                                    onClick={() => toggleStatus(task.id, task.status)}
+                                                    className={`mt-1 w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${task.status === 'completed'
+                                                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                                                        : 'border-slate-600 hover:border-primary-500 hover:bg-primary-500/10 text-transparent hover:text-primary-500'
+                                                        }`}
+                                                >
+                                                    <Check size={14} />
+                                                </button>
+
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h3 className={`text-lg font-medium transition-colors ${task.status === 'completed' ? 'text-zinc-400 dark:text-slate-500 line-through' : 'text-zinc-800 dark:text-slate-200 group-hover:text-black dark:group-hover:text-white'
+                                                            }`}>
+                                                            {task.title}
+                                                        </h3>
+                                                        {project && selectedProject === 'all' && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 text-zinc-400 bg-white/5">
+                                                                {project.name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2 items-center">
+                                                        {task.priority && (
+                                                            <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-md border font-medium ${task.priority === 'High' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                                                task.priority === 'Medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                                }`}>
+                                                                {task.priority}
+                                                            </span>
+                                                        )}
+
+                                                        <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-slate-800 text-zinc-600 dark:text-slate-400 border border-zinc-200 dark:border-slate-700">
+                                                            <Calendar size={12} className="mr-1.5" /> {formatDisplayDate(task.date)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => startEditing(task)}
+                                                        className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                        title="Edit Task"
+                                                    >
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deleteTask(task.id)}
+                                                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                                        title="Delete Task"
+                                                    >
+                                                        <Trash2 size={16} />
                                                     </button>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-start gap-4">
-                                            <button
-                                                onClick={() => toggleStatus(task.id, task.status)}
-                                                className={`mt-1 w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${task.status === 'completed'
-                                                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                                                    : 'border-slate-600 hover:border-primary-500 hover:bg-primary-500/10 text-transparent hover:text-primary-500'
-                                                    }`}
-                                            >
-                                                <Check size={14} />
-                                            </button>
-
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <h3 className={`text-lg font-medium transition-colors ${task.status === 'completed' ? 'text-zinc-400 dark:text-slate-500 line-through' : 'text-zinc-800 dark:text-slate-200 group-hover:text-black dark:group-hover:text-white'
-                                                        }`}>
-                                                        {task.title}
-                                                    </h3>
-                                                    {project && selectedProject === 'all' && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 text-zinc-400 bg-white/5">
-                                                            {project.name}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2 items-center">
-                                                    {task.priority && (
-                                                        <span className={`inline-flex items-center text-xs px-2.5 py-1 rounded-md border font-medium ${task.priority === 'High' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                                                            task.priority === 'Medium' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                            }`}>
-                                                            {task.priority}
-                                                        </span>
-                                                    )}
-
-                                                    <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-slate-800 text-zinc-600 dark:text-slate-400 border border-zinc-200 dark:border-slate-700">
-                                                        <Calendar size={12} className="mr-1.5" /> {formatDisplayDate(task.date)}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => startEditing(task)}
-                                                    className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                                    title="Edit Task"
-                                                >
-                                                    <Edit2 size={16} />
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteTask(task.id)}
-                                                    className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                                                    title="Delete Task"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
+                    )}
                 </div>
             </main>
         </div>

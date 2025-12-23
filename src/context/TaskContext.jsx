@@ -42,7 +42,8 @@ export function TaskProvider({ children }) {
                     id: t.id,
                     title: t.title,
                     description: t.description,
-                    status: t.completed ? 'completed' : 'pending',
+                    // Priority check for status: meta.status > boolean completed
+                    status: t.meta?.status || (t.completed ? 'completed' : 'pending'),
                     priority: t.priority,
                     date: t.meta?.date_display || null, // Retrieve display date
                     tags: t.tags || [],
@@ -150,19 +151,14 @@ export function TaskProvider({ children }) {
         if (updates.tags !== undefined) updatePayload.tags = updates.tags;
         if (updates.projectId !== undefined) updatePayload.project_id = updates.projectId;
         if (updates.status !== undefined) {
+            // Map any status to boolean for backward compatibility. 
+            // IMPORTANT: 'in_progress' is NOT completed.
             updatePayload.completed = updates.status === 'completed';
-            // Handle completedAt in meta
-            if (updates.status === 'completed') {
-                const today = new Date().toLocaleDateString('en-CA');
-                // We need to fetch current meta to update it safely, or just patch it?
-                // Supabase generic update doesn't support deep merge on jsonb easily without getting it first or using logic
-                // For now, simpler to just assume we might overwrite meta or need to be careful.
-                // Let's rely on the fact that we have the task state locally.
-            }
         }
 
         // Construct meta update if needed
         const metaUpdates = {};
+        if (updates.status !== undefined) metaUpdates.status = updates.status; // Save exact status string
         if (updates.date) metaUpdates.date_display = updates.date;
         if (updates.completedAt) metaUpdates.completedAt = updates.completedAt;
 
