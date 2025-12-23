@@ -68,6 +68,11 @@ export function TaskProvider({ children }) {
                     setProjects(INITIAL_PROJECTS);
                 }
 
+                if (settingsData?.preferences?.gamification) {
+                    setUserXp(settingsData.preferences.gamification.xp || 0);
+                    setUserLevel(settingsData.preferences.gamification.level || 1);
+                }
+
             } catch (error) {
                 console.error('Error fetching data:', error);
             } finally {
@@ -173,9 +178,15 @@ export function TaskProvider({ children }) {
             // We need to merge existing meta. 
             // Ideally we get the current task from state
             const currentTask = tasks.find(t => t.id === id);
-            updatePayload.meta = { ...currentTask?.meta, ...currentTask, ...metaUpdates };
-            // Cleaning up the meta payload to not include top level keys again is annoying but safer
-            // Let's just store the specific fields we care about in meta for display
+            // Check if completing
+            if (updates.status === 'completed' && currentTask.status !== 'completed') {
+                // Award XP based on priority
+                const xpMap = { 'High': 50, 'Medium': 30, 'Low': 10 };
+                // Default to 20 if no priority
+                const amount = xpMap[currentTask.priority] || 20;
+                addXp(amount);
+            }
+
             updatePayload.meta = { ...currentTask?.meta, ...metaUpdates };
         }
 
@@ -240,10 +251,54 @@ export function TaskProvider({ children }) {
         tasksToUpdate.forEach(t => updateTask(t.id, { projectId: null }));
     };
 
+    // --- Gamification ---
+    // Formula: Level = floor(sqrt(XP / 100)) + 1
+    // Lvl 1: 0-99 XP
+    // Lvl 2: 100-399 XP
+    // Lvl 3: 400-899 XP
+    const [userXp, setUserXp] = useState(0);
+    const [userLevel, setUserLevel] = useState(1);
+    // Track if a level up just happened to trigger animations
+    const [justLeveledUp, setJustLeveledUp] = useState(false);
+
+    const saveGamificationToSettings = async (xp, level) => {
+        if (!user) return;
+        const { data } = await supabase.from('settings').select('preferences').eq('user_id', user.id).single();
+        const currentPrefs = data?.preferences || {};
+
+        await supabase
+            .from('settings')
+            .upsert({
+                user_id: user.id,
+                preferences: {
+                    ...currentPrefs,
+                    gamification: { xp, level }
+                }
+            });
+    };
+
+    const addXp = async (amount) => {
+        const newXp = userXp + amount;
+        setUserXp(newXp);
+
+        // Calculate new level
+        const newLevel = Math.floor(Math.sqrt(newXp / 100)) + 1;
+
+        if (newLevel > userLevel) {
+            setUserLevel(newLevel);
+            setJustLeveledUp(true);
+            // Reset "just leveled up" flag after a short delay so animations can play
+            setTimeout(() => setJustLeveledUp(false), 5000);
+        }
+
+        await saveGamificationToSettings(newXp, newLevel > userLevel ? newLevel : userLevel);
+    };
+
     return (
         <TaskContext.Provider value={{
             tasks, addTask, updateTask, deleteTask, clearTasks,
             projects, addProject, updateProject, deleteProject,
+            userXp, userLevel, addXp, justLeveledUp,
             loading
         }}>
             {children}

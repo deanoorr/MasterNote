@@ -4,13 +4,24 @@ import { useTasks } from '../context/TaskContext';
 import { Sparkles, Zap, Moon } from 'lucide-react';
 
 export default function DigitalCompanion() {
-    const { tasks } = useTasks();
-    const [mood, setMood] = useState('IDLE'); // IDLE, HAPPY, THINKING
+    const { tasks, userXp, userLevel, justLeveledUp } = useTasks();
+    const [mood, setMood] = useState('IDLE'); // IDLE, HAPPY, THINKING, LEVEL_UP
     const [message, setMessage] = useState("I'm ready when you are.");
     const prevCompletedRef = useRef(0);
+    const prevLevelRef = useRef(userLevel);
 
     // Calculate completed count
     const completedCount = tasks.filter(t => t.status === 'completed' || t.completed).length;
+
+    // Calculate XP progress for current level
+    // Lvl 1: 0-99 (Width 100)
+    // Lvl 2: 100-399 (Width 300)
+    // Formula inverse: XP = (Level-1)^2 * 100
+    const currentLevelBaseXp = Math.pow(userLevel - 1, 2) * 100;
+    const nextLevelBaseXp = Math.pow(userLevel, 2) * 100;
+    const xpNeededForLevel = nextLevelBaseXp - currentLevelBaseXp;
+    const xpInCurrentLevel = userXp - currentLevelBaseXp;
+    const progressPercent = Math.min(100, Math.max(0, (xpInCurrentLevel / xpNeededForLevel) * 100));
 
     useEffect(() => {
         // Init ref
@@ -26,15 +37,34 @@ export default function DigitalCompanion() {
         prevCompletedRef.current = completedCount;
     }, [completedCount]);
 
+    useEffect(() => {
+        if (justLeveledUp || userLevel > prevLevelRef.current) {
+            triggerLevelUp();
+        }
+        prevLevelRef.current = userLevel;
+    }, [userLevel, justLeveledUp]);
+
     const triggerHappy = () => {
+        if (mood === 'LEVEL_UP') return; // Don't interrupt level up
         setMood('HAPPY');
-        const msgs = ["Great job!", "You're on fire!", "Keep it up!", "Productivity +100 XP"];
+        const msgs = ["Great job!", "You're on fire!", "Keep it up!", "Productivity +10 XP"];
         setMessage(msgs[Math.floor(Math.random() * msgs.length)]);
 
         setTimeout(() => {
             setMood('IDLE');
             setMessage("What's next?");
         }, 3000);
+    };
+
+    const triggerLevelUp = () => {
+        setMood('LEVEL_UP');
+        setMessage(`Level Up! Welcome to Lvl ${userLevel}! 🎉`);
+
+        // Celebrate for longer
+        setTimeout(() => {
+            setMood('IDLE');
+            setMessage("You are unstoppable.");
+        }, 5000);
     };
 
     // Animation Variants
@@ -50,6 +80,13 @@ export default function DigitalCompanion() {
             y: [0, -30, 0],
             backgroundColor: ["#fbbf24", "#f59e0b", "#fbbf24"], // Amber/Gold
             transition: { duration: 0.8, ease: "circOut" }
+        },
+        LEVEL_UP: {
+            scale: [1, 1.5, 1.2, 1.5, 1],
+            rotate: [0, 0, 180, 360, 0],
+            y: [0, -50, -20, -50, 0],
+            backgroundColor: ["#818cf8", "#ec4899", "#8b5cf6", "#f59e0b", "#818cf8"], // Rainbow-ish
+            transition: { duration: 2, ease: "easeInOut" }
         }
     };
 
@@ -63,11 +100,35 @@ export default function DigitalCompanion() {
             opacity: [0.5, 0.8, 0],
             scale: [1, 2, 3],
             transition: { duration: 1, ease: "easeOut" }
+        },
+        LEVEL_UP: {
+            opacity: [0, 1, 0.5, 1, 0],
+            scale: [1, 3, 2, 4, 1],
+            background: ["radial-gradient(circle, #ec4899, transparent)", "radial-gradient(circle, #f59e0b, transparent)"],
+            transition: { duration: 2, ease: "easeInOut" }
         }
     };
 
     return (
         <div className="relative flex flex-col items-center justify-center p-6 w-full max-w-xs mx-auto">
+
+            {/* Level Badge - Floating top right */}
+            <div className="absolute top-4 right-4 z-20 flex flex-col items-end">
+                <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur border border-zinc-200 dark:border-zinc-700 px-2 py-1 rounded-lg text-xs font-bold text-zinc-900 dark:text-white shadow-sm flex items-center gap-1">
+                    <Zap size={12} className="text-yellow-500 fill-yellow-500" />
+                    Lvl {userLevel}
+                </div>
+                {/* XP Bar */}
+                <div className="mt-1 w-16 h-1 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                    <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercent}%` }}
+                        transition={{ duration: 1 }}
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
+                    />
+                </div>
+            </div>
+
             {/* The Orb */}
             <div className="relative w-32 h-32 flex items-center justify-center">
 
@@ -84,7 +145,7 @@ export default function DigitalCompanion() {
                     animate={mood}
                     className="relative z-10 w-20 h-20 rounded-full shadow-inner flex items-center justify-center"
                     style={{
-                        background: mood === 'HAPPY'
+                        background: mood === 'HAPPY' || mood === 'LEVEL_UP'
                             ? 'radial-gradient(circle at 30% 30%, #fcd34d, #f59e0b)'
                             : 'radial-gradient(circle at 30% 30%, #a5b4fc, #6366f1)',
                         boxShadow: 'inset -5px -5px 15px rgba(0,0,0,0.3), inset 5px 5px 15px rgba(255,255,255,0.5)'
@@ -92,7 +153,7 @@ export default function DigitalCompanion() {
                 >
                     {/* Face / Icon */}
                     <AnimatePresence mode="wait">
-                        {mood === 'HAPPY' ? (
+                        {mood === 'HAPPY' || mood === 'LEVEL_UP' ? (
                             <motion.div
                                 key="happy"
                                 initial={{ scale: 0, opacity: 0 }}
@@ -125,7 +186,7 @@ export default function DigitalCompanion() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="mt-4 px-4 py-2 bg-white dark:bg-zinc-800 rounded-2xl shadow-lg border border-zinc-100 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-300 relative"
+                    className="mt-4 px-4 py-2 bg-white dark:bg-zinc-800 rounded-2xl shadow-lg border border-zinc-100 dark:border-zinc-700 text-sm font-medium text-zinc-600 dark:text-zinc-300 relative text-center max-w-[200px]"
                 >
                     {message}
                     {/* Triangle pointer */}
