@@ -4,7 +4,7 @@ import { useHabits } from '../context/HabitContext';
 import { useSettings } from '../context/SettingsContext';
 
 import { motion } from 'framer-motion';
-import { Sparkles, CheckCircle2, Circle, Clock, Loader2, ArrowRight, Activity } from 'lucide-react';
+import { Sparkles, CheckCircle2, Circle, Clock, Loader2, ArrowRight, Activity, TrendingUp } from 'lucide-react';
 
 export default function DashboardPage({ onNavigate }) {
     const { tasks, updateTask } = useTasks();
@@ -12,7 +12,6 @@ export default function DashboardPage({ onNavigate }) {
     const { settings } = useSettings();
 
     const [briefing, setBriefing] = useState('');
-
 
     const userName = settings?.userProfile?.name || 'User';
     const pendingTasks = tasks.filter(t => t.status !== 'completed').slice(0, 5);
@@ -30,6 +29,7 @@ export default function DashboardPage({ onNavigate }) {
     };
 
     const handleToggleTask = (task) => {
+        // Toggle between pending/completed (or other logic if needed)
         const newStatus = task.status === 'completed' ? 'pending' : 'completed';
         updateTask(task.id, { status: newStatus });
     };
@@ -148,6 +148,143 @@ export default function DashboardPage({ onNavigate }) {
                     </div>
 
                 </div>
+
+                {/* 4. Productivity Analytics (Visual) */}
+                <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-3xl p-8 transform transition-all hover:shadow-lg hover:shadow-purple-500/5">
+                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-8 flex items-center gap-3">
+                        <div className="p-2 bg-purple-500/10 rounded-lg text-purple-600 dark:text-purple-400">
+                            <TrendingUp size={24} />
+                        </div>
+                        Productivity Insights
+                    </h2>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                        {/* 1. Completion Rate (Donut Chart) */}
+                        <div className="bg-white dark:bg-zinc-900/50 rounded-2xl p-6 border border-zinc-100 dark:border-white/5 flex flex-col items-center justify-center relative overflow-hidden group">
+                            <div className="relative w-40 h-40">
+                                <svg className="w-full h-full transform -rotate-90">
+                                    <circle
+                                        cx="80"
+                                        cy="80"
+                                        r="70"
+                                        stroke="currentColor"
+                                        strokeWidth="12"
+                                        fill="transparent"
+                                        className="text-zinc-100 dark:text-zinc-800"
+                                    />
+                                    <motion.circle
+                                        initial={{ pathLength: 0 }}
+                                        animate={{ pathLength: tasks.length > 0 ? (tasks.filter(t => t.status === 'completed').length / tasks.length) : 0 }}
+                                        transition={{ duration: 1.5, ease: "easeOut" }}
+                                        cx="80"
+                                        cy="80"
+                                        r="70"
+                                        stroke="currentColor"
+                                        strokeWidth="12"
+                                        fill="transparent"
+                                        strokeLinecap="round"
+                                        className="text-purple-500"
+                                        style={{ pathLength: 0 }} // Required for motion initial state
+                                    />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span className="text-4xl font-bold text-zinc-900 dark:text-white tracking-tight">
+                                        {tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0}%
+                                    </span>
+                                    <span className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-1">Complete</span>
+                                </div>
+                            </div>
+                            <p className="text-center text-zinc-500 text-sm mt-4">
+                                You've completed <span className="font-bold text-zinc-900 dark:text-white">{tasks.filter(t => t.status === 'completed').length}</span> out of {tasks.length} tasks.
+                            </p>
+                        </div>
+
+                        {/* 2. Task Distribution (Visual Bars) */}
+                        <div className="bg-white dark:bg-zinc-900/50 rounded-2xl p-6 border border-zinc-100 dark:border-white/5 flex flex-col justify-center">
+                            <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-6">Task Distribution</h3>
+
+                            <div className="space-y-6">
+                                {/* Completed */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-medium text-emerald-600 dark:text-emerald-400">Completed</span>
+                                        <span className="text-zinc-500">{tasks.filter(t => t.status === 'completed').length} tasks</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-emerald-500/10 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'completed').length / tasks.length) * 100 : 0}%` }}
+                                            transition={{ duration: 1, delay: 0.2 }}
+                                            className="h-full bg-emerald-500 rounded-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* In Progress */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-medium text-amber-600 dark:text-amber-400">In Progress</span>
+                                        <span className="text-zinc-500">{tasks.filter(t => t.status === 'in_progress').length} tasks</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-amber-500/10 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'in_progress').length / tasks.length) * 100 : 0}%` }}
+                                            transition={{ duration: 1, delay: 0.4 }}
+                                            className="h-full bg-amber-500 rounded-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* To Do */}
+                                <div>
+                                    <div className="flex justify-between text-xs mb-2">
+                                        <span className="font-medium text-zinc-600 dark:text-zinc-400">To Do</span>
+                                        <span className="text-zinc-500">{tasks.filter(t => t.status === 'pending' || !t.status).length} tasks</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${tasks.length > 0 ? (tasks.filter(t => t.status === 'pending' || !t.status).length / tasks.length) * 100 : 0}%` }}
+                                            transition={{ duration: 1, delay: 0.6 }}
+                                            className="h-full bg-zinc-400 dark:bg-zinc-600 rounded-full"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. Priority Focus (Card) */}
+                        <div className="bg-gradient-to-br from-rose-500 to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-rose-500/20 relative overflow-hidden flex flex-col justify-between">
+                            {/* Abstract Shapes */}
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10" />
+                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full blur-2xl transform -translate-x-5 translate-y-5" />
+
+                            <div>
+                                <h3 className="text-rose-100 text-sm font-medium mb-1 relative z-10">Attention Needed</h3>
+                                <div className="flex items-baseline gap-2 relative z-10 mb-4">
+                                    <span className="text-5xl font-bold">
+                                        {tasks.filter(t => t.priority === 'High' && t.status !== 'completed').length}
+                                    </span>
+                                    <span className="text-rose-100/80">high priority</span>
+                                </div>
+                                <p className="text-sm text-rose-50/90 leading-relaxed relative z-10">
+                                    High priority tasks pending. Resolve them to improve your workflow.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => onNavigate('workspace')}
+                                className="w-full mt-6 bg-white text-rose-600 py-3 rounded-xl font-bold text-sm hover:bg-rose-50 transition-colors shadow-sm relative z-10 flex items-center justify-center gap-2"
+                            >
+                                View Updates <ArrowRight size={16} />
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
             </div>
         </div>
     );
