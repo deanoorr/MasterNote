@@ -1,9 +1,10 @@
-import { LayoutGrid, Settings, LogOut, Sparkles, StickyNote, Activity, Home, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutGrid, Settings, LogOut, Sparkles, StickyNote, Activity, Home, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Logo } from './Logo';
 
 const navItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'focus', label: 'Focus Zone', icon: Zap },
     { id: 'workspace', label: 'My Tasks', icon: LayoutGrid },
     { id: 'habits', label: 'Habits', icon: Activity },
     { id: 'notes', label: 'Notes', icon: StickyNote },

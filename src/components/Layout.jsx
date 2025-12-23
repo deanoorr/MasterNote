@@ -8,6 +8,7 @@ import NotesPage from '../pages/NotesPage';
 import SettingsPage from '../pages/SettingsPage';
 import HabitsPage from '../pages/HabitsPage';
 import DashboardPage from '../pages/DashboardPage';
+import FocusPage from '../pages/FocusPage';
 
 export default function Layout() {
     const [activeTab, setActiveTab] = useState('home');
@@ -31,6 +32,7 @@ export default function Layout() {
 
             <main className={`flex-1 h-full relative overflow-hidden z-10 transition-all duration-300 ml-0 md:ml-20 ${!isCollapsed ? 'md:ml-64' : ''} pb-[60px] md:pb-0`}>
                 {activeTab === 'home' && <DashboardPage onNavigate={setActiveTab} />}
+                {activeTab === 'focus' && <FocusPage />}
                 {activeTab === 'workspace' && <Workspace />}
                 {activeTab === 'assistant' && <AssistantView />}
                 {activeTab === 'notes' && <NotesPage />}

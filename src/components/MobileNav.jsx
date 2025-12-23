@@ -1,9 +1,10 @@
 import React from 'react';
-import { LayoutGrid, Settings, Sparkles, StickyNote, Activity, Home } from 'lucide-react';
+import { LayoutGrid, Settings, Sparkles, StickyNote, Activity, Home, Zap } from 'lucide-react';
 
 export default function MobileNav({ activeTab, onTabChange }) {
     const navItems = [
         { id: 'home', label: 'Home', icon: Home },
+        { id: 'focus', label: 'Focus', icon: Zap },
         { id: 'workspace', label: 'Tasks', icon: LayoutGrid },
         { id: 'assistant', label: 'AI', icon: Sparkles },
         { id: 'notes', label: 'Notes', icon: StickyNote },
