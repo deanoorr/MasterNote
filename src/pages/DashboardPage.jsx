@@ -5,10 +5,10 @@ import { useSettings } from '../context/SettingsContext';
 
 import { motion } from 'framer-motion';
 import DigitalCompanion from '../components/DigitalCompanion';
-import { Activity, CheckCircle, TrendingUp, AlertCircle, ArrowRight, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Activity, CheckCircle, TrendingUp, AlertCircle, ArrowRight, Clock, Sparkles, CheckCircle2, Layout as LayoutIcon } from 'lucide-react';
 
 export default function DashboardPage({ onNavigate }) {
-    const { tasks, updateTask } = useTasks();
+    const { tasks, updateTask, projects } = useTasks();
     const { habits, toggleHabit } = useHabits();
     const { user } = useSettings();
 
@@ -143,7 +143,51 @@ export default function DashboardPage({ onNavigate }) {
 
                 </div>
 
-                {/* 4. Productivity Analytics (Visual) */}
+                {/* 4. Active Projects */}
+                <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+                        <LayoutIcon className="text-indigo-500" size={20} />
+                        Active Projects
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {/* We need projects here. It's not in the hook above yet. Adding import/hook usage. */}
+                        {projects.filter(p => p.id !== 'all').map(project => {
+                            const pTasks = tasks.filter(t => t.projectId === project.id);
+                            const pCompleted = pTasks.filter(t => t.status === 'completed' || t.completed).length;
+                            const pProgress = pTasks.length > 0 ? Math.round((pCompleted / pTasks.length) * 100) : 0;
+
+                            return (
+                                <motion.div
+                                    key={project.id}
+                                    whileHover={{ scale: 1.02 }}
+                                    onClick={() => onNavigate(`project:${project.id}`)}
+                                    className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-2xl p-4 cursor-pointer hover:shadow-lg hover:shadow-indigo-500/10 transition-all group"
+                                >
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className={`p-2 rounded-lg ${project.color || 'bg-zinc-500'} bg-opacity-20 text-indigo-600 dark:text-indigo-400`}>
+                                            <LayoutIcon size={18} />
+                                        </div>
+                                        <ArrowRight size={16} className="text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                                    </div>
+                                    <h3 className="font-semibold text-zinc-900 dark:text-white mb-1">{project.name}</h3>
+                                    <div className="flex items-center justify-between text-xs text-zinc-500 mb-2">
+                                        <span>{pTasks.length} tasks</span>
+                                        <span>{pProgress}%</span>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${pProgress}%` }}
+                                            className={`h-full ${project.color || 'bg-indigo-500'}`}
+                                        />
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 5. Productivity Analytics (Visual) */}
                 <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-zinc-200 dark:border-white/10 rounded-3xl p-8 transform transition-all hover:shadow-lg hover:shadow-purple-500/5">
                     <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-8 flex items-center gap-3">
                         <div className="p-2 bg-purple-500/10 rounded-lg text-purple-600 dark:text-purple-400">

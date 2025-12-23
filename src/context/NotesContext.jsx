@@ -99,8 +99,10 @@ export function NotesProvider({ children }) {
                 timestamp: new Date(data.created_at).getTime()
             };
             setNotes(prev => [newNote, ...prev]);
+            return newNote;
         } catch (error) {
             console.error('Error adding note:', error);
+            return null;
         }
     };
 

@@ -9,6 +9,7 @@ import SettingsPage from '../pages/SettingsPage';
 import HabitsPage from '../pages/HabitsPage';
 import DashboardPage from '../pages/DashboardPage';
 import FocusPage from '../pages/FocusPage';
+import ProjectPage from '../pages/ProjectPage';
 
 export default function Layout() {
     const [activeTab, setActiveTab] = useState('home');
@@ -38,6 +39,12 @@ export default function Layout() {
                 {activeTab === 'notes' && <NotesPage />}
                 {activeTab === 'habits' && <HabitsPage />}
                 {activeTab === 'settings' && <SettingsPage />}
+                {activeTab.startsWith('project:') && (
+                    <ProjectPage
+                        projectId={activeTab.split(':')[1]}
+                        onBack={() => setActiveTab('home')}
+                    />
+                )}
             </main>
 
             <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
