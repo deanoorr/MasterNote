@@ -4,24 +4,18 @@ import { useHabits } from '../context/HabitContext';
 import { useSettings } from '../context/SettingsContext';
 
 import { motion } from 'framer-motion';
-import { Sparkles, CheckCircle2, Circle, Clock, Loader2, ArrowRight, Activity, TrendingUp } from 'lucide-react';
+import DigitalCompanion from '../components/DigitalCompanion';
+import { Activity, CheckCircle, TrendingUp, AlertCircle, ArrowRight, Clock, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function DashboardPage({ onNavigate }) {
     const { tasks, updateTask } = useTasks();
     const { habits, toggleHabit } = useHabits();
-    const { settings } = useSettings();
+    const { user } = useSettings();
 
-    const [briefing, setBriefing] = useState('');
 
-    const userName = settings?.userProfile?.name || 'User';
+    const userName = user?.name || 'User';
     const pendingTasks = tasks.filter(t => t.status !== 'completed').slice(0, 5);
-    const todaysHabits = habits; // In a real app, filter by day of week if needed
-
-    // Generate Morning Briefing
-    useEffect(() => {
-        const taskName = pendingTasks[0]?.title || "your goals";
-        setBriefing(`Good day, ${userName}! Time to crush ${taskName} and have a great one.`);
-    }, [userName, pendingTasks]);
+    const todaysHabits = habits;
 
     const isCompletedToday = (habit) => {
         const today = new Date().toLocaleDateString('en-CA');
@@ -38,23 +32,23 @@ export default function DashboardPage({ onNavigate }) {
         <div className="h-full w-full p-8 overflow-y-auto custom-scrollbar bg-transparent">
             <div className="max-w-5xl mx-auto space-y-8">
 
-                {/* 1. Morning Briefing Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-3xl p-8 relative overflow-hidden shadow-2xl shadow-indigo-200/50 dark:shadow-indigo-900/20"
-                >
-                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                        <Sparkles size={120} className="text-zinc-900 dark:text-white" />
-                    </div>
+                {/* 1. Digital Companion Header */}
+                <div className="flex flex-col items-center justify-center text-center space-y-6 py-8">
+                    <DigitalCompanion />
 
-                    <div className="relative z-10">
-                        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-4">Command Center</h1>
-                        <p className="text-xl text-zinc-700 dark:text-zinc-300 leading-relaxed max-w-3xl">
-                            {briefing}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2 }}
+                    >
+                        <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white">
+                            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {user?.name || 'Friend'}.
+                        </h1>
+                        <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-lg">
+                            Ready to make today count?
                         </p>
-                    </div>
-                </motion.div>
+                    </motion.div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 

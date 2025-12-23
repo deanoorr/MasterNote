@@ -1,3 +1,4 @@
+// Soundscapes Component - Audio fixed
 import React, { useState, useRef, useEffect } from 'react';
 import { Volume2, VolumeX, Play, Pause, CloudRain, Trees, Coffee, Wind } from 'lucide-react';
 
