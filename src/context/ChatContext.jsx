@@ -166,28 +166,26 @@ export function ChatProvider({ children }) {
     };
 
     const deleteSession = async (id) => {
-        let nextId = currentSessionId;
+        // Use ref to get latest state synchronously
+        const currentSessions = sessionsRef.current;
+        const remaining = currentSessions.filter(s => s.id !== id);
 
         let updatedSessions = [];
+        let nextId = currentSessionId;
 
-        setSessions(prev => {
-            const remaining = prev.filter(s => s.id !== id);
-
-            if (remaining.length === 0) {
-                const newDefault = { ...DEFAULT_SESSION, id: Date.now().toString(), lastUpdated: Date.now() };
-                updatedSessions = [newDefault];
-                nextId = newDefault.id;
-            } else {
-                updatedSessions = remaining;
-                if (currentSessionId === id) {
-                    nextId = remaining[0].id;
-                }
+        if (remaining.length === 0) {
+            const newDefault = { ...DEFAULT_SESSION, id: Date.now().toString(), lastUpdated: Date.now() };
+            updatedSessions = [newDefault];
+            nextId = newDefault.id;
+        } else {
+            updatedSessions = remaining;
+            if (currentSessionId === id || currentSessionId === 'default' || !remaining.find(s => s.id === currentSessionId)) {
+                nextId = remaining[0].id;
             }
+        }
 
-            saveToLocalStorage(updatedSessions);
-            return updatedSessions;
-        });
-
+        setSessions(updatedSessions);
+        saveToLocalStorage(updatedSessions);
         setCurrentSessionId(nextId);
 
         // Clean up folder map
@@ -197,8 +195,6 @@ export function ChatProvider({ children }) {
             setChatFolderMap(newMap);
             if (user) await saveFoldersAndMap(folders, newMap);
         }
-
-        // NO Supabase delete for chats
     };
 
     const renameSession = async (id, newTitle) => {
@@ -374,7 +370,7 @@ export function ChatProvider({ children }) {
             sessions,
             folders,
             currentSessionId,
-            currentSession: sessions.find(s => s.id === currentSessionId) || sessions[0],
+            currentSession: sessions.find(s => s.id === currentSessionId) || sessions[0] || DEFAULT_SESSION,
             createSession,
             switchSession,
             deleteSession,

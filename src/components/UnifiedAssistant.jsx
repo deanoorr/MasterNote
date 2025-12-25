@@ -910,6 +910,8 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                         await persistSession(activeSessionId);
                         setIsProcessing(false);
                         setIsThinkingEnabled(false);
+
+                        generateChatTitle(activeSessionId, userText, textAccumulator);
                     } catch (e) {
                         console.error("Chat Error:", e);
                         updateMessage(activeSessionId, msgId, "Error generating response. Please try again.");
@@ -970,8 +972,14 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                             }
                             updateMessage(activeSessionId, msgId, text);
 
-                            // Final Persist
+                            // Final Persist to DB
                             await persistSession(activeSessionId);
+
+                            // Intelligent Auto-Titling
+                            const currentTitle = currentSession.title;
+                            if (currentTitle === 'New Chat' || currentTitle === 'default') {
+                                generateChatTitle(activeSessionId, userText, textAccumulator);
+                            }
                             setIsProcessing(false);
                             setIsThinkingEnabled(false);
                             return; // EXIT EARLY to skip standard Grok call
