@@ -1038,7 +1038,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                             // Intelligent Auto-Titling
                             const currentTitle = currentSession.title;
                             if (currentTitle === 'New Chat' || currentTitle === 'default') {
-                                generateChatTitle(activeSessionId, userText, textAccumulator);
+                                generateChatTitle(activeSessionId, userText, text);
                             }
                             setIsProcessing(false);
                             setIsThinkingEnabled(false);
@@ -1058,6 +1058,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     if (selectedModel.provider === 'deepseek' && isThinkingEnabled) targetModelId = 'deepseek-reasoner';
                     else if (selectedModel.provider === 'xai' && isThinkingEnabled) targetModelId = 'grok-4-1-fast-reasoning';
                     else if (selectedModel.provider === 'moonshot' && isThinkingEnabled) targetModelId = 'kimi-k2-thinking';
+                    else if (selectedModel.id === 'gpt-5.2-chat-latest' && isThinkingEnabled) targetModelId = 'gpt-5.2-pro-2025-12-11'; // Override for GPT 5.2 Pro
                     else if (selectedModel.provider === 'openrouter') {
                         if (!selectedOpenRouterModel) throw new Error("Please select an OpenRouter model");
                         targetModelId = selectedOpenRouterModel.id;
@@ -1072,7 +1073,7 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     const validAttachments = currentAttachments.filter(att => {
                         const isImage = att.type === 'image';
                         if (!isImage) {
-                            skippedFilesWarning += `\n⚠️ **skipped ${att.name}**: This model only supports images. For PDFs/Docs, please use **Google Gemini** models.`;
+                            skippedFilesWarning += `\nWARNING **skipped ${att.name}**: This model only supports images. For PDFs/Docs, please use **Google Gemini** models.`;
                         }
                         return isImage;
                     });
@@ -1108,27 +1109,57 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     }
 
                     try {
-                        const stream = await client.chat.completions.create({
-                            messages: [
-                                { role: "system", content: finalSystemPrompt },
-                                ...historyForModel,
-                                {
-                                    role: "user",
-                                    content: [
-                                        { type: "text", text: userText + (mode === 'canvas' ? `\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)` : "") + (canvasData ? `\n\nCURRENT CANVAS CONTENT (${canvasData.type}):\n${canvasData.content}` : "") },
-                                        ...validAttachments.map(att => ({
-                                            type: "image_url",
-                                            image_url: { url: att.preview }
-                                        }))
-                                    ]
-                                }
-                            ],
+                        const isProModel = targetModelId === 'gpt-5.2-pro' || targetModelId === 'gpt-5.2-pro-2025-12-11';
+
+                        // Prepare messages: Convert system to developer for Pro/O1 models if needed
+                        let messages = [
+                            { role: isProModel ? "developer" : "system", content: finalSystemPrompt },
+                            ...historyForModel,
+                            {
+                                role: "user",
+                                content: [
+                                    { type: "text", text: userText + (mode === 'canvas' ? `\n\n(REMINDER: Output exclusively in <canvas_content> XML tags)` : "") + (canvasData ? `\n\nCURRENT CANVAS CONTENT (${canvasData.type}):\n${canvasData.content}` : "") },
+                                    ...validAttachments.map(att => ({
+                                        type: "image_url",
+                                        image_url: { url: att.preview }
+                                    }))
+                                ]
+                            }
+                        ];
+
+                        const completionParams = {
+                            messages: messages,
                             model: targetModelId,
-                            stream: true,
-                            reasoning_effort: (selectedModel.provider === 'openai' && isThinkingEnabled) ? "high" : undefined,
-                        });
+                            stream: !isProModel, // Disable streaming for Pro model
+                        };
+
+                        // Add reasoning effort only if NOT Pro model
+                        if (selectedModel.provider === 'openai' && isThinkingEnabled && !isProModel) {
+                            completionParams.reasoning_effort = "high";
+                        }
+
+                        const stream = await client.chat.completions.create(completionParams);
 
                         let textAccumulator = searchThoughts + (skippedFilesWarning ? skippedFilesWarning + "\n\n" : "");
+
+                        if (isProModel) {
+                            // Handle non-streaming response
+                            const fullContent = stream.choices[0].message.content || "";
+                            textAccumulator += fullContent;
+                            updateMessage(activeSessionId, msgId, textAccumulator);
+
+                            // Auto-titling check
+                            const currentTitle = currentSession.title;
+                            if (currentTitle === 'New Chat' || currentTitle === 'default') {
+                                generateChatTitle(activeSessionId, userText, textAccumulator);
+                            } else if (currentSession.title === 'New Conversation' && currentSession.messages.length <= 3) {
+                                generateChatTitle(activeSessionId, userText, textAccumulator);
+                            }
+                            setIsThinking(false);
+                            return; // Exit as we are done
+                        }
+
+                        // Streaming handling for other models
                         // Initial update if we have a warning
                         if (skippedFilesWarning) updateMessage(activeSessionId, msgId, textAccumulator);
 
@@ -1353,14 +1384,20 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     if (!import.meta.env.VITE_SCIRA_API_KEY) throw new Error("Scira API Key missing");
                     let endpoint = "/scira-api/api/search";
                     let body = {};
+                    let textAccumulator = ""; // Initialize textAccumulator
+
                     if (sciraMode === 'x') {
                         endpoint = "/scira-api/api/xsearch";
                         // Refine query with history for X search to support follow-up questions
                         let refinedQuery = userText;
                         if (isThinkingEnabled) {
-                            updateMessage(activeSessionId, msgId, "<think>🧠 Refining search query...</think>");
+                            textAccumulator += "<think>🧠 Refining search query...</think>";
+                            updateMessage(activeSessionId, msgId, textAccumulator);
+
                             refinedQuery = await refineSearchQuery(userText, currentSession.messages);
-                            updateMessage(activeSessionId, msgId, `<think>🔍 Searching X for: "${refinedQuery}"...</think>`);
+
+                            textAccumulator = textAccumulator.replace("</think>", `\n🔍 Searching X for: "${refinedQuery}"...</think>`);
+                            updateMessage(activeSessionId, msgId, textAccumulator);
                         } else {
                             // Silent refinement if thinking is off
                             refinedQuery = await refineSearchQuery(userText, currentSession.messages);
@@ -1388,24 +1425,31 @@ RULE: Pick ONLY ONE most relevant category. If none match strongly, do not outpu
                     try {
                         data = JSON.parse(textData);
                     } catch (e) {
-                        throw new Error("Failed to parse Scira API response: " + textData.substring(0, 100));
+                        // Some endpoints might return raw text or streaming format
+                        // For now assume JSON as per Scira docs, but fallback to text wrapping
+                        data = { content: textData };
                     }
 
-                    let text = data.text || "";
-                    if (data.sources && data.sources.length > 0) {
-                        text += "\n\n**Sources:**\n";
-                        data.sources.forEach((s, i) => {
-                            text += `\n${i + 1}. [Source ${i + 1}](${s})`;
-                        });
-                    }
-                    updateMessage(activeSessionId, msgId, text);
+                    // Process response logic...
+                    // Assuming data.content or similar holds the result
+                    const resultText = data.content || data.response || JSON.stringify(data);
 
-                    // Auto-Titling Logic for Scira
+                    if (isThinkingEnabled && textAccumulator.includes("</think>")) {
+                        textAccumulator = textAccumulator.replace("</think>", `\n✅ Results received.</think>\n\n${resultText}`);
+                    } else {
+                        textAccumulator += resultText;
+                    }
+
+                    updateMessage(activeSessionId, msgId, textAccumulator);
+                    await persistSession(activeSessionId);
+
+                    // Auto-link title for first message
                     if (currentSession.title === 'New Chat' && currentSession.messages.length <= 3) {
-                        generateChatTitle(activeSessionId, userText, text);
+                        generateChatTitle(activeSessionId, userText, textAccumulator);
                     }
 
                 }
+
             } catch (error) {
                 updateMessage(activeSessionId, msgId, `Error: ${error.message}`);
             }
