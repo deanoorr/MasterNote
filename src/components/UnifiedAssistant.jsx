@@ -259,42 +259,102 @@ export default function UnifiedAssistant() {
     const fileInputRef = useRef(null);
 
     const generateChatTitle = async (sessionId, userMessage, aiMessage) => {
-        try {
-            const prompt = `
-            Summarize the following conversation start into a short, descriptive title (max 5 words).
-            User: ${userMessage.substring(0, 500)}
-            AI: ${aiMessage.substring(0, 500)}
-            
-            Return ONLY the title, no quotes or preamble.
-            `;
+        const prompt = `
+        Summarize the following conversation start into a short, descriptive title (max 5 words).
+        User: ${userMessage.substring(0, 500)}
+        AI: ${aiMessage.substring(0, 500)}
+        
+        Return ONLY the title, no quotes or preamble.
+        `;
 
-            let title = "New Conversation";
-
-            if (clientsRef.current.openai) {
-                const completion = await clientsRef.current.openai.chat.completions.create({
+        const clients = clientsRef.current;
+        const providers = [
+            {
+                name: 'openai',
+                check: () => clients.openai,
+                run: async () => (await clients.openai.chat.completions.create({
                     messages: [{ role: "user", content: prompt }],
-                    model: "gpt-4o-mini", // fast and cheap
+                    model: "gpt-4o-mini",
                     max_tokens: 15
-                });
-                title = completion.choices[0].message.content;
-            } else if (clientsRef.current.genAI) {
-                const model = clientsRef.current.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                const result = await model.generateContent(prompt);
-                title = result.response.text();
-            } else if (clientsRef.current.anthropic) {
-                const msg = await clientsRef.current.anthropic.messages.create({
+                })).choices[0].message.content
+            },
+            {
+                name: 'genAI',
+                check: () => clients.genAI,
+                run: async () => (await clients.genAI.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent(prompt)).response.text()
+            },
+            {
+                name: 'anthropic',
+                check: () => clients.anthropic,
+                run: async () => (await clients.anthropic.messages.create({
                     model: "claude-3-haiku-20240307",
                     max_tokens: 15,
                     messages: [{ role: "user", content: prompt }]
-                });
-                title = msg.content[0].text;
+                })).content[0].text
+            },
+            {
+                name: 'xai',
+                check: () => clients.xai,
+                run: async () => (await clients.xai.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "grok-beta",
+                    max_tokens: 15
+                })).choices[0].message.content
+            },
+            {
+                name: 'deepseek',
+                check: () => clients.deepseek,
+                run: async () => (await clients.deepseek.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "deepseek-chat",
+                    max_tokens: 15
+                })).choices[0].message.content
+            },
+            {
+                name: 'moonshot',
+                check: () => clients.moonshot,
+                run: async () => (await clients.moonshot.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "moonshot-v1-8k",
+                    max_tokens: 15
+                })).choices[0].message.content
+            },
+            {
+                name: 'openrouter',
+                check: () => clients.openrouter,
+                run: async () => (await clients.openrouter.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "google/gemini-2.0-flash-001",
+                    max_tokens: 15
+                })).choices[0].message.content
             }
+        ];
 
+        let title = "New Conversation";
+        let success = false;
+
+        for (const provider of providers) {
+            if (provider.check()) {
+                try {
+                    console.log(`Attempting auto-title with ${provider.name}...`);
+                    title = await provider.run();
+                    success = true;
+                    break;
+                } catch (e) {
+                    console.warn(`Auto-title failed with ${provider.name}:`, e);
+                    // Continue to next provider
+                }
+            }
+        }
+
+        if (success && title) {
             title = title.replace(/^["']|["']$/g, '').trim();
-            renameSession(sessionId, title);
-
-        } catch (e) {
-            console.error("Auto-titling failed:", e);
+            if (title && title !== "New Conversation") {
+                console.log(`Renaming session ${sessionId} to "${title}"`);
+                renameSession(sessionId, title);
+            }
+        } else {
+            console.error("All auto-title attempts failed.");
         }
     };
 
